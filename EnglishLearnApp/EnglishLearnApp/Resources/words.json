@@ -1,0 +1,538 @@
+{
+  "words": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440001",
+      "word": "rarity",
+      "meaning": "珍しさ・希少性",
+      "phonetic": "ˈrer.ə.t̬i",
+      "sentences": [
+        {
+          "id": "a0000001-0001-0001-0001-000000000001",
+          "english": "True friendship is a rarity in this world.",
+          "japanese": "本当の友情はこの世では珍しいものだ。",
+          "category": "一般的な使い方"
+        },
+        {
+          "id": "a0000001-0001-0001-0001-000000000002",
+          "english": "Snow is a rarity in this region.",
+          "japanese": "この地域では雪は珍しい。",
+          "category": "一般的な使い方"
+        },
+        {
+          "id": "a0000001-0001-0001-0001-000000000003",
+          "english": "Kindness like hers is a rarity these days.",
+          "japanese": "彼女のような優しさは、今では稀だ。",
+          "category": "一般的な使い方"
+        },
+        {
+          "id": "a0000001-0001-0001-0001-000000000004",
+          "english": "Honesty in politics has become a rarity.",
+          "japanese": "政治における誠実さは、もはや希少だ。",
+          "category": "一般的な使い方"
+        },
+        {
+          "id": "a0000001-0001-0001-0001-000000000005",
+          "english": "It's a rarity to see him smile.",
+          "japanese": "彼が笑うのは珍しいことだ。",
+          "category": "一般的な使い方"
+        },
+        {
+          "id": "a0000001-0001-0001-0001-000000000006",
+          "english": "This coin's rarity increases its value significantly.",
+          "japanese": "このコインの希少性は、その価値を大きく高めている。",
+          "category": "ビジネス・マーケティング"
+        },
+        {
+          "id": "a0000001-0001-0001-0001-000000000007",
+          "english": "We focus on delivering products with uniqueness and rarity.",
+          "japanese": "私たちは独自性と希少性のある製品を提供することに注力している。",
+          "category": "ビジネス・マーケティング"
+        },
+        {
+          "id": "a0000001-0001-0001-0001-000000000008",
+          "english": "Limited editions are prized for their rarity.",
+          "japanese": "限定版は、その希少性のために高く評価される。",
+          "category": "ビジネス・マーケティング"
+        },
+        {
+          "id": "a0000001-0001-0001-0001-000000000009",
+          "english": "The rarity of the material makes it expensive.",
+          "japanese": "素材の希少性が、それを高価にしている。",
+          "category": "ビジネス・マーケティング"
+        },
+        {
+          "id": "a0000001-0001-0001-0001-000000000010",
+          "english": "Rarity drives demand in luxury markets.",
+          "japanese": "希少性が高級市場での需要を生み出す。",
+          "category": "ビジネス・マーケティング"
+        },
+        {
+          "id": "a0000001-0001-0001-0001-000000000011",
+          "english": "This card has ultra rarity and is hard to find.",
+          "japanese": "このカードは超レアで、なかなか見つからない。",
+          "category": "コレクション・ゲーム"
+        },
+        {
+          "id": "a0000001-0001-0001-0001-000000000012",
+          "english": "Players hunt for items with high rarity.",
+          "japanese": "プレイヤーたちはレア度の高いアイテムを探し求める。",
+          "category": "コレクション・ゲーム"
+        },
+        {
+          "id": "a0000001-0001-0001-0001-000000000013",
+          "english": "Rarity levels range from common to legendary.",
+          "japanese": "レアリティのレベルは、コモンからレジェンダリーまである。",
+          "category": "コレクション・ゲーム"
+        },
+        {
+          "id": "a0000001-0001-0001-0001-000000000014",
+          "english": "The NFT's rarity makes it more valuable to collectors.",
+          "japanese": "そのNFTの希少性が、コレクターにとって価値を高めている。",
+          "category": "コレクション・ゲーム"
+        },
+        {
+          "id": "a0000001-0001-0001-0001-000000000015",
+          "english": "Rarity affects the drop rate in most games.",
+          "japanese": "ほとんどのゲームでは、レアリティがドロップ率に影響する。",
+          "category": "コレクション・ゲーム"
+        },
+        {
+          "id": "a0000001-0001-0001-0001-000000000016",
+          "english": "This bird is a rarity and rarely seen in the wild.",
+          "japanese": "この鳥は珍しく、野生では滅多に見られない。",
+          "category": "科学・自然・環境"
+        },
+        {
+          "id": "a0000001-0001-0001-0001-000000000017",
+          "english": "Meteorites are geological rarities.",
+          "japanese": "隕石は地質学的に見ても珍しい存在だ。",
+          "category": "科学・自然・環境"
+        },
+        {
+          "id": "a0000001-0001-0001-0001-000000000018",
+          "english": "The plant's rarity is due to habitat loss.",
+          "japanese": "その植物の希少性は生息地の喪失によるものだ。",
+          "category": "科学・自然・環境"
+        },
+        {
+          "id": "a0000001-0001-0001-0001-000000000019",
+          "english": "Albino animals are rarities in nature.",
+          "japanese": "アルビノの動物は自然界では非常に珍しい。",
+          "category": "科学・自然・環境"
+        },
+        {
+          "id": "a0000001-0001-0001-0001-000000000020",
+          "english": "Fossils like this are a true rarity.",
+          "japanese": "このような化石は本当に稀少だ。",
+          "category": "科学・自然・環境"
+        },
+        {
+          "id": "a0000001-0001-0001-0001-000000000021",
+          "english": "A moment of silence in a busy life is a rarity.",
+          "japanese": "忙しい生活の中での静寂のひとときは、まれなものだ。",
+          "category": "抽象的・比喩的"
+        },
+        {
+          "id": "a0000001-0001-0001-0001-000000000022",
+          "english": "Trust is a rarity in today's world.",
+          "japanese": "信頼は現代社会では稀なものだ。",
+          "category": "抽象的・比喩的"
+        },
+        {
+          "id": "a0000001-0001-0001-0001-000000000023",
+          "english": "Creative genius is a true rarity.",
+          "japanese": "創造的な天才は本当に希少だ。",
+          "category": "抽象的・比喩的"
+        },
+        {
+          "id": "a0000001-0001-0001-0001-000000000024",
+          "english": "An apology from him? That's a rarity.",
+          "japanese": "彼が謝るなんて？それは珍しいよ。",
+          "category": "抽象的・比喩的"
+        },
+        {
+          "id": "a0000001-0001-0001-0001-000000000025",
+          "english": "Love without conditions is a rarity.",
+          "japanese": "無条件の愛はとても稀なものだ。",
+          "category": "抽象的・比喩的"
+        },
+        {
+          "id": "a0000001-0001-0001-0001-000000000026",
+          "english": "Her beauty was not just physical—it was a rarity of spirit.",
+          "japanese": "彼女の美しさは見た目だけでなく、魂の希少さでもあった。",
+          "category": "文学・詩的な表現"
+        },
+        {
+          "id": "a0000001-0001-0001-0001-000000000027",
+          "english": "In the desert of mediocrity, his brilliance was a rarity.",
+          "japanese": "凡庸の砂漠の中で、彼の輝きは希少だった。",
+          "category": "文学・詩的な表現"
+        },
+        {
+          "id": "a0000001-0001-0001-0001-000000000028",
+          "english": "Their meeting was a cosmic rarity.",
+          "japanese": "彼らの出会いは宇宙的に見ても稀だった。",
+          "category": "文学・詩的な表現"
+        },
+        {
+          "id": "a0000001-0001-0001-0001-000000000029",
+          "english": "He held on to that memory, a rarity in his fading mind.",
+          "japanese": "彼はその記憶にすがっていた。それは薄れていく意識の中の希少なものだった。",
+          "category": "文学・詩的な表現"
+        },
+        {
+          "id": "a0000001-0001-0001-0001-000000000030",
+          "english": "The book is a rarity—both wise and funny.",
+          "japanese": "その本は希少だ。賢くてユーモアもある。",
+          "category": "文学・詩的な表現"
+        }
+      ]
+    },
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440002",
+      "word": "these days",
+      "meaning": "最近、この頃",
+      "phonetic": "ðiːz deɪz",
+      "sentences": [
+        {
+          "id": "a0000002-0001-0001-0001-000000000016",
+          "english": "These days, I've been exercising regularly.",
+          "japanese": "最近は定期的に運動している。",
+          "category": "趣味・習慣の変化"
+        },
+        {
+          "id": "a0000002-0001-0001-0001-000000000017",
+          "english": "I'm into gardening these days.",
+          "japanese": "最近ガーデニングにハマってるの。",
+          "category": "趣味・習慣の変化"
+        },
+        {
+          "id": "a0000002-0001-0001-0001-000000000018",
+          "english": "These days, I listen to jazz instead of pop.",
+          "japanese": "最近はポップスじゃなくてジャズを聴いている。",
+          "category": "趣味・習慣の変化"
+        },
+        {
+          "id": "a0000002-0001-0001-0001-000000000019",
+          "english": "I write in my journal every day these days.",
+          "japanese": "最近は毎日日記を書いている。",
+          "category": "趣味・習慣の変化"
+        },
+        {
+          "id": "a0000002-0001-0001-0001-000000000020",
+          "english": "These days, I avoid drinking alcohol.",
+          "japanese": "この頃はお酒を控えている。",
+          "category": "趣味・習慣の変化"
+        },
+        {
+          "id": "a0000002-0001-0001-0001-000000000021",
+          "english": "These days, I'm swamped with work.",
+          "japanese": "最近は仕事で手一杯だ。",
+          "category": "仕事・学業"
+        },
+        {
+          "id": "a0000002-0001-0001-0001-000000000022",
+          "english": "I'm learning Python these days.",
+          "japanese": "最近はPythonを勉強している。",
+          "category": "仕事・学業"
+        },
+        {
+          "id": "a0000002-0001-0001-0001-000000000023",
+          "english": "These days, job hunting is very competitive.",
+          "japanese": "最近の就職活動はとても競争が激しい。",
+          "category": "仕事・学業"
+        },
+        {
+          "id": "a0000002-0001-0001-0001-000000000024",
+          "english": "I work from home most days these days.",
+          "japanese": "最近はほとんど在宅勤務をしている。",
+          "category": "仕事・学業"
+        },
+        {
+          "id": "a0000002-0001-0001-0001-000000000025",
+          "english": "These days, companies value flexibility.",
+          "japanese": "最近では企業は柔軟性を重視している。",
+          "category": "仕事・学業"
+        },
+        {
+          "id": "a0000002-0001-0001-0001-000000000026",
+          "english": "It rains a lot these days.",
+          "japanese": "最近は雨が多い。",
+          "category": "その他"
+        },
+        {
+          "id": "a0000002-0001-0001-0001-000000000027",
+          "english": "These days, I prefer quiet over excitement.",
+          "japanese": "この頃は刺激より静けさを好む。",
+          "category": "その他"
+        },
+        {
+          "id": "a0000002-0001-0001-0001-000000000028",
+          "english": "These days, I'm trying to be more positive.",
+          "japanese": "最近はもっとポジティブに生きようとしてる。",
+          "category": "その他"
+        },
+        {
+          "id": "a0000002-0001-0001-0001-000000000029",
+          "english": "My parents call me more often these days.",
+          "japanese": "最近は両親がよく電話をくれる。",
+          "category": "その他"
+        },
+        {
+          "id": "a0000002-0001-0001-0001-000000000030",
+          "english": "These days, time feels like it's flying.",
+          "japanese": "最近は時間が飛ぶように過ぎていく。",
+          "category": "その他"
+        }
+      ]
+    },
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440003",
+      "word": "experience",
+      "meaning": "経験、体験",
+      "phonetic": "ɪkˈspɪr.i.əns",
+      "sentences": [
+        {
+          "id": "a0000003-0001-0001-0001-000000000001",
+          "english": "I had a wonderful experience during my trip to Italy.",
+          "japanese": "イタリア旅行中に素晴らしい体験をした。",
+          "category": "一般的な経験"
+        },
+        {
+          "id": "a0000003-0001-0001-0001-000000000002",
+          "english": "She has five years of experience as a software engineer.",
+          "japanese": "彼女はソフトウェアエンジニアとして5年の経験がある。",
+          "category": "一般的な経験"
+        },
+        {
+          "id": "a0000003-0001-0001-0001-000000000003",
+          "english": "You need more experience to apply for this position.",
+          "japanese": "この職に応募するには、もっと経験が必要です。",
+          "category": "一般的な経験"
+        },
+        {
+          "id": "a0000003-0001-0001-0001-000000000004",
+          "english": "He experienced culture shock when he moved abroad.",
+          "japanese": "彼は海外に移住したときにカルチャーショックを経験した。",
+          "category": "一般的な経験"
+        },
+        {
+          "id": "a0000003-0001-0001-0001-000000000005",
+          "english": "This job will give you valuable experience.",
+          "japanese": "この仕事は貴重な経験を与えてくれる。",
+          "category": "一般的な経験"
+        },
+        {
+          "id": "a0000003-0001-0001-0001-000000000006",
+          "english": "I experienced deep sadness after the loss of my pet.",
+          "japanese": "ペットを亡くして深い悲しみを経験した。",
+          "category": "感情・状態"
+        },
+        {
+          "id": "a0000003-0001-0001-0001-000000000007",
+          "english": "She experienced a sense of freedom for the first time.",
+          "japanese": "彼女は初めて自由という感覚を体験した。",
+          "category": "感情・状態"
+        },
+        {
+          "id": "a0000003-0001-0001-0001-000000000008",
+          "english": "They experienced fear during the earthquake.",
+          "japanese": "彼らは地震の間に恐怖を体験した。",
+          "category": "感情・状態"
+        },
+        {
+          "id": "a0000003-0001-0001-0001-000000000009",
+          "english": "He has experienced both failure and success.",
+          "japanese": "彼は失敗も成功も経験してきた。",
+          "category": "感情・状態"
+        },
+        {
+          "id": "a0000003-0001-0001-0001-000000000010",
+          "english": "Have you ever experienced true happiness?",
+          "japanese": "本当の幸福を経験したことがありますか？",
+          "category": "感情・状態"
+        },
+        {
+          "id": "a0000003-0001-0001-0001-000000000011",
+          "english": "My experience in marketing helped me get the job.",
+          "japanese": "マーケティングの経験が役に立って就職できた。",
+          "category": "仕事・スキル"
+        },
+        {
+          "id": "a0000003-0001-0001-0001-000000000012",
+          "english": "She's looking for an internship to gain experience.",
+          "japanese": "彼女は経験を積むためにインターンを探している。",
+          "category": "仕事・スキル"
+        },
+        {
+          "id": "a0000003-0001-0001-0001-000000000013",
+          "english": "You'll learn through hands-on experience.",
+          "japanese": "実地の経験を通じて学ぶことになるよ。",
+          "category": "仕事・スキル"
+        },
+        {
+          "id": "a0000003-0001-0001-0001-000000000014",
+          "english": "No previous experience is required.",
+          "japanese": "過去の経験は必要ありません。",
+          "category": "仕事・スキル"
+        },
+        {
+          "id": "a0000003-0001-0001-0001-000000000015",
+          "english": "He shared his experience working in startups.",
+          "japanese": "彼はスタートアップで働いた経験を共有した。",
+          "category": "仕事・スキル"
+        },
+        {
+          "id": "a0000003-0001-0001-0001-000000000016",
+          "english": "Experience is the best teacher.",
+          "japanese": "経験は最良の教師である。",
+          "category": "教育・人生の教訓"
+        },
+        {
+          "id": "a0000003-0001-0001-0001-000000000017",
+          "english": "We learn from both good and bad experiences.",
+          "japanese": "良い経験も悪い経験も、私たちを成長させる。",
+          "category": "教育・人生の教訓"
+        },
+        {
+          "id": "a0000003-0001-0001-0001-000000000018",
+          "english": "Her travel experiences shaped her worldview.",
+          "japanese": "彼女の旅の経験が彼女の世界観を形作った。",
+          "category": "教育・人生の教訓"
+        },
+        {
+          "id": "a0000003-0001-0001-0001-000000000019",
+          "english": "That experience taught me to be patient.",
+          "japanese": "その経験が私に忍耐を教えてくれた。",
+          "category": "教育・人生の教訓"
+        },
+        {
+          "id": "a0000003-0001-0001-0001-000000000020",
+          "english": "Each experience makes us stronger.",
+          "japanese": "それぞれの経験が私たちを強くしてくれる。",
+          "category": "教育・人生の教訓"
+        },
+        {
+          "id": "a0000003-0001-0001-0001-000000000021",
+          "english": "What was your experience like at the concert?",
+          "japanese": "コンサートの体験はどうだった？",
+          "category": "会話・カジュアル"
+        },
+        {
+          "id": "a0000003-0001-0001-0001-000000000022",
+          "english": "It was a once-in-a-lifetime experience.",
+          "japanese": "一生に一度の経験だったよ。",
+          "category": "会話・カジュアル"
+        },
+        {
+          "id": "a0000003-0001-0001-0001-000000000023",
+          "english": "I want to experience skydiving at least once.",
+          "japanese": "一度はスカイダイビングを体験してみたい。",
+          "category": "会話・カジュアル"
+        },
+        {
+          "id": "a0000003-0001-0001-0001-000000000024",
+          "english": "You'll experience a lot of new things in college.",
+          "japanese": "大学ではたくさんの新しいことを経験するよ。",
+          "category": "会話・カジュアル"
+        },
+        {
+          "id": "a0000003-0001-0001-0001-000000000025",
+          "english": "Traveling alone was a scary but rewarding experience.",
+          "japanese": "一人旅は怖かったけど、やりがいのある経験だった。",
+          "category": "会話・カジュアル"
+        },
+        {
+          "id": "a0000003-0001-0001-0001-000000000026",
+          "english": "Love is an experience that changes you forever.",
+          "japanese": "愛はあなたを永遠に変える経験だ。",
+          "category": "比喩・哲学的"
+        },
+        {
+          "id": "a0000003-0001-0001-0001-000000000027",
+          "english": "Aging is not just about years, but about experience.",
+          "japanese": "年を取ることは、単なる年月ではなく経験の積み重ねだ。",
+          "category": "比喩・哲学的"
+        },
+        {
+          "id": "a0000003-0001-0001-0001-000000000028",
+          "english": "Every experience adds a chapter to your story.",
+          "japanese": "すべての経験があなたの物語に一章を加える。",
+          "category": "比喩・哲学的"
+        },
+        {
+          "id": "a0000003-0001-0001-0001-000000000029",
+          "english": "Experience teaches us things books cannot.",
+          "japanese": "経験は本では学べないことを教えてくれる。",
+          "category": "比喩・哲学的"
+        },
+        {
+          "id": "a0000003-0001-0001-0001-000000000030",
+          "english": "Life is a collection of experiences.",
+          "japanese": "人生とは経験の集まりである。",
+          "category": "比喩・哲学的"
+        },
+        {
+          "id": "a0000003-0001-0001-0001-000000000031",
+          "english": "This… is my Stand! Gold Experience!",
+          "japanese": "これが……オレのスタンド！『ゴールド・エクスペリエンス』だッ！",
+          "category": "Gold Experience"
+        },
+        {
+          "id": "a0000003-0001-0001-0001-000000000032",
+          "english": "Gold Experience's ability is to give life!",
+          "japanese": "ゴールド・エクスペリエンスの能力は'生命'を与えることだ！",
+          "category": "Gold Experience"
+        },
+        {
+          "id": "a0000003-0001-0001-0001-000000000033",
+          "english": "Try to attack if you can! But you can't… because your consciousness is already speeding up!",
+          "japanese": "動けるなら攻撃してみろ！だが、できない……なぜなら君の意識はすでに加速しているからだッ！",
+          "category": "Gold Experience"
+        },
+        {
+          "id": "a0000003-0001-0001-0001-000000000034",
+          "english": "Anyone struck by Gold Experience will feel a disconnect between their body and their mind!",
+          "japanese": "ゴールド・エクスペリエンスの力で殴られた者は、肉体と精神の間にズレが生じる！",
+          "category": "Gold Experience"
+        },
+        {
+          "id": "a0000003-0001-0001-0001-000000000035",
+          "english": "That frog is a living being. You're suffering the consequences of harming life itself!",
+          "japanese": "そのカエルは'生命'だ。生命を傷つけた報いを受けたのは……おまえ自身だッ！",
+          "category": "Gold Experience"
+        },
+        {
+          "id": "a0000003-0001-0001-0001-000000000036",
+          "english": "What you saw was only an instant… but for you, it will be an eternity…",
+          "japanese": "君が見たものは……ほんの『一瞬』……だが……君にとっては永遠だ……",
+          "category": "Gold Experience Requiem"
+        },
+        {
+          "id": "a0000003-0001-0001-0001-000000000037",
+          "english": "Gold Experience Requiem will not allow even the truth to reach you.",
+          "japanese": "ゴールド・エクスペリエンス・レクイエムは……『真実に到達すること』さえも許さない",
+          "category": "Gold Experience Requiem"
+        },
+        {
+          "id": "a0000003-0001-0001-0001-000000000038",
+          "english": "Your death will repeat for eternity. You will never arrive at the result!",
+          "japanese": "おまえの『死』は、永遠に繰り返す。『結果』に到達することはない……！",
+          "category": "Gold Experience Requiem"
+        },
+        {
+          "id": "a0000003-0001-0001-0001-000000000039",
+          "english": "This is… the power of Requiem…",
+          "japanese": "これが……『レクイエム』の能力だ……",
+          "category": "Gold Experience Requiem"
+        },
+        {
+          "id": "a0000003-0001-0001-0001-000000000040",
+          "english": "Your fate, your future — all of it is denied by Gold Experience Requiem!",
+          "japanese": "おまえの『運命』も『未来』も、全てこのゴールド・エクスペリエンス・レクイエムが否定する！",
+          "category": "Gold Experience Requiem"
+        }
+      ]
+    }
+  ]
+}
