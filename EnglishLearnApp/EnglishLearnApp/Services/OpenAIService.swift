@@ -89,12 +89,6 @@ class OpenAIService: ObservableObject {
             errorMessage = nil
         }
 
-        defer {
-            Task { @MainActor in
-                isLoading = false
-            }
-        }
-
         let systemPrompt = """
         あなたは英語学習アプリ用の例文を生成するアシスタントです。
         与えられた英単語を使った自然な例文を生成してください。
@@ -135,37 +129,48 @@ class OpenAIService: ObservableObject {
         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
         urlRequest.httpBody = try JSONEncoder().encode(request)
 
-        let (data, response) = try await URLSession.shared.data(for: urlRequest)
+        do {
+            let (data, response) = try await URLSession.shared.data(for: urlRequest)
 
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw OpenAIError.invalidResponse
-        }
-
-        guard httpResponse.statusCode == 200 else {
-            if let errorBody = String(data: data, encoding: .utf8) {
-                print("OpenAI API Error: \(errorBody)")
+            guard let httpResponse = response as? HTTPURLResponse else {
+                await MainActor.run { isLoading = false }
+                throw OpenAIError.invalidResponse
             }
-            throw OpenAIError.apiError(statusCode: httpResponse.statusCode)
-        }
 
-        let openAIResponse = try JSONDecoder().decode(OpenAIResponse.self, from: data)
+            guard httpResponse.statusCode == 200 else {
+                if let errorBody = String(data: data, encoding: .utf8) {
+                    print("OpenAI API Error: \(errorBody)")
+                }
+                await MainActor.run { isLoading = false }
+                throw OpenAIError.apiError(statusCode: httpResponse.statusCode)
+            }
 
-        guard let content = openAIResponse.choices.first?.message.content else {
-            throw OpenAIError.noContent
-        }
+            let openAIResponse = try JSONDecoder().decode(OpenAIResponse.self, from: data)
 
-        guard let contentData = content.data(using: .utf8) else {
-            throw OpenAIError.invalidJSON
-        }
+            guard let content = openAIResponse.choices.first?.message.content else {
+                await MainActor.run { isLoading = false }
+                throw OpenAIError.noContent
+            }
 
-        let generatedSentences = try JSONDecoder().decode(GeneratedSentences.self, from: contentData)
+            guard let contentData = content.data(using: .utf8) else {
+                await MainActor.run { isLoading = false }
+                throw OpenAIError.invalidJSON
+            }
 
-        return generatedSentences.sentences.map { generated in
-            Sentence(
-                english: generated.english,
-                japanese: generated.japanese,
-                category: generated.category
-            )
+            let generatedSentences = try JSONDecoder().decode(GeneratedSentences.self, from: contentData)
+
+            await MainActor.run { isLoading = false }
+
+            return generatedSentences.sentences.map { generated in
+                Sentence(
+                    english: generated.english,
+                    japanese: generated.japanese,
+                    category: generated.category
+                )
+            }
+        } catch {
+            await MainActor.run { isLoading = false }
+            throw error
         }
     }
 
