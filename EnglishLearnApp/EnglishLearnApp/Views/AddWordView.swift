@@ -148,10 +148,10 @@ struct AddWordView: View {
         }
     }
 
-    /// Saves the word with generated sentences to persistent storage.
+    /// Creates a new word and passes it to the callback.
     ///
     /// Creates a new `Word` object with the entered information and generated sentences,
-    /// saves it using `WordDataManager`, and dismisses the view.
+    /// then passes it to the `onSave` callback. Persistence is handled by the caller.
     private func saveWord() {
         let newWord = Word(
             word: word,
@@ -159,10 +159,6 @@ struct AddWordView: View {
             phonetic: phonetic,
             sentences: generatedSentences
         )
-
-        var words = WordDataManager.shared.loadWords()
-        words.append(newWord)
-        WordDataManager.shared.saveWords(words)
 
         onSave?(newWord)
         dismiss()

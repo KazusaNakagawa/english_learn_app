@@ -43,6 +43,7 @@ struct WordListView: View {
         .sheet(isPresented: $showingAddWordView) {
             AddWordView { newWord in
                 words.append(newWord)
+                WordDataManager.shared.saveWords(words)
             }
         }
         .onAppear {
