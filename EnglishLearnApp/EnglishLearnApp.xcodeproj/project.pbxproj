@@ -19,6 +19,10 @@
 		A100000A238D1234567890AB /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A100001A238D1234567890AB /* Preview Assets.xcassets */; };
 		A100000B238D1234567890AB /* SentenceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100001C238D1234567890AB /* SentenceListView.swift */; };
 		A100000C238D1234567890AB /* SentencePracticeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100001D238D1234567890AB /* SentencePracticeView.swift */; };
+		A100000D238D1234567890AB /* AddWordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100001E238D1234567890AB /* AddWordView.swift */; };
+		A100000E238D1234567890AB /* OpenAIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100001F238D1234567890AB /* OpenAIService.swift */; };
+		A100000F238D1234567890AB /* SettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000020238D1234567890AB /* SettingsManager.swift */; };
+		A1000010238D1234567890AB /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000022238D1234567890AB /* SettingsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -35,7 +39,11 @@
 		A100001B238D1234567890AB /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A100001C238D1234567890AB /* SentenceListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SentenceListView.swift; sourceTree = "<group>"; };
 		A100001D238D1234567890AB /* SentencePracticeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SentencePracticeView.swift; sourceTree = "<group>"; };
+		A100001E238D1234567890AB /* AddWordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddWordView.swift; sourceTree = "<group>"; };
+		A100001F238D1234567890AB /* OpenAIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIService.swift; sourceTree = "<group>"; };
+		A1000020238D1234567890AB /* SettingsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsManager.swift; sourceTree = "<group>"; };
 		A1000021238D1234567890AB /* EnglishLearnApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = EnglishLearnApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1000022238D1234567890AB /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -93,6 +101,8 @@
 			children = (
 				A1000014238D1234567890AB /* SpeechService.swift */,
 				A1000015238D1234567890AB /* SpeechRecognizer.swift */,
+				A100001F238D1234567890AB /* OpenAIService.swift */,
+				A1000020238D1234567890AB /* SettingsManager.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -105,6 +115,8 @@
 				A1000017238D1234567890AB /* WordPracticeView.swift */,
 				A100001C238D1234567890AB /* SentenceListView.swift */,
 				A100001D238D1234567890AB /* SentencePracticeView.swift */,
+				A100001E238D1234567890AB /* AddWordView.swift */,
+				A1000022238D1234567890AB /* SettingsView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -206,6 +218,10 @@
 				A1000007238D1234567890AB /* WordPracticeView.swift in Sources */,
 				A100000B238D1234567890AB /* SentenceListView.swift in Sources */,
 				A100000C238D1234567890AB /* SentencePracticeView.swift in Sources */,
+				A100000D238D1234567890AB /* AddWordView.swift in Sources */,
+				A100000E238D1234567890AB /* OpenAIService.swift in Sources */,
+				A100000F238D1234567890AB /* SettingsManager.swift in Sources */,
+				A1000010238D1234567890AB /* SettingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

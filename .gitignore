@@ -58,3 +58,6 @@ playground.xcworkspace
 *.pem
 *.p12
 *.key
+
+# test
+output/

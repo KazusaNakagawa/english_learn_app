@@ -1,8 +1,21 @@
 import SwiftUI
 
+/// A view for configuring application settings.
+///
+/// This view provides controls for:
+/// - Voice gender selection for text-to-speech
+/// - OpenAI API key configuration for sentence generation
+///
+/// Settings are automatically persisted via `SettingsManager`.
 struct SettingsView: View {
+    /// The shared settings manager injected from the environment.
     @EnvironmentObject private var settings: SettingsManager
+
+    /// The speech service for playing sample audio.
     @StateObject private var speechService = SpeechService()
+
+    /// Local state for the API key input field.
+    @State private var apiKeyInput: String = ""
 
     var body: some View {
         NavigationStack {
@@ -34,11 +47,40 @@ struct SettingsView: View {
                     .listRowSeparator(.hidden)
                 }
 
+                Section(header: Text("OpenAI API設定")) {
+                    SecureField("APIキー", text: $apiKeyInput)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .onAppear {
+                            apiKeyInput = settings.openAIAPIKey ?? ""
+                        }
+                        .onChange(of: apiKeyInput) { _, newValue in
+                            settings.openAIAPIKey = newValue.isEmpty ? nil : newValue
+                        }
+
+                    if settings.openAIAPIKey != nil && !settings.openAIAPIKey!.isEmpty {
+                        HStack {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                            Text("APIキーが設定されています")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+
                 Section(header: Text("説明")) {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("英語の学習コンテンツの音声として、女性または男性の音声を選択できます。")
                             .font(.body)
                         Text("デフォルトを選択すると、システムの設定に従います。")
+                            .font(.body)
+                            .foregroundColor(.secondary)
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("OpenAI APIキーを設定すると、単語追加時に自動で例文を生成できます。")
+                            .font(.body)
+                        Text("APIキーはOpenAIのウェブサイトで取得できます。")
                             .font(.body)
                             .foregroundColor(.secondary)
                     }
