@@ -102,7 +102,7 @@ class SettingsManager: ObservableObject {
         case tsundere  = 7
         case sexy      = 5
         case whisper   = 22
-        case hisohiso  = 37
+        case hisohiso  = 38
 
         var label: String {
             switch self {
