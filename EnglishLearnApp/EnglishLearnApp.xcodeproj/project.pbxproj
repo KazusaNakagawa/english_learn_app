@@ -23,6 +23,8 @@
 		A100000E238D1234567890AB /* OpenAIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100001F238D1234567890AB /* OpenAIService.swift */; };
 		A100000F238D1234567890AB /* SettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000020238D1234567890AB /* SettingsManager.swift */; };
 		A1000010238D1234567890AB /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000022238D1234567890AB /* SettingsView.swift */; };
+		A1000025238D1234567890AB /* TrashView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000023238D1234567890AB /* TrashView.swift */; };
+		A1000026238D1234567890AB /* EditWordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000024238D1234567890AB /* EditWordView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -44,6 +46,8 @@
 		A1000020238D1234567890AB /* SettingsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsManager.swift; sourceTree = "<group>"; };
 		A1000021238D1234567890AB /* EnglishLearnApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = EnglishLearnApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1000022238D1234567890AB /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		A1000023238D1234567890AB /* TrashView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrashView.swift; sourceTree = "<group>"; };
+		A1000024238D1234567890AB /* EditWordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditWordView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -117,6 +121,8 @@
 				A100001D238D1234567890AB /* SentencePracticeView.swift */,
 				A100001E238D1234567890AB /* AddWordView.swift */,
 				A1000022238D1234567890AB /* SettingsView.swift */,
+				A1000023238D1234567890AB /* TrashView.swift */,
+				A1000024238D1234567890AB /* EditWordView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -222,6 +228,8 @@
 				A100000E238D1234567890AB /* OpenAIService.swift in Sources */,
 				A100000F238D1234567890AB /* SettingsManager.swift in Sources */,
 				A1000010238D1234567890AB /* SettingsView.swift in Sources */,
+				A1000025238D1234567890AB /* TrashView.swift in Sources */,
+				A1000026238D1234567890AB /* EditWordView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
