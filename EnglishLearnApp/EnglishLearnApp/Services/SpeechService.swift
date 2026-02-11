@@ -73,18 +73,29 @@ class SpeechService: NSObject, ObservableObject {
         do {
             var queryRequest = URLRequest(url: queryURL)
             queryRequest.httpMethod = "POST"
-            let (queryData, _) = try await URLSession.shared.data(for: queryRequest)
+            let (queryData, queryResponse) = try await URLSession.shared.data(for: queryRequest)
+            guard let queryHTTP = queryResponse as? HTTPURLResponse, (200...299).contains(queryHTTP.statusCode) else {
+                print("VOICEVOX audio_query failed: \((queryResponse as? HTTPURLResponse)?.statusCode ?? -1)")
+                isSpeaking = false
+                return
+            }
 
             var synthRequest = URLRequest(url: synthURL)
             synthRequest.httpMethod = "POST"
             synthRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
             synthRequest.httpBody = queryData
-            let (audioData, _) = try await URLSession.shared.data(for: synthRequest)
+            let (audioData, synthResponse) = try await URLSession.shared.data(for: synthRequest)
+            guard let synthHTTP = synthResponse as? HTTPURLResponse, (200...299).contains(synthHTTP.statusCode) else {
+                print("VOICEVOX synthesis failed: \((synthResponse as? HTTPURLResponse)?.statusCode ?? -1)")
+                isSpeaking = false
+                return
+            }
 
             audioPlayer = try AVAudioPlayer(data: audioData)
             audioPlayer?.delegate = self
             audioPlayer?.play()
         } catch {
+            print("VOICEVOX error: \(error.localizedDescription)")
             isSpeaking = false
         }
     }
