@@ -2,6 +2,8 @@ import AVFoundation
 
 class SpeechService: NSObject, ObservableObject {
     private let synthesizer = AVSpeechSynthesizer()
+    private var audioPlayer: AVAudioPlayer?
+
     @Published var isSpeaking = false
     @Published var voiceGender: SettingsManager.VoiceGender = .default_
 
@@ -30,8 +32,14 @@ class SpeechService: NSObject, ObservableObject {
     }
 
     func speak(_ text: String, language: String = "en-US", voiceGender: SettingsManager.VoiceGender = .default_) {
-        if synthesizer.isSpeaking {
-            synthesizer.stopSpeaking(at: .immediate)
+        stop()
+
+        if voiceGender == .zundamon {
+            isSpeaking = true
+            Task { @MainActor [weak self] in
+                await self?.speakWithVoicevox(text)
+            }
+            return
         }
 
         let utterance = AVSpeechUtterance(string: text)
@@ -42,6 +50,54 @@ class SpeechService: NSObject, ObservableObject {
 
         isSpeaking = true
         synthesizer.speak(utterance)
+    }
+
+    @MainActor
+    private func speakWithVoicevox(_ text: String) async {
+        let settings = SettingsManager.shared
+        let baseURL = settings.voicevoxServerURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard !baseURL.isEmpty else {
+            isSpeaking = false
+            return
+        }
+
+        let speakerID = settings.voicevoxStyle.rawValue
+
+        guard let encodedText = text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let queryURL = URL(string: "\(baseURL)/audio_query?text=\(encodedText)&speaker=\(speakerID)"),
+              let synthURL = URL(string: "\(baseURL)/synthesis?speaker=\(speakerID)") else {
+            isSpeaking = false
+            return
+        }
+
+        do {
+            var queryRequest = URLRequest(url: queryURL)
+            queryRequest.httpMethod = "POST"
+            let (queryData, queryResponse) = try await URLSession.shared.data(for: queryRequest)
+            guard let queryHTTP = queryResponse as? HTTPURLResponse, (200...299).contains(queryHTTP.statusCode) else {
+                print("VOICEVOX audio_query failed: \((queryResponse as? HTTPURLResponse)?.statusCode ?? -1)")
+                isSpeaking = false
+                return
+            }
+
+            var synthRequest = URLRequest(url: synthURL)
+            synthRequest.httpMethod = "POST"
+            synthRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            synthRequest.httpBody = queryData
+            let (audioData, synthResponse) = try await URLSession.shared.data(for: synthRequest)
+            guard let synthHTTP = synthResponse as? HTTPURLResponse, (200...299).contains(synthHTTP.statusCode) else {
+                print("VOICEVOX synthesis failed: \((synthResponse as? HTTPURLResponse)?.statusCode ?? -1)")
+                isSpeaking = false
+                return
+            }
+
+            audioPlayer = try AVAudioPlayer(data: audioData)
+            audioPlayer?.delegate = self
+            audioPlayer?.play()
+        } catch {
+            print("VOICEVOX error: \(error.localizedDescription)")
+            isSpeaking = false
+        }
     }
 
     private func getVoiceForGender(_ gender: SettingsManager.VoiceGender, language: String) -> AVSpeechSynthesisVoice? {
@@ -58,13 +114,16 @@ class SpeechService: NSObject, ObservableObject {
             return availableVoices.first { voice in
                 voice.language == language && voice.gender == .male
             } ?? AVSpeechSynthesisVoice(language: language)
+        case .zundamon:
+            return nil
         }
     }
 
     func stop() {
-        if synthesizer.isSpeaking {
-            synthesizer.stopSpeaking(at: .immediate)
-        }
+        synthesizer.stopSpeaking(at: .immediate)
+        audioPlayer?.stop()
+        audioPlayer = nil
+        isSpeaking = false
     }
 }
 
@@ -76,6 +135,14 @@ extension SpeechService: AVSpeechSynthesizerDelegate {
     }
 
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        DispatchQueue.main.async {
+            self.isSpeaking = false
+        }
+    }
+}
+
+extension SpeechService: AVAudioPlayerDelegate {
+    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         DispatchQueue.main.async {
             self.isSpeaking = false
         }
