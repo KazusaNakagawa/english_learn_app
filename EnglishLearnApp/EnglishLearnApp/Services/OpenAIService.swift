@@ -107,15 +107,11 @@ class OpenAIService: ObservableObject {
         let userPrompt = """
         「\(word)」（\(meaning)）を使った例文を\(count)個生成してください。
 
-        条件：
-        - 日常会話、ビジネス、学習など多様なシーンの例文を含めてください
-        - カテゴリは「日常会話」「ビジネス」「学習・教育」「趣味・娯楽」「旅行」などから適切なものを選んでください
-        - 自然で実用的な例文にしてください
-        - 日本語訳は自然な日本語にしてください
+        \(SettingsManager.shared.promptConditions)
         """
 
         let request = OpenAIRequest(
-            model: "gpt-4o-mini",
+            model: SettingsManager.shared.openAIModel.rawValue,
             messages: [
                 OpenAIRequest.Message(role: "system", content: systemPrompt),
                 OpenAIRequest.Message(role: "user", content: userPrompt)
