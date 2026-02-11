@@ -1,35 +1,50 @@
 import SwiftUI
 
-/// A view that displays a list of vocabulary words.
-///
-/// This view shows all available words with their meanings and phonetics.
-/// Users can tap on a word to navigate to its sentences or practice view,
-/// and use the "+" button to add new words.
-///
-/// ## Features
-/// - Displays words with meaning, phonetic, and sentence count
-/// - Audio playback button for each word
-/// - Navigation to sentence list or practice view
-/// - Add new words via sheet presentation
 struct WordListView: View {
-    /// The list of words to display.
     @State private var words: [Word] = []
+    @State private var searchText: String = ""
+    @State private var wordToEdit: Word? = nil
 
-    /// The speech service for audio playback.
     @StateObject private var speechService = SpeechService()
-
-    /// The shared settings manager.
     @EnvironmentObject private var settings: SettingsManager
 
-    /// Controls the presentation of the add word view.
     @State private var showingAddWordView = false
 
+    private var filteredWords: [Word] {
+        if searchText.isEmpty {
+            return words
+        }
+        let query = searchText.lowercased()
+        return words.filter {
+            $0.word.lowercased().contains(query) ||
+            $0.meaning.lowercased().contains(query) ||
+            $0.phonetic.lowercased().contains(query)
+        }
+    }
+
     var body: some View {
-        List(words) { word in
+        List(filteredWords) { word in
             NavigationLink(destination: destinationView(for: word)) {
                 WordRowView(word: word, speechService: speechService)
             }
+            .swipeActions(edge: .trailing) {
+                Button(role: .destructive) {
+                    WordDataManager.shared.moveToTrash(wordId: word.id)
+                    words = WordDataManager.shared.loadWords()
+                } label: {
+                    Label("ゴミ箱へ", systemImage: "trash")
+                }
+            }
+            .swipeActions(edge: .leading) {
+                Button {
+                    wordToEdit = word
+                } label: {
+                    Label("編集", systemImage: "pencil")
+                }
+                .tint(.orange)
+            }
         }
+        .searchable(text: $searchText, prompt: "単語・意味・発音記号で検索")
         .navigationTitle("英単語リスト")
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
@@ -39,11 +54,23 @@ struct WordListView: View {
                     Image(systemName: "plus")
                 }
             }
+            ToolbarItem(placement: .navigationBarLeading) {
+                NavigationLink(destination: TrashView()) {
+                    Image(systemName: "trash")
+                }
+            }
         }
         .sheet(isPresented: $showingAddWordView) {
             AddWordView { newWord in
-                words.append(newWord)
-                WordDataManager.shared.saveWords(words)
+                let all = WordDataManager.shared.loadAllWords() + [newWord]
+                WordDataManager.shared.saveAllWords(all)
+                words = WordDataManager.shared.loadWords()
+            }
+        }
+        .sheet(item: $wordToEdit) { word in
+            EditWordView(word: word) { updatedWord in
+                WordDataManager.shared.updateWord(updatedWord)
+                words = WordDataManager.shared.loadWords()
             }
         }
         .onAppear {
@@ -51,10 +78,6 @@ struct WordListView: View {
         }
     }
 
-    /// Returns the appropriate destination view for the given word.
-    ///
-    /// - Parameter word: The word to navigate to.
-    /// - Returns: `SentenceListView` if the word has sentences, otherwise `WordPracticeView`.
     @ViewBuilder
     private func destinationView(for word: Word) -> some View {
         if word.sentences.isEmpty {
@@ -65,15 +88,8 @@ struct WordListView: View {
     }
 }
 
-/// A row view displaying a single word in the list.
-///
-/// Shows the word, phonetic transcription, meaning, sentence count badge,
-/// and an audio playback button.
 struct WordRowView: View {
-    /// The word to display.
     let word: Word
-
-    /// The speech service for audio playback.
     @ObservedObject var speechService: SpeechService
 
     var body: some View {
