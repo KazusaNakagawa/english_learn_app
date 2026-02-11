@@ -98,15 +98,24 @@ http://192.168.1.5:50021/version
 
 **ステップ3：Info.plist に ATS 設定を追加する（初回のみ）**
 
-iOS はデフォルトで `http://` 通信をブロックします。Xcode で `Info.plist` に以下を追加してリビルドしてください：
+iOS はデフォルトで `http://` 通信をブロックします。Xcode で `Info.plist` の `NSAppTransportSecurity` を以下のように **特定IPのみ許可するスコープ設定** にしてリビルドしてください：
 
 ```xml
 <key>NSAppTransportSecurity</key>
 <dict>
-    <key>NSAllowsArbitraryLoads</key>
-    <true/>
+    <key>NSExceptionDomains</key>
+    <dict>
+        <!-- VOICEVOXサーバーのIPまたはホスト名に置き換える -->
+        <key>192.168.1.5</key>
+        <dict>
+            <key>NSExceptionAllowsInsecureHTTPLoads</key>
+            <true/>
+        </dict>
+    </dict>
 </dict>
 ```
+
+> **⚠️ セキュリティ注意：** `NSAllowsArbitraryLoads: true` はすべての HTTP 通信を許可してしまうため使用しないでください。上記のように `NSExceptionDomains` で VOICEVOXサーバーのIPのみに限定してください。
 
 **ステップ4：アプリにURLを入力する**
 
