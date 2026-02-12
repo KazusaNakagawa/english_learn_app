@@ -32,7 +32,7 @@ struct SentenceListView: View {
                             speechService.speak(word.word, voiceGender: settings.voiceGender)
                         }) {
                             HStack {
-                                Image(systemName: "speaker.wave.2.fill")
+                                Image(systemName: (speechService.isSpeaking && speechService.speakingLanguage != "ja-JP") ? "speaker.wave.3.fill" : "speaker.wave.2.fill")
                                 Text("英語を聞く")
                             }
                             .padding(.horizontal, 16)
@@ -46,7 +46,7 @@ struct SentenceListView: View {
                             speechService.speak(word.meaning, language: "ja-JP", voiceGender: settings.voiceGender)
                         }) {
                             HStack {
-                                Image(systemName: "speaker.wave.2.fill")
+                                Image(systemName: (speechService.isSpeaking && speechService.speakingLanguage == "ja-JP") ? "speaker.wave.3.fill" : "speaker.wave.2.fill")
                                 Text("日本語を聞く")
                             }
                             .padding(.horizontal, 16)
