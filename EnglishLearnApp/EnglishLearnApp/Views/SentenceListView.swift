@@ -41,6 +41,7 @@ struct SentenceListView: View {
                             .cornerRadius(8)
                         }
                         .foregroundColor(.blue)
+                        .buttonStyle(.borderless)
 
                         Button(action: {
                             speechService.speak(word.meaning, language: "ja-JP", voiceGender: settings.voiceGender)
@@ -55,6 +56,7 @@ struct SentenceListView: View {
                             .cornerRadius(8)
                         }
                         .foregroundColor(.orange)
+                        .buttonStyle(.borderless)
                     }
                     .padding(.top, 4)
                 }
