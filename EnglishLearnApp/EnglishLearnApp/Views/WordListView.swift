@@ -121,14 +121,25 @@ struct WordRowView: View {
 
             Spacer()
 
-            Button(action: {
-                speechService.speak(word.word, voiceGender: speechService.voiceGender)
-            }) {
-                Image(systemName: speechService.isSpeaking ? "speaker.wave.3.fill" : "speaker.wave.2.fill")
-                    .font(.title2)
-                    .foregroundColor(.blue)
+            HStack(spacing: 12) {
+                Button(action: {
+                    speechService.speak(word.word, voiceGender: speechService.voiceGender)
+                }) {
+                    Image(systemName: (speechService.isSpeaking && speechService.speakingLanguage != "ja-JP") ? "speaker.wave.3.fill" : "speaker.wave.2.fill")
+                        .font(.title2)
+                        .foregroundColor(.blue)
+                }
+                .buttonStyle(.borderless)
+
+                Button(action: {
+                    speechService.speak(word.meaning, language: "ja-JP", voiceGender: speechService.voiceGender)
+                }) {
+                    Image(systemName: (speechService.isSpeaking && speechService.speakingLanguage == "ja-JP") ? "speaker.wave.3.fill" : "speaker.wave.2.fill")
+                        .font(.title2)
+                        .foregroundColor(.orange)
+                }
+                .buttonStyle(.borderless)
             }
-            .buttonStyle(.borderless)
         }
         .padding(.vertical, 4)
     }

@@ -1,10 +1,11 @@
 import AVFoundation
 
 class SpeechService: NSObject, ObservableObject {
-    private let synthesizer = AVSpeechSynthesizer()
+    nonisolated(unsafe) private let synthesizer = AVSpeechSynthesizer()
     private var audioPlayer: AVAudioPlayer?
 
     @Published var isSpeaking = false
+    @Published var speakingLanguage: String? = nil
     @Published var voiceGender: SettingsManager.VoiceGender = .default_
 
     override init() {
@@ -33,6 +34,7 @@ class SpeechService: NSObject, ObservableObject {
 
     func speak(_ text: String, language: String = "en-US", voiceGender: SettingsManager.VoiceGender = .default_) {
         stop()
+        speakingLanguage = language
 
         if voiceGender == .zundamon {
             isSpeaking = true
@@ -124,6 +126,7 @@ class SpeechService: NSObject, ObservableObject {
         audioPlayer?.stop()
         audioPlayer = nil
         isSpeaking = false
+        speakingLanguage = nil
     }
 }
 

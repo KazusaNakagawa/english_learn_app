@@ -27,19 +27,35 @@ struct SentenceListView: View {
                         .font(.title3)
                         .foregroundColor(.blue)
 
-                    Button(action: {
-                        speechService.speak(word.word, voiceGender: settings.voiceGender)
-                    }) {
-                        HStack {
-                            Image(systemName: "speaker.wave.2.fill")
-                            Text("発音を聞く")
+                    HStack(spacing: 12) {
+                        Button(action: {
+                            speechService.speak(word.word, voiceGender: settings.voiceGender)
+                        }) {
+                            HStack {
+                                Image(systemName: "speaker.wave.2.fill")
+                                Text("英語を聞く")
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(Color.blue.opacity(0.1))
+                            .cornerRadius(8)
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .background(Color.blue.opacity(0.1))
-                        .cornerRadius(8)
+                        .foregroundColor(.blue)
+
+                        Button(action: {
+                            speechService.speak(word.meaning, language: "ja-JP", voiceGender: settings.voiceGender)
+                        }) {
+                            HStack {
+                                Image(systemName: "speaker.wave.2.fill")
+                                Text("日本語を聞く")
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(Color.orange.opacity(0.1))
+                            .cornerRadius(8)
+                        }
+                        .foregroundColor(.orange)
                     }
-                    .foregroundColor(.blue)
                     .padding(.top, 4)
                 }
                 .frame(maxWidth: .infinity)
