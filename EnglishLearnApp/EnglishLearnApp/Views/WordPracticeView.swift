@@ -30,20 +30,37 @@ struct WordPracticeView: View {
             Spacer()
 
             // 音声読み上げボタン
-            Button(action: {
-                speechService.speak(word.word, voiceGender: settings.voiceGender)
-            }) {
-                VStack {
-                    Image(systemName: speechService.isSpeaking ? "speaker.wave.3.fill" : "speaker.wave.2.fill")
-                        .font(.system(size: 40))
-                    Text("お手本を聞く")
-                        .font(.subheadline)
+            HStack(spacing: 16) {
+                Button(action: {
+                    speechService.speak(word.word, voiceGender: settings.voiceGender)
+                }) {
+                    VStack {
+                        Image(systemName: (speechService.isSpeaking && speechService.speakingLanguage != "ja-JP") ? "speaker.wave.3.fill" : "speaker.wave.2.fill")
+                            .font(.system(size: 40))
+                        Text("英語を聞く")
+                            .font(.subheadline)
+                    }
+                    .frame(width: 120, height: 80)
+                    .background(Color.blue.opacity(0.1))
+                    .cornerRadius(16)
                 }
-                .frame(width: 120, height: 80)
-                .background(Color.blue.opacity(0.1))
-                .cornerRadius(16)
+                .foregroundColor(.blue)
+
+                Button(action: {
+                    speechService.speak(word.meaning, language: "ja-JP", voiceGender: settings.voiceGender)
+                }) {
+                    VStack {
+                        Image(systemName: (speechService.isSpeaking && speechService.speakingLanguage == "ja-JP") ? "speaker.wave.3.fill" : "speaker.wave.2.fill")
+                            .font(.system(size: 40))
+                        Text("日本語を聞く")
+                            .font(.subheadline)
+                    }
+                    .frame(width: 120, height: 80)
+                    .background(Color.orange.opacity(0.1))
+                    .cornerRadius(16)
+                }
+                .foregroundColor(.orange)
             }
-            .foregroundColor(.blue)
 
             // 発音チェックボタン
             Button(action: {

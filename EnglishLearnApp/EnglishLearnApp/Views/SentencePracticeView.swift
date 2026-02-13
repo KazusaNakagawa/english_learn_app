@@ -43,20 +43,38 @@ struct SentencePracticeView: View {
 
                 // 操作ボタン
                 VStack(spacing: 16) {
-                    // 音声読み上げボタン
+                    // 英語読み上げボタン
                     Button(action: {
                         speechService.speak(sentence.english, voiceGender: settings.voiceGender)
                     }) {
                         HStack {
-                            Image(systemName: speechService.isSpeaking ? "speaker.wave.3.fill" : "speaker.wave.2.fill")
+                            Image(systemName: (speechService.isSpeaking && speechService.speakingLanguage != "ja-JP") ? "speaker.wave.3.fill" : "speaker.wave.2.fill")
                                 .font(.title2)
-                            Text("お手本を聞く")
+                            Text("英語を聞く")
                                 .font(.headline)
                         }
                         .frame(maxWidth: .infinity)
                         .frame(height: 56)
                         .background(Color.blue.opacity(0.1))
                         .foregroundColor(.blue)
+                        .cornerRadius(12)
+                    }
+                    .padding(.horizontal)
+
+                    // 日本語訳読み上げボタン
+                    Button(action: {
+                        speechService.speak(sentence.japanese, language: "ja-JP", voiceGender: settings.voiceGender)
+                    }) {
+                        HStack {
+                            Image(systemName: (speechService.isSpeaking && speechService.speakingLanguage == "ja-JP") ? "speaker.wave.3.fill" : "speaker.wave.2.fill")
+                                .font(.title2)
+                            Text("日本語訳を聞く")
+                                .font(.headline)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 56)
+                        .background(Color.orange.opacity(0.1))
+                        .foregroundColor(.orange)
                         .cornerRadius(12)
                     }
                     .padding(.horizontal)
