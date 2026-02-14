@@ -46,6 +46,8 @@ export class VoicevoxStack extends cdk.Stack {
         READINESS_CHECK_PATH: '/version',
       },
       description: 'VOICEVOX TTS engine (Zundamon) - PoC',
+      // Cap concurrent invocations to limit unexpected cost exposure
+      reservedConcurrentExecutions: 3,
     });
 
     // ----------------------------------------------------------------
@@ -64,6 +66,16 @@ export class VoicevoxStack extends cdk.Stack {
         allowHeaders: ['Content-Type', 'Accept'],
       },
     });
+
+    // Apply throttling to the $default stage to limit request rate
+    // and reduce cost exposure while CORS is fully open (PoC)
+    const defaultStage = httpApi.defaultStage?.node.defaultChild as apigatewayv2.CfnStage;
+    if (defaultStage) {
+      defaultStage.defaultRouteSettings = {
+        throttlingBurstLimit: 10,  // max concurrent requests
+        throttlingRateLimit: 5,    // requests per second
+      };
+    }
 
     const lambdaIntegration = new apigatewayv2Integrations.HttpLambdaIntegration(
       'VoicevoxLambdaIntegration',
