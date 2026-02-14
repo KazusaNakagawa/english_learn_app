@@ -135,8 +135,9 @@ npm run destroy
 **Step 1: クエリ生成**
 
 ```bash
-curl -X POST \
-  "{BASE_URL}/audio_query?text=ずんだもんです&speaker=3" \
+curl -G -X POST "${BASE_URL}/audio_query" \
+  --data-urlencode "text=ずんだもんです" \
+  -d "speaker=3" \
   -o query.json
 ```
 
@@ -144,7 +145,7 @@ curl -X POST \
 
 ```bash
 curl -X POST \
-  "{BASE_URL}/synthesis?speaker=3" \
+  "${BASE_URL}/synthesis?speaker=3" \
   -H "Content-Type: application/json" \
   -d @query.json \
   -o output.wav
