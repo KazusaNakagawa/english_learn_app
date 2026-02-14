@@ -20,7 +20,7 @@ export class VoicevoxStack extends cdk.Stack {
       repositoryName: 'voicevox-engine',
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       // Allow `cdk destroy` to succeed even when the repository contains images
-      autoDeleteImages: true,
+      emptyOnDelete: true,
       lifecycleRules: [
         {
           // Prevent unbounded accumulation of hash-tagged images
