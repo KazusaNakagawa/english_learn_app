@@ -34,8 +34,8 @@ export class VoicevoxStack extends cdk.Stack {
       ),
       // CPU inference only. 2GB to give VOICEVOX enough headroom
       memorySize: 2048,
-      // Allow time for cold start + TTS generation
-      timeout: cdk.Duration.seconds(60),
+      // Allow time for cold start (VOICEVOX model loading ~30s) + TTS generation
+      timeout: cdk.Duration.seconds(120),
       architecture: lambda.Architecture.X86_64,
       environment: {
         // Lambda Web Adapter: port that VOICEVOX engine listens on
