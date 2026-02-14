@@ -1,5 +1,5 @@
 # Stage 1: fetch Lambda Web Adapter binary
-FROM public.ecr.aws/awsguru/aws-lambda-adapter:0.8.4 AS adapter
+FROM public.ecr.aws/awsguru/aws-lambda-adapter:0.9.1 AS adapter
 
 # Stage 2: VOICEVOX engine (CPU build)
 FROM voicevox/voicevox_engine:cpu-ubuntu20.04-latest
