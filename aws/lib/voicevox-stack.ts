@@ -1,4 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigatewayv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import * as apigatewayv2Integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
@@ -13,7 +14,19 @@ export class VoicevoxStack extends cdk.Stack {
     // ----------------------------------------------------------------
     // Lambda: VOICEVOX engine (Container Image + Lambda Web Adapter)
     // ----------------------------------------------------------------
+    const executionRole = new iam.Role(this, 'VoicevoxFunctionRole', {
+      roleName: 'voicevox-engine-role',
+      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AWSLambdaBasicExecutionRole'
+        ),
+      ],
+    });
+
     const voicevoxFn = new lambda.DockerImageFunction(this, 'VoicevoxFunction', {
+      functionName: 'voicevox-engine',
+      role: executionRole,
       code: lambda.DockerImageCode.fromImageAsset(
         path.join(__dirname, '../lambda/voicevox'),
         // Force linux/amd64 build to match Lambda x86_64 (required on Apple Silicon)
