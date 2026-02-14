@@ -75,11 +75,6 @@ struct SettingsView: View {
 
                 if settings.voiceGender == .zundamon {
                     Section(header: Text("VOICEVOX設定")) {
-                        TextField("サーバーURL (例: http://192.168.1.10:50021)", text: $settings.voicevoxServerURL)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .keyboardType(.URL)
-
                         Picker("スタイル", selection: $settings.voicevoxStyle) {
                             ForEach(SettingsManager.VoicevoxStyle.allCases, id: \.self) { style in
                                 Text(style.label).tag(style)

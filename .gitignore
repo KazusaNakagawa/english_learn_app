@@ -1,8 +1,13 @@
 # macOS
+.aws
 .DS_Store
 .AppleDouble
 .LSOverride
 ._*
+
+# App configuration (contains secrets — do not commit)
+EnglishLearnApp/EnglishLearnApp/Config.xcconfig
+EnglishLearnApp/EnglishLearnApp/AppConfig.swift
 
 # Xcode
 build/

@@ -57,7 +57,7 @@ class SpeechService: NSObject, ObservableObject {
     @MainActor
     private func speakWithVoicevox(_ text: String) async {
         let settings = SettingsManager.shared
-        let baseURL = settings.voicevoxServerURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let baseURL = AppConfig.voicevoxBaseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         guard !baseURL.isEmpty else {
             isSpeaking = false
             return
