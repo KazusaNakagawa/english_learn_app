@@ -185,5 +185,4 @@ API Gateway → Lambda Web Adapter (extension) → VOICEVOX engine (:50021)
 ## 注意事項
 
 - **コールドスタート**: 初回リクエスト時に 10〜30 秒の遅延が発生します。PoC では許容範囲とします。
-- **バイナリレスポンス**: `/synthesis` は WAV バイナリを返します。API Gateway の `binaryMediaTypes` 設定が必要な場合は `voicevox-stack.ts` を修正してください。
 - **イメージサイズ**: VOICEVOX engine イメージは数 GB あるため、初回の ECR プッシュに時間がかかります。
