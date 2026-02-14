@@ -1,5 +1,5 @@
 # macOS
-~/.aws
+.aws
 .DS_Store
 .AppleDouble
 .LSOverride
