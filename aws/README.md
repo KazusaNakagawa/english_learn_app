@@ -161,9 +161,9 @@ curl -X POST \
 | ------ | ----- |
 | ランタイム | Container Image |
 | メモリ | 2048 MB |
-| タイムアウト | 60 秒 |
+| タイムアウト | 120 秒 |
 | アーキテクチャ | x86_64 |
-| ベースイメージ | `voicevox/voicevox_engine:cpu-ubuntu20.04-latest` |
+| ベースイメージ | `voicevox/voicevox_engine:cpu-ubuntu22.04-0.25.1` |
 
 ### Lambda Web Adapter について
 
