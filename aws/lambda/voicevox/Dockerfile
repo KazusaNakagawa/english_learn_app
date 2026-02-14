@@ -2,7 +2,9 @@
 FROM public.ecr.aws/awsguru/aws-lambda-adapter:0.9.1 AS adapter
 
 # Stage 2: VOICEVOX engine (CPU build)
-FROM voicevox/voicevox_engine:cpu-ubuntu20.04-latest
+# Pinned to a specific release for reproducibility.
+# ubuntu20.04 is phased out; use ubuntu22.04 with a pinned version tag.
+FROM voicevox/voicevox_engine:cpu-ubuntu22.04-0.25.1
 
 # Place Lambda Web Adapter as a Lambda Extension.
 # Binaries under /opt/extensions/ are automatically invoked by the Lambda runtime.
