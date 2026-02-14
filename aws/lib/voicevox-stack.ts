@@ -1,15 +1,53 @@
 import * as cdk from 'aws-cdk-lib';
+import * as ecr from 'aws-cdk-lib/aws-ecr';
+import * as ecr_assets from 'aws-cdk-lib/aws-ecr-assets';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigatewayv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import * as apigatewayv2Integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
-import * as ecr_assets from 'aws-cdk-lib/aws-ecr-assets';
+import * as ecrDeploy from 'cdk-ecr-deployment';
 import { Construct } from 'constructs';
 import * as path from 'path';
 
 export class VoicevoxStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
+
+    // ----------------------------------------------------------------
+    // ECR: dedicated repository with human-readable name
+    // ----------------------------------------------------------------
+    const repository = new ecr.Repository(this, 'VoicevoxRepository', {
+      repositoryName: 'voicevox-engine',
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      // Allow `cdk destroy` to succeed even when the repository contains images
+      emptyOnDelete: true,
+      lifecycleRules: [
+        {
+          // Prevent unbounded accumulation of hash-tagged images
+          maxImageCount: 10,
+          description: 'Retain last 10 images',
+        },
+      ],
+    });
+
+    // Build the Docker image asset (pushed to bootstrap ECR repo with content-hash tag)
+    const imageAsset = new ecr_assets.DockerImageAsset(this, 'VoicevoxImage', {
+      directory: path.join(__dirname, '../lambda/voicevox'),
+      // Force linux/amd64 build to match Lambda x86_64 (required on Apple Silicon)
+      platform: ecr_assets.Platform.LINUX_AMD64,
+    });
+
+    // Copy to voicevox-engine:<hash> so CloudFormation detects image changes automatically
+    const deployHashTag = new ecrDeploy.ECRDeployment(this, 'DeployVoicevoxImageHash', {
+      src: new ecrDeploy.DockerImageName(imageAsset.imageUri),
+      dest: new ecrDeploy.DockerImageName(`${repository.repositoryUri}:${imageAsset.imageTag}`),
+    });
+
+    // Also tag as :latest for human-readable display in the ECR console
+    new ecrDeploy.ECRDeployment(this, 'DeployVoicevoxImageLatest', {
+      src: new ecrDeploy.DockerImageName(imageAsset.imageUri),
+      dest: new ecrDeploy.DockerImageName(`${repository.repositoryUri}:latest`),
+    });
 
     // ----------------------------------------------------------------
     // Lambda: VOICEVOX engine (Container Image + Lambda Web Adapter)
@@ -27,11 +65,12 @@ export class VoicevoxStack extends cdk.Stack {
     const voicevoxFn = new lambda.DockerImageFunction(this, 'VoicevoxFunction', {
       functionName: 'voicevox-engine',
       role: executionRole,
-      code: lambda.DockerImageCode.fromImageAsset(
-        path.join(__dirname, '../lambda/voicevox'),
-        // Force linux/amd64 build to match Lambda x86_64 (required on Apple Silicon)
-        { platform: ecr_assets.Platform.LINUX_AMD64 }
-      ),
+      // Reference voicevox-engine repo with content-hash tag.
+      // The hash changes when the Dockerfile changes, so CloudFormation
+      // automatically re-deploys Lambda on every image update.
+      code: lambda.DockerImageCode.fromEcr(repository, {
+        tagOrDigest: imageAsset.imageTag,
+      }),
       // CPU inference only. 2GB to give VOICEVOX enough headroom
       memorySize: 2048,
       // Allow time for cold start (VOICEVOX model loading ~30s) + TTS generation
@@ -52,6 +91,14 @@ export class VoicevoxStack extends cdk.Stack {
       // required minimum of 10, causing a deployment error.
       // Cost is capped instead by API Gateway throttling (5 RPS / burst 10).
     });
+
+    // Allow Lambda to pull the container image from the dedicated ECR repository
+    repository.grantPull(executionRole);
+
+    // Ensure Lambda is updated only after the image is copied to voicevox-engine:<hash>.
+    // Without this, CloudFormation may update Lambda before ECRDeployment completes,
+    // causing "Source image does not exist" errors.
+    voicevoxFn.node.addDependency(deployHashTag);
 
     // ----------------------------------------------------------------
     // API Gateway: HTTP API
