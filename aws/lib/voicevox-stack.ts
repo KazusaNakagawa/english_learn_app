@@ -46,8 +46,11 @@ export class VoicevoxStack extends cdk.Stack {
         READINESS_CHECK_PATH: '/version',
       },
       description: 'VOICEVOX TTS engine (Zundamon) - PoC',
-      // Cap concurrent invocations to limit unexpected cost exposure
-      reservedConcurrentExecutions: 3,
+      // NOTE: reservedConcurrentExecutions is intentionally omitted.
+      // New AWS accounts have a default Lambda concurrency limit of 10.
+      // Reserving any units would drop unreserved concurrency below the
+      // required minimum of 10, causing a deployment error.
+      // Cost is capped instead by API Gateway throttling (5 RPS / burst 10).
     });
 
     // ----------------------------------------------------------------
