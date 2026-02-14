@@ -25,21 +25,6 @@ ENV PORT=50021
 ENV ASYNC_INIT=true
 ENV READINESS_CHECK_PATH=/version
 
-# ----------------------------------------------------------------
-# The base image default CMD is:
-#   gosu user /opt/python/bin/python3 ./run.py --voicelib_dir ...
-#
-# Lambda containers run as root, so gosu cannot switch to "user"
-# and crashes with "no matching entries in passwd file".
-# We override CMD to skip gosu and run Python directly as root.
-#
-# However, packages such as uvicorn are installed under the "user"
-# account's home directory (/home/user/.local/lib/pythonX.Y/site-packages).
-# Setting HOME=/home/user makes Python resolve ~/.local to that path,
-# so all user-installed packages remain visible when running as root.
-# ----------------------------------------------------------------
-ENV HOME=/home/user
-
 # Lambda container image filesystem is read-only except for /tmp.
 # VOICEVOX engine writes runtime data (dicts, user config) to
 # ~/.local/share and ~/.cache via XDG base directory conventions.
@@ -50,9 +35,12 @@ ENV XDG_CONFIG_HOME=/tmp/.config
 
 EXPOSE 50021
 
+# ubuntu22.04 image ships a compiled binary at /opt/voicevox_engine/run.
+# Core libraries (libvoicevox_core.so, libvoicevox_onnxruntime.so) are
+# bundled inside /opt/voicevox_engine, so --voicevox_dir alone is sufficient.
+# No gosu / Python path workaround needed (no user-switching in this image).
 WORKDIR /opt/voicevox_engine
-CMD ["/opt/python/bin/python3", "./run.py", \
-     "--voicelib_dir", "/opt/voicevox_core/", \
-     "--runtime_dir", "/opt/onnxruntime/lib", \
+CMD ["/opt/voicevox_engine/run", \
+     "--voicevox_dir", "/opt/voicevox_engine", \
      "--host", "0.0.0.0", \
      "--port", "50021"]
