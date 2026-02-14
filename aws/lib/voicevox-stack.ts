@@ -38,7 +38,7 @@ export class VoicevoxStack extends cdk.Stack {
     });
 
     // Copy to voicevox-engine:<hash> so CloudFormation detects image changes automatically
-    new ecrDeploy.ECRDeployment(this, 'DeployVoicevoxImageHash', {
+    const deployHashTag = new ecrDeploy.ECRDeployment(this, 'DeployVoicevoxImageHash', {
       src: new ecrDeploy.DockerImageName(imageAsset.imageUri),
       dest: new ecrDeploy.DockerImageName(`${repository.repositoryUri}:${imageAsset.imageTag}`),
     });
@@ -94,6 +94,11 @@ export class VoicevoxStack extends cdk.Stack {
 
     // Allow Lambda to pull the container image from the dedicated ECR repository
     repository.grantPull(executionRole);
+
+    // Ensure Lambda is updated only after the image is copied to voicevox-engine:<hash>.
+    // Without this, CloudFormation may update Lambda before ECRDeployment completes,
+    // causing "Source image does not exist" errors.
+    voicevoxFn.node.addDependency(deployHashTag);
 
     // ----------------------------------------------------------------
     // API Gateway: HTTP API
