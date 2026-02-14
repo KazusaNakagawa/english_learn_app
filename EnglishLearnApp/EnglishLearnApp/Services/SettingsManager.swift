@@ -54,13 +54,6 @@ class SettingsManager: ObservableObject {
         }
     }
 
-    /// The base URL of the VOICEVOX ENGINE server (e.g. "http://192.168.1.10:50021").
-    @Published var voicevoxServerURL: String {
-        didSet {
-            UserDefaults.standard.set(voicevoxServerURL, forKey: "voicevoxServerURL")
-        }
-    }
-
     /// The selected ずんだもん voice style.
     @Published var voicevoxStyle: VoicevoxStyle {
         didSet {
@@ -172,8 +165,6 @@ class SettingsManager: ObservableObject {
         } else {
             self.promptConditions = SettingsManager.defaultPromptConditions
         }
-
-        self.voicevoxServerURL = UserDefaults.standard.string(forKey: "voicevoxServerURL") ?? ""
 
         if let savedStyle = UserDefaults.standard.object(forKey: "voicevoxStyle") as? Int,
            let style = VoicevoxStyle(rawValue: savedStyle) {

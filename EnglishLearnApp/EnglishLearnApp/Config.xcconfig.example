@@ -1,0 +1,9 @@
+// Copy this file to Config.xcconfig and fill in your values.
+// Config.xcconfig is listed in .gitignore and should NOT be committed.
+//
+// How to link in Xcode:
+//   Project > Info > Configurations > Debug / Release
+//   → Set "Based on Configuration File" to Config.xcconfig
+
+// VOICEVOX API Gateway endpoint (no trailing slash)
+VOICEVOX_BASE_URL = https://xxxxxxxxxx.execute-api.ap-northeast-1.amazonaws.com

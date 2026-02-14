@@ -5,6 +5,9 @@
 .LSOverride
 ._*
 
+# App configuration (contains secrets — do not commit)
+EnglishLearnApp/EnglishLearnApp/Config.xcconfig
+
 # Xcode
 build/
 DerivedData/
