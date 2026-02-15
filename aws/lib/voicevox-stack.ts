@@ -9,15 +9,29 @@ import * as ecrDeploy from 'cdk-ecr-deployment';
 import { Construct } from 'constructs';
 import * as path from 'path';
 
+export interface VoicevoxStackProps extends cdk.StackProps {
+  /** Deployment environment: 'poc' | 'dev' | 'pro' */
+  stackEnv: string;
+}
+
+const envConfig: Record<string, { memorySize: number; throttleRateLimit: number; throttleBurstLimit: number }> = {
+  poc: { memorySize: 2048, throttleRateLimit: 5,   throttleBurstLimit: 10  },
+  dev: { memorySize: 2048, throttleRateLimit: 10,  throttleBurstLimit: 20  },
+  pro: { memorySize: 3008, throttleRateLimit: 50,  throttleBurstLimit: 100 },
+};
+
 export class VoicevoxStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+  constructor(scope: Construct, id: string, props: VoicevoxStackProps) {
     super(scope, id, props);
+
+    const { stackEnv } = props;
+    const cfg = envConfig[stackEnv];
 
     // ----------------------------------------------------------------
     // ECR: dedicated repository with human-readable name
     // ----------------------------------------------------------------
     const repository = new ecr.Repository(this, 'VoicevoxRepository', {
-      repositoryName: 'voicevox-engine',
+      repositoryName: `voicevox-engine-${stackEnv}`,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       // Allow `cdk destroy` to succeed even when the repository contains images
       emptyOnDelete: true,
@@ -37,7 +51,7 @@ export class VoicevoxStack extends cdk.Stack {
       platform: ecr_assets.Platform.LINUX_AMD64,
     });
 
-    // Copy to voicevox-engine:<hash> so CloudFormation detects image changes automatically
+    // Copy to voicevox-engine-{env}:<hash> so CloudFormation detects image changes automatically
     const deployHashTag = new ecrDeploy.ECRDeployment(this, 'DeployVoicevoxImageHash', {
       src: new ecrDeploy.DockerImageName(imageAsset.imageUri),
       dest: new ecrDeploy.DockerImageName(`${repository.repositoryUri}:${imageAsset.imageTag}`),
@@ -53,7 +67,7 @@ export class VoicevoxStack extends cdk.Stack {
     // Lambda: VOICEVOX engine (Container Image + Lambda Web Adapter)
     // ----------------------------------------------------------------
     const executionRole = new iam.Role(this, 'VoicevoxFunctionRole', {
-      roleName: 'voicevox-engine-role',
+      roleName: `voicevox-engine-role-${stackEnv}`,
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName(
@@ -63,16 +77,15 @@ export class VoicevoxStack extends cdk.Stack {
     });
 
     const voicevoxFn = new lambda.DockerImageFunction(this, 'VoicevoxFunction', {
-      functionName: 'voicevox-engine',
+      functionName: `voicevox-engine-${stackEnv}`,
       role: executionRole,
-      // Reference voicevox-engine repo with content-hash tag.
+      // Reference voicevox-engine-{env} repo with content-hash tag.
       // The hash changes when the Dockerfile changes, so CloudFormation
       // automatically re-deploys Lambda on every image update.
       code: lambda.DockerImageCode.fromEcr(repository, {
         tagOrDigest: imageAsset.imageTag,
       }),
-      // CPU inference only. 2GB to give VOICEVOX enough headroom
-      memorySize: 2048,
+      memorySize: cfg.memorySize,
       // Allow time for cold start (VOICEVOX model loading ~30s) + TTS generation
       timeout: cdk.Duration.seconds(120),
       architecture: lambda.Architecture.X86_64,
@@ -84,18 +97,18 @@ export class VoicevoxStack extends cdk.Stack {
         // Path used by Lambda Web Adapter to confirm the app is ready
         READINESS_CHECK_PATH: '/version',
       },
-      description: 'VOICEVOX TTS engine (Zundamon) - PoC',
+      description: `VOICEVOX TTS engine (Zundamon) - ${stackEnv}`,
       // NOTE: reservedConcurrentExecutions is intentionally omitted.
       // New AWS accounts have a default Lambda concurrency limit of 10.
       // Reserving any units would drop unreserved concurrency below the
       // required minimum of 10, causing a deployment error.
-      // Cost is capped instead by API Gateway throttling (5 RPS / burst 10).
+      // Cost is capped instead by API Gateway throttling.
     });
 
     // Allow Lambda to pull the container image from the dedicated ECR repository
     repository.grantPull(executionRole);
 
-    // Ensure Lambda is updated only after the image is copied to voicevox-engine:<hash>.
+    // Ensure Lambda is updated only after the image is copied to voicevox-engine-{env}:<hash>.
     // Without this, CloudFormation may update Lambda before ECRDeployment completes,
     // causing "Source image does not exist" errors.
     voicevoxFn.node.addDependency(deployHashTag);
@@ -104,8 +117,8 @@ export class VoicevoxStack extends cdk.Stack {
     // API Gateway: HTTP API
     // ----------------------------------------------------------------
     const httpApi = new apigatewayv2.HttpApi(this, 'VoicevoxHttpApi', {
-      apiName: 'voicevox-api',
-      description: 'VOICEVOX TTS API (PoC)',
+      apiName: `voicevox-api-${stackEnv}`,
+      description: `VOICEVOX TTS API (${stackEnv})`,
       corsPreflight: {
         allowOrigins: ['*'],
         allowMethods: [
@@ -117,13 +130,12 @@ export class VoicevoxStack extends cdk.Stack {
       },
     });
 
-    // Apply throttling to the $default stage to limit request rate
-    // and reduce cost exposure while CORS is fully open (PoC)
+    // Apply per-environment throttling to the $default stage
     const defaultStage = httpApi.defaultStage?.node.defaultChild as apigatewayv2.CfnStage;
     if (defaultStage) {
       defaultStage.defaultRouteSettings = {
-        throttlingBurstLimit: 10,  // max concurrent requests
-        throttlingRateLimit: 5,    // requests per second
+        throttlingBurstLimit: cfg.throttleBurstLimit,
+        throttlingRateLimit: cfg.throttleRateLimit,
       };
     }
 
@@ -174,7 +186,7 @@ export class VoicevoxStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'VoicevoxApiEndpoint', {
       value: httpApi.apiEndpoint,
       description: 'VOICEVOX API Gateway endpoint URL',
-      exportName: 'VoicevoxApiEndpoint',
+      exportName: `VoicevoxApiEndpoint-${stackEnv}`,
     });
 
     new cdk.CfnOutput(this, 'VoicevoxFunctionArn', {

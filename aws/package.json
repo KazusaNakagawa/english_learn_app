@@ -6,10 +6,18 @@
     "build": "tsc",
     "watch": "tsc -w",
     "cdk": "cdk",
-    "synth": "cdk synth",
-    "diff": "cdk diff",
-    "deploy": "cdk deploy",
-    "destroy": "cdk destroy"
+    "deploy:poc": "cdk deploy -c env=poc",
+    "deploy:dev": "cdk deploy -c env=dev",
+    "deploy:pro": "cdk deploy -c env=pro",
+    "diff:poc": "cdk diff -c env=poc",
+    "diff:dev": "cdk diff -c env=dev",
+    "diff:pro": "cdk diff -c env=pro",
+    "synth:poc": "cdk synth -c env=poc",
+    "synth:dev": "cdk synth -c env=dev",
+    "synth:pro": "cdk synth -c env=pro",
+    "destroy:poc": "cdk destroy -c env=poc",
+    "destroy:dev": "cdk destroy -c env=dev",
+    "destroy:pro": "cdk destroy -c env=pro"
   },
   "dependencies": {
     "aws-cdk-lib": "^2.120.0",
