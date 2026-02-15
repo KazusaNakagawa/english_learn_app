@@ -179,6 +179,15 @@ struct SettingsView: View {
                     }
                 }
 
+                Section(header: Text("法的情報")) {
+                    NavigationLink(destination: PrivacyPolicyView()) {
+                        Label("プライバシーポリシー", systemImage: "hand.raised")
+                    }
+                    NavigationLink(destination: TermsOfServiceView()) {
+                        Label("利用規約", systemImage: "doc.text")
+                    }
+                }
+
                 Section(header: Text("説明")) {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("英語の学習コンテンツの音声として、女性または男性の音声を選択できます。")
