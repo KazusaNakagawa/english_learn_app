@@ -25,6 +25,7 @@
 		A1000010238D1234567890AB /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000022238D1234567890AB /* SettingsView.swift */; };
 		A1000025238D1234567890AB /* TrashView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000023238D1234567890AB /* TrashView.swift */; };
 		A1000026238D1234567890AB /* EditWordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000024238D1234567890AB /* EditWordView.swift */; };
+		A1000075238D1234567890AB /* ArchiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000074238D1234567890AB /* ArchiveView.swift */; };
 		A1000027238D1234567890AB /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000028238D1234567890AB /* AppConfig.swift */; };
 /* End PBXBuildFile section */
 
@@ -49,6 +50,7 @@
 		A1000022238D1234567890AB /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		A1000023238D1234567890AB /* TrashView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrashView.swift; sourceTree = "<group>"; };
 		A1000024238D1234567890AB /* EditWordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditWordView.swift; sourceTree = "<group>"; };
+		A1000074238D1234567890AB /* ArchiveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveView.swift; sourceTree = "<group>"; };
 		A1000028238D1234567890AB /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -126,6 +128,7 @@
 				A1000022238D1234567890AB /* SettingsView.swift */,
 				A1000023238D1234567890AB /* TrashView.swift */,
 				A1000024238D1234567890AB /* EditWordView.swift */,
+				A1000074238D1234567890AB /* ArchiveView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -233,6 +236,7 @@
 				A1000010238D1234567890AB /* SettingsView.swift in Sources */,
 				A1000025238D1234567890AB /* TrashView.swift in Sources */,
 				A1000026238D1234567890AB /* EditWordView.swift in Sources */,
+				A1000075238D1234567890AB /* ArchiveView.swift in Sources */,
 				A1000027238D1234567890AB /* AppConfig.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
