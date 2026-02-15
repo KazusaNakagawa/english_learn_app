@@ -97,6 +97,13 @@ struct WordListView: View {
                     } label: {
                         Label("ゴミ箱へ", systemImage: "trash")
                     }
+                    Button {
+                        WordDataManager.shared.archive(wordId: word.id)
+                        words = WordDataManager.shared.loadWords()
+                    } label: {
+                        Label("アーカイブ", systemImage: "archivebox")
+                    }
+                    .tint(.teal)
                 }
                 .swipeActions(edge: .leading) {
                     Button {
@@ -119,6 +126,11 @@ struct WordListView: View {
                     showingAddWordView = true
                 }) {
                     Image(systemName: "plus")
+                }
+            }
+            ToolbarItem(placement: .navigationBarLeading) {
+                NavigationLink(destination: ArchiveView()) {
+                    Image(systemName: "archivebox")
                 }
             }
             ToolbarItem(placement: .navigationBarLeading) {
