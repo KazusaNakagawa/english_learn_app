@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// A view for configuring application settings.
 ///
@@ -21,6 +22,20 @@ struct SettingsView: View {
 
     /// Controls visibility of the reset confirmation alert.
     @State private var showResetPromptAlert = false
+
+    // MARK: - Export / Import state
+    @State private var exportURL: URL? = nil
+    @State private var showingShareSheet = false
+    @State private var isExporting = false
+    @State private var exportErrorMessage: String? = nil
+    @State private var showingExportError = false
+    @State private var showingImportPicker = false
+    @State private var pendingImportWords: [Word] = []
+    @State private var showingImportConfirm = false
+    @State private var importErrorMessage: String? = nil
+    @State private var showingImportError = false
+    @State private var importSuccessMessage: String? = nil
+    @State private var showingImportSuccess = false
 
     var body: some View {
         NavigationStack {
@@ -124,6 +139,46 @@ struct SettingsView: View {
                     }
                 }
 
+                Section(header: Text("データ管理")) {
+                    Button {
+                        guard !isExporting else { return }
+                        isExporting = true
+                        Task {
+                            // Brief delay so the spinner renders before heavy work
+                            try? await Task.sleep(nanoseconds: 150_000_000)
+                            await MainActor.run {
+                                if let url = WordDataManager.shared.exportToJSON() {
+                                    exportURL = url
+                                    isExporting = false
+                                    showingShareSheet = true
+                                } else {
+                                    isExporting = false
+                                    exportErrorMessage = "ファイルの生成に失敗しました。再度お試しください。"
+                                    showingExportError = true
+                                }
+                            }
+                        }
+                    } label: {
+                        HStack {
+                            if isExporting {
+                                ProgressView()
+                                    .progressViewStyle(.circular)
+                                    .scaleEffect(0.85)
+                            } else {
+                                Image(systemName: "square.and.arrow.up")
+                            }
+                            Text(isExporting ? "エクスポート中..." : "単語リストをエクスポート")
+                        }
+                    }
+                    .disabled(isExporting)
+
+                    Button {
+                        showingImportPicker = true
+                    } label: {
+                        Label("単語リストをインポート", systemImage: "square.and.arrow.down")
+                    }
+                }
+
                 Section(header: Text("説明")) {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("英語の学習コンテンツの音声として、女性または男性の音声を選択できます。")
@@ -153,7 +208,78 @@ struct SettingsView: View {
             .navigationTitle("設定")
             .navigationBarTitleDisplayMode(.inline)
         }
+        .sheet(isPresented: $showingShareSheet) {
+            if let url = exportURL {
+                ActivityView(activityItems: [url])
+            }
+        }
+        .fileImporter(
+            isPresented: $showingImportPicker,
+            allowedContentTypes: [UTType.json]
+        ) { result in
+            switch result {
+            case .success(let url):
+                let accessing = url.startAccessingSecurityScopedResource()
+                defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+                do {
+                    pendingImportWords = try WordDataManager.shared.importFromJSON(url: url)
+                    showingImportConfirm = true
+                } catch {
+                    importErrorMessage = "ファイルの読み込みに失敗しました。\n正しいエクスポートファイルか確認してください。"
+                    showingImportError = true
+                }
+            case .failure(let error):
+                importErrorMessage = error.localizedDescription
+                showingImportError = true
+            }
+        }
+        .confirmationDialog(
+            "\(pendingImportWords.count)件の単語をインポートします",
+            isPresented: $showingImportConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("既存データと結合") {
+                WordDataManager.shared.mergeWords(pendingImportWords)
+                importSuccessMessage = "\(pendingImportWords.count)件を既存データと結合しました"
+                showingImportSuccess = true
+            }
+            Button("既存データを置き換え", role: .destructive) {
+                WordDataManager.shared.replaceWords(pendingImportWords)
+                importSuccessMessage = "\(pendingImportWords.count)件でデータを置き換えました"
+                showingImportSuccess = true
+            }
+            Button("キャンセル", role: .cancel) {}
+        } message: {
+            Text("インポート方法を選択してください")
+        }
+        .alert("インポート完了", isPresented: $showingImportSuccess) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(importSuccessMessage ?? "")
+        }
+        .alert("インポートエラー", isPresented: $showingImportError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(importErrorMessage ?? "不明なエラーが発生しました")
+        }
+        .alert("エクスポートエラー", isPresented: $showingExportError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(exportErrorMessage ?? "不明なエラーが発生しました")
+        }
     }
+}
+
+// MARK: - UIKit Share Sheet bridge
+
+private struct ActivityView: UIViewControllerRepresentable {
+    let activityItems: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 #Preview {
