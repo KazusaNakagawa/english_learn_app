@@ -1,0 +1,48 @@
+name: CDK CI
+
+on:
+  push:
+    # TODO
+    # branches: [develop, main]
+    paths:
+      - 'aws/**'
+      - '.github/workflows/cdk-ci.yml'
+  pull_request:
+    # branches: [develop, main]
+    paths:
+      - 'aws/**'
+      - '.github/workflows/cdk-ci.yml'
+
+jobs:
+  validate:
+    name: Validate CDK
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: aws
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: aws/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript build
+        run: npm run build
+
+      - name: CDK synth (dry-run)
+        run: npx cdk synth
+        env:
+          AWS_DEFAULT_REGION: ap-northeast-1
+          # CDK synth does not require real AWS credentials
+          AWS_ACCESS_KEY_ID: dummy
+          AWS_SECRET_ACCESS_KEY: dummy
