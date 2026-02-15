@@ -108,7 +108,7 @@ Two files must be created locally before building the iOS app:
 ## Development Workflow
 
 1. **Create an Issue** — file a GitHub Issue for the task before starting.
-2. **Cut a working branch** — branch off `develop` for the change.
+2. **Cut a working branch** — pull the latest `develop` branch, then create a feature branch from it.
 3. **Implement** — make the code changes.
 4. **Manual verification** — confirm the change works by running the app or the affected AWS stack by hand.
 5. **Document if needed** — if the change introduces non-obvious behaviour, a setup step, or a known pitfall, add a document under `docs/`.
