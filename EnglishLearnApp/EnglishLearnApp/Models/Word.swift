@@ -23,15 +23,17 @@ struct Word: Codable, Identifiable {
     var phonetic: String
     var sentences: [Sentence]
     var deletedAt: Date?
+    var createdAt: Date?
 
     init(id: UUID = UUID(), word: String, meaning: String, phonetic: String,
-         sentences: [Sentence] = [], deletedAt: Date? = nil) {
+         sentences: [Sentence] = [], deletedAt: Date? = nil, createdAt: Date? = Date()) {
         self.id = id
         self.word = word
         self.meaning = meaning
         self.phonetic = phonetic
         self.sentences = sentences
         self.deletedAt = deletedAt
+        self.createdAt = createdAt
     }
 }
 
@@ -74,10 +76,28 @@ class WordDataManager {
 
     /// Loads all words including trashed ones.
     func loadAllWords() -> [Word] {
+        let words: [Word]
         if let documentsWords = loadFromDocuments() {
-            return documentsWords
+            words = documentsWords
+        } else {
+            words = loadFromBundle()
         }
-        return loadFromBundle()
+        return migrateCreatedAtIfNeeded(words)
+    }
+
+    /// One-time migration: assigns incremental createdAt to words that have none.
+    /// Preserves the original load order as relative age (index 0 = oldest).
+    /// Runs once and persists to Documents so it never runs again.
+    private func migrateCreatedAtIfNeeded(_ words: [Word]) -> [Word] {
+        guard words.contains(where: { $0.createdAt == nil }) else { return words }
+        // Assign synthetic dates 1 hour apart so sort order matches load order
+        let reference = Date(timeIntervalSince1970: 0)
+        var migrated = words
+        for i in migrated.indices where migrated[i].createdAt == nil {
+            migrated[i].createdAt = reference.addingTimeInterval(Double(i) * 3600)
+        }
+        saveAllWords(migrated)
+        return migrated
     }
 
     /// Loads only trashed words within the 10-day retention window.

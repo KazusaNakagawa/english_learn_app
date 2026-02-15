@@ -1,52 +1,119 @@
 import SwiftUI
 
+// MARK: - Sort Option
+
+enum WordSortOption: String, CaseIterable {
+    case alphabeticalAZ   = "alphabetical_az"
+    case alphabeticalZA   = "alphabetical_za"
+    case dateNewest       = "date_newest"
+    case dateOldest       = "date_oldest"
+    case mostSentences    = "most_sentences"
+    case fewestSentences  = "fewest_sentences"
+
+    var label: String {
+        switch self {
+        case .alphabeticalAZ:  return "A → Z"
+        case .alphabeticalZA:  return "Z → A"
+        case .dateNewest:      return "Newest first"
+        case .dateOldest:      return "Oldest first"
+        case .mostSentences:   return "Most sentences"
+        case .fewestSentences: return "Fewest sentences"
+        }
+    }
+}
+
+// MARK: - WordListView
+
 struct WordListView: View {
     @State private var words: [Word] = []
     @State private var searchText: String = ""
     @State private var wordToEdit: Word? = nil
+    @State private var selectedLetter: Character? = nil
+
+    @AppStorage("wordSortOption") private var sortOptionRaw: String = WordSortOption.alphabeticalAZ.rawValue
 
     @StateObject private var speechService = SpeechService()
     @EnvironmentObject private var settings: SettingsManager
 
     @State private var showingAddWordView = false
 
+    private var sortOption: WordSortOption {
+        WordSortOption(rawValue: sortOptionRaw) ?? .alphabeticalAZ
+    }
+
+    private var availableLetters: [Character] {
+        let letters = words.compactMap { $0.word.uppercased().first }
+        return Array(Set(letters)).sorted()
+    }
+
     private var filteredWords: [Word] {
-        if searchText.isEmpty {
-            return words
+        var result = words
+
+        // Letter filter
+        if let letter = selectedLetter {
+            result = result.filter { $0.word.uppercased().first == letter }
         }
-        let query = searchText.lowercased()
-        return words.filter {
-            $0.word.lowercased().contains(query) ||
-            $0.meaning.lowercased().contains(query) ||
-            $0.phonetic.lowercased().contains(query)
+
+        // Search filter
+        if !searchText.isEmpty {
+            let query = searchText.lowercased()
+            result = result.filter {
+                $0.word.lowercased().contains(query) ||
+                $0.meaning.lowercased().contains(query) ||
+                $0.phonetic.lowercased().contains(query)
+            }
         }
+
+        // Sort
+        switch sortOption {
+        case .alphabeticalAZ:
+            result.sort { $0.word.lowercased() < $1.word.lowercased() }
+        case .alphabeticalZA:
+            result.sort { $0.word.lowercased() > $1.word.lowercased() }
+        case .dateNewest:
+            result.sort { ($0.createdAt ?? .distantPast) > ($1.createdAt ?? .distantPast) }
+        case .dateOldest:
+            result.sort { ($0.createdAt ?? .distantPast) < ($1.createdAt ?? .distantPast) }
+        case .mostSentences:
+            result.sort { $0.sentences.count > $1.sentences.count }
+        case .fewestSentences:
+            result.sort { $0.sentences.count < $1.sentences.count }
+        }
+
+        return result
     }
 
     var body: some View {
-        List(filteredWords) { word in
-            NavigationLink(destination: destinationView(for: word)) {
-                WordRowView(word: word, speechService: speechService)
-            }
-            .swipeActions(edge: .trailing) {
-                Button(role: .destructive) {
-                    WordDataManager.shared.moveToTrash(wordId: word.id)
-                    words = WordDataManager.shared.loadWords()
-                } label: {
-                    Label("ゴミ箱へ", systemImage: "trash")
+        VStack(spacing: 0) {
+            letterFilterBar
+            List(filteredWords) { word in
+                NavigationLink(destination: destinationView(for: word)) {
+                    WordRowView(word: word, speechService: speechService)
+                }
+                .swipeActions(edge: .trailing) {
+                    Button(role: .destructive) {
+                        WordDataManager.shared.moveToTrash(wordId: word.id)
+                        words = WordDataManager.shared.loadWords()
+                    } label: {
+                        Label("ゴミ箱へ", systemImage: "trash")
+                    }
+                }
+                .swipeActions(edge: .leading) {
+                    Button {
+                        wordToEdit = word
+                    } label: {
+                        Label("編集", systemImage: "pencil")
+                    }
+                    .tint(.orange)
                 }
             }
-            .swipeActions(edge: .leading) {
-                Button {
-                    wordToEdit = word
-                } label: {
-                    Label("編集", systemImage: "pencil")
-                }
-                .tint(.orange)
-            }
+            .searchable(text: $searchText, prompt: "単語・意味・発音記号で検索")
         }
-        .searchable(text: $searchText, prompt: "単語・意味・発音記号で検索")
         .navigationTitle("英単語リスト")
         .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                sortMenu
+            }
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button(action: {
                     showingAddWordView = true
@@ -78,6 +145,54 @@ struct WordListView: View {
         }
     }
 
+    // MARK: - Subviews
+
+    private var letterFilterBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                letterChip(nil, label: "All")
+                ForEach(availableLetters, id: \.self) { letter in
+                    letterChip(letter, label: String(letter))
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+        }
+        .background(Color(.systemGroupedBackground))
+    }
+
+    private func letterChip(_ letter: Character?, label: String) -> some View {
+        Button {
+            selectedLetter = letter
+        } label: {
+            Text(label)
+                .font(.subheadline.bold())
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(selectedLetter == letter ? Color.accentColor : Color(.secondarySystemGroupedBackground))
+                .foregroundColor(selectedLetter == letter ? .white : .primary)
+                .cornerRadius(8)
+        }
+    }
+
+    private var sortMenu: some View {
+        Menu {
+            ForEach(WordSortOption.allCases, id: \.self) { option in
+                Button {
+                    sortOptionRaw = option.rawValue
+                } label: {
+                    if sortOption == option {
+                        Label(option.label, systemImage: "checkmark")
+                    } else {
+                        Text(option.label)
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: "arrow.up.arrow.down")
+        }
+    }
+
     @ViewBuilder
     private func destinationView(for word: Word) -> some View {
         if word.sentences.isEmpty {
@@ -87,6 +202,8 @@ struct WordListView: View {
         }
     }
 }
+
+// MARK: - WordRowView
 
 struct WordRowView: View {
     let word: Word
