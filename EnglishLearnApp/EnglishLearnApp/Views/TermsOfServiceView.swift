@@ -33,11 +33,11 @@ struct TermsOfServiceView: View {
             policyText("最終更新日：2026年2月")
 
             section("1. 同意") {
-                policyText("ボカブラ（vocabulary 以下「本アプリ」）をダウンロードまたは使用することにより、本利用規約に同意したものとみなします。同意しない場合は本アプリをご使用にならないでください。")
+                policyText("WordCraft（以下「本アプリ」）をダウンロードまたは使用することにより、本利用規約に同意したものとみなします。同意しない場合は本アプリをご使用にならないでください。")
             }
 
             section("2. サービスの説明") {
-                policyText("本アプリ（ボカブラ）は英単語の登録・発音練習・AI例文生成を行う個人向け語学学習ツールです。AI機能はお客様自身のAPI認証情報を使用するサードパーティサービスを介して提供されます。")
+                policyText("本アプリ（WordCraft）は英単語の登録・発音練習・AI例文生成を行う個人向け語学学習ツールです。AI機能はお客様自身のAPI認証情報を使用するサードパーティサービスを介して提供されます。")
             }
 
             section("3. ユーザーの責任") {
@@ -79,11 +79,11 @@ struct TermsOfServiceView: View {
             policyText("Last updated: February 2026")
 
             section("1. Acceptance of Terms") {
-                policyText("By downloading or using ボカブラ (a play on \"vocabulary\", hereinafter \"the App\"), you agree to be bound by these Terms of Service. If you do not agree, please do not use the App.")
+                policyText("By downloading or using WordCraft (hereinafter \"the App\"), you agree to be bound by these Terms of Service. If you do not agree, please do not use the App.")
             }
 
             section("2. Description of Service") {
-                policyText("ボカブラ is a personal vocabulary learning tool that allows you to register English words, practice pronunciation, and generate example sentences using third-party AI services via your own API credentials.")
+                policyText("WordCraft is a personal vocabulary learning tool that allows you to register English words, practice pronunciation, and generate example sentences using third-party AI services via your own API credentials.")
             }
 
             section("3. User Responsibilities") {
