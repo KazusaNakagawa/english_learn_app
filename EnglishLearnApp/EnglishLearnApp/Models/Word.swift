@@ -151,6 +151,48 @@ class WordDataManager {
         saveAllWords(all)
     }
 
+    // MARK: - Export / Import
+
+    /// Exports all non-deleted words to a JSON file in the temp directory.
+    func exportToJSON() -> URL? {
+        let words = loadAllWords().filter { $0.deletedAt == nil }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .prettyPrinted
+        guard let data = try? encoder.encode(WordList(words: words)) else { return nil }
+        let filename = "words_export_\(Int(Date().timeIntervalSince1970)).json"
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+        do {
+            try data.write(to: url)
+            return url
+        } catch {
+            print("Export error: \(error)")
+            return nil
+        }
+    }
+
+    /// Decodes words from a JSON file URL. Throws on parse failure.
+    func importFromJSON(url: URL) throws -> [Word] {
+        let data = try Data(contentsOf: url)
+        let decoder = JSONDecoder()
+        let wordList = try decoder.decode(WordList.self, from: data)
+        return wordList.words
+    }
+
+    /// Adds imported words that don't already exist (deduplicates by ID).
+    func mergeWords(_ imported: [Word]) {
+        var all = loadAllWords()
+        let existingIDs = Set(all.map { $0.id })
+        let newWords = imported.filter { !existingIDs.contains($0.id) }
+        all.append(contentsOf: newWords)
+        saveAllWords(all)
+    }
+
+    /// Replaces all active words with imported words, keeping trashed words intact.
+    func replaceWords(_ imported: [Word]) {
+        let trashed = loadAllWords().filter { $0.deletedAt != nil }
+        saveAllWords(trashed + imported)
+    }
+
     /// Updates a word's fields by ID.
     func updateWord(_ updated: Word) {
         var all = loadAllWords()

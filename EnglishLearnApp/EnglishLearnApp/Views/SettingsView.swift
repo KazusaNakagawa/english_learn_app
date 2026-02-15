@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// A view for configuring application settings.
 ///
@@ -21,6 +22,15 @@ struct SettingsView: View {
 
     /// Controls visibility of the reset confirmation alert.
     @State private var showResetPromptAlert = false
+
+    // MARK: - Export / Import state
+    @State private var exportURL: URL? = nil
+    @State private var showingShareSheet = false
+    @State private var showingImportPicker = false
+    @State private var pendingImportWords: [Word] = []
+    @State private var showingImportConfirm = false
+    @State private var importErrorMessage: String? = nil
+    @State private var showingImportError = false
 
     var body: some View {
         NavigationStack {
@@ -124,6 +134,23 @@ struct SettingsView: View {
                     }
                 }
 
+                Section(header: Text("データ管理")) {
+                    Button {
+                        if let url = WordDataManager.shared.exportToJSON() {
+                            exportURL = url
+                            showingShareSheet = true
+                        }
+                    } label: {
+                        Label("単語リストをエクスポート", systemImage: "square.and.arrow.up")
+                    }
+
+                    Button {
+                        showingImportPicker = true
+                    } label: {
+                        Label("単語リストをインポート", systemImage: "square.and.arrow.down")
+                    }
+                }
+
                 Section(header: Text("説明")) {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("英語の学習コンテンツの音声として、女性または男性の音声を選択できます。")
@@ -153,7 +180,64 @@ struct SettingsView: View {
             .navigationTitle("設定")
             .navigationBarTitleDisplayMode(.inline)
         }
+        .sheet(isPresented: $showingShareSheet) {
+            if let url = exportURL {
+                ActivityView(activityItems: [url])
+            }
+        }
+        .fileImporter(
+            isPresented: $showingImportPicker,
+            allowedContentTypes: [UTType.json]
+        ) { result in
+            switch result {
+            case .success(let url):
+                let accessing = url.startAccessingSecurityScopedResource()
+                defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+                do {
+                    pendingImportWords = try WordDataManager.shared.importFromJSON(url: url)
+                    showingImportConfirm = true
+                } catch {
+                    importErrorMessage = "ファイルの読み込みに失敗しました。\n正しいエクスポートファイルか確認してください。"
+                    showingImportError = true
+                }
+            case .failure(let error):
+                importErrorMessage = error.localizedDescription
+                showingImportError = true
+            }
+        }
+        .confirmationDialog(
+            "\(pendingImportWords.count)件の単語をインポートします",
+            isPresented: $showingImportConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("既存データと結合") {
+                WordDataManager.shared.mergeWords(pendingImportWords)
+            }
+            Button("既存データを置き換え", role: .destructive) {
+                WordDataManager.shared.replaceWords(pendingImportWords)
+            }
+            Button("キャンセル", role: .cancel) {}
+        } message: {
+            Text("インポート方法を選択してください")
+        }
+        .alert("インポートエラー", isPresented: $showingImportError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(importErrorMessage ?? "不明なエラーが発生しました")
+        }
     }
+}
+
+// MARK: - UIKit Share Sheet bridge
+
+private struct ActivityView: UIViewControllerRepresentable {
+    let activityItems: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 #Preview {
