@@ -214,8 +214,10 @@ class WordDataManager {
     }
 
     /// Replaces all active words with imported words, keeping trashed words intact.
+    /// Trashed entries whose ID also appears in the imported set are dropped to avoid duplicate UUIDs.
     func replaceWords(_ imported: [Word]) {
-        let trashed = loadAllWords().filter { $0.deletedAt != nil }
+        let importedIDs = Set(imported.map { $0.id })
+        let trashed = loadAllWords().filter { $0.deletedAt != nil && !importedIDs.contains($0.id) }
         saveAllWords(trashed + imported)
     }
 
