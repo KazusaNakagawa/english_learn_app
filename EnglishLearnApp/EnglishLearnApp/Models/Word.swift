@@ -24,9 +24,11 @@ struct Word: Codable, Identifiable {
     var sentences: [Sentence]
     var deletedAt: Date?
     var createdAt: Date?
+    var archivedAt: Date?
 
     init(id: UUID = UUID(), word: String, meaning: String, phonetic: String,
-         sentences: [Sentence] = [], deletedAt: Date? = nil, createdAt: Date? = Date()) {
+         sentences: [Sentence] = [], deletedAt: Date? = nil, createdAt: Date? = Date(),
+         archivedAt: Date? = nil) {
         self.id = id
         self.word = word
         self.meaning = meaning
@@ -34,6 +36,7 @@ struct Word: Codable, Identifiable {
         self.sentences = sentences
         self.deletedAt = deletedAt
         self.createdAt = createdAt
+        self.archivedAt = archivedAt
     }
 }
 
@@ -71,7 +74,7 @@ class WordDataManager {
             }
             saveAllWords(all)
         }
-        return all.filter { $0.deletedAt == nil }
+        return all.filter { $0.deletedAt == nil && $0.archivedAt == nil }
     }
 
     /// Loads all words including trashed ones.
@@ -98,6 +101,29 @@ class WordDataManager {
         }
         saveAllWords(migrated)
         return migrated
+    }
+
+    /// Loads all archived words.
+    func loadArchivedWords() -> [Word] {
+        return loadAllWords().filter { $0.archivedAt != nil && $0.deletedAt == nil }
+    }
+
+    /// Archives a word by setting archivedAt to now.
+    func archive(wordId: UUID) {
+        var all = loadAllWords()
+        if let idx = all.firstIndex(where: { $0.id == wordId }) {
+            all[idx].archivedAt = Date()
+            saveAllWords(all)
+        }
+    }
+
+    /// Restores an archived word by clearing archivedAt.
+    func unarchive(wordId: UUID) {
+        var all = loadAllWords()
+        if let idx = all.firstIndex(where: { $0.id == wordId }) {
+            all[idx].archivedAt = nil
+            saveAllWords(all)
+        }
     }
 
     /// Loads only trashed words within the 10-day retention window.
