@@ -34,7 +34,7 @@ struct PrivacyPolicyView: View {
 
             section("1. 概要") {
                 policyText(
-                    "ボカブラ（vocabulary 以下「本アプリ」）は個人向けの英語学習アプリです。" +
+                    "WordCraft（以下「本アプリ」）は個人向けの英語学習アプリです。" +
                     "開発者は外部サーバーで個人データを収集・送信・保存しません。" +
                     "すべてのデータはお客様のデバイス上にのみ保存されます。"
                 )
@@ -84,7 +84,7 @@ struct PrivacyPolicyView: View {
 
             section("1. Overview") {
                 policyText(
-                    "ボカブラ (a play on \"vocabulary\", hereinafter \"the App\") is a personal vocabulary learning application. " +
+                    "WordCraft (hereinafter \"the App\") is a personal vocabulary learning application. " +
                     "The developer does not collect, transmit, or store any personal data on external servers. " +
                     "All data remains on your device unless you explicitly share it."
                 )
