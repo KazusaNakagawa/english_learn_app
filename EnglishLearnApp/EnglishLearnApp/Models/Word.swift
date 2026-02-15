@@ -23,15 +23,17 @@ struct Word: Codable, Identifiable {
     var phonetic: String
     var sentences: [Sentence]
     var deletedAt: Date?
+    var createdAt: Date?
 
     init(id: UUID = UUID(), word: String, meaning: String, phonetic: String,
-         sentences: [Sentence] = [], deletedAt: Date? = nil) {
+         sentences: [Sentence] = [], deletedAt: Date? = nil, createdAt: Date? = Date()) {
         self.id = id
         self.word = word
         self.meaning = meaning
         self.phonetic = phonetic
         self.sentences = sentences
         self.deletedAt = deletedAt
+        self.createdAt = createdAt
     }
 }
 
