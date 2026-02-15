@@ -2,13 +2,12 @@ name: CDK CI
 
 on:
   push:
-    # TODO
-    # branches: [develop, main]
+    branches: [develop, main]
     paths:
       - 'aws/**'
       - '.github/workflows/cdk-ci.yml'
   pull_request:
-    # branches: [develop, main]
+    branches: [develop, main]
     paths:
       - 'aws/**'
       - '.github/workflows/cdk-ci.yml'

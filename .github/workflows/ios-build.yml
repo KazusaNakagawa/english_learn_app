@@ -2,13 +2,12 @@ name: iOS Build
 
 on:
   push:
-    # TODO
-    # branches: [develop, main]
+    branches: [] # TODO: Setting is still
     paths:
       - 'EnglishLearnApp/**'
       - '.github/workflows/ios-build.yml'
   pull_request:
-    # branches: [develop, main]
+    branches: [] # TODO: Setting is still
     paths:
       - 'EnglishLearnApp/**'
       - '.github/workflows/ios-build.yml'
