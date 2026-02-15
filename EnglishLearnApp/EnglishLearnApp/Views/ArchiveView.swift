@@ -32,7 +32,7 @@ struct ArchiveView: View {
                                 .font(.subheadline)
                                 .foregroundColor(.blue)
                             if let archivedAt = word.archivedAt {
-                                Text("Archived \(archivedAt.formatted(date: .abbreviated, time: .omitted))")
+                                Text("アーカイブ日: \(archivedAt.formatted(date: .abbreviated, time: .omitted))")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
