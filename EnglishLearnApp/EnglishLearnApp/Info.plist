@@ -2,12 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>CFBundleDisplayName</key>
-	<string>WordCraft</string>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>発音を認識するために音声認識を使用します</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>発音チェックのためにマイクを使用します</string>
 	<key>VOICEVOX_BASE_URL</key>
 	<string>$(VOICEVOX_BASE_URL)</string>
 </dict>

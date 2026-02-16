@@ -25,10 +25,10 @@
 		A1000010238D1234567890AB /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000022238D1234567890AB /* SettingsView.swift */; };
 		A1000025238D1234567890AB /* TrashView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000023238D1234567890AB /* TrashView.swift */; };
 		A1000026238D1234567890AB /* EditWordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000024238D1234567890AB /* EditWordView.swift */; };
+		A1000027238D1234567890AB /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000028238D1234567890AB /* AppConfig.swift */; };
 		A1000075238D1234567890AB /* ArchiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000074238D1234567890AB /* ArchiveView.swift */; };
 		A1000077238D1234567890AB /* PrivacyPolicyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000076238D1234567890AB /* PrivacyPolicyView.swift */; };
 		A1000079238D1234567890AB /* TermsOfServiceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000078238D1234567890AB /* TermsOfServiceView.swift */; };
-		A1000027238D1234567890AB /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000028238D1234567890AB /* AppConfig.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -52,10 +52,10 @@
 		A1000022238D1234567890AB /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		A1000023238D1234567890AB /* TrashView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrashView.swift; sourceTree = "<group>"; };
 		A1000024238D1234567890AB /* EditWordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditWordView.swift; sourceTree = "<group>"; };
+		A1000028238D1234567890AB /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
 		A1000074238D1234567890AB /* ArchiveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveView.swift; sourceTree = "<group>"; };
 		A1000076238D1234567890AB /* PrivacyPolicyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyPolicyView.swift; sourceTree = "<group>"; };
 		A1000078238D1234567890AB /* TermsOfServiceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TermsOfServiceView.swift; sourceTree = "<group>"; };
-		A1000028238D1234567890AB /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -309,7 +309,7 @@
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
-				ONLY_ACTIVE_ARCH = YES;
+				ONLY_ACTIVE_ARCH = NO;
 				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
@@ -368,6 +368,7 @@
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = NO;
 				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
@@ -386,6 +387,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = EnglishLearnApp/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = WordCraft;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "発音チェックのためにマイクを使用します";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "発音を認識するために音声認識を使用します";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -398,8 +400,9 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.WordCraft;
+				PRODUCT_BUNDLE_IDENTIFIER = com.naka903.WordCraft;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -417,6 +420,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = EnglishLearnApp/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = WordCraft;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "発音チェックのためにマイクを使用します";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "発音を認識するために音声認識を使用します";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -429,8 +433,9 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.WordCraft;
+				PRODUCT_BUNDLE_IDENTIFIER = com.naka903.WordCraft;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";

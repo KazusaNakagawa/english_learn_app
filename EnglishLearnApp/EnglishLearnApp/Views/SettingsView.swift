@@ -23,6 +23,9 @@ struct SettingsView: View {
     /// Controls visibility of the reset confirmation alert.
     @State private var showResetPromptAlert = false
 
+    /// Tracks whether the prompt TextEditor is focused.
+    @FocusState private var isPromptFocused: Bool
+
     // MARK: - Export / Import state
     @State private var exportURL: URL? = nil
     @State private var showingShareSheet = false
@@ -120,6 +123,19 @@ struct SettingsView: View {
                     TextEditor(text: $settings.promptConditions)
                         .frame(minHeight: 160)
                         .font(.caption)
+                        .focused($isPromptFocused)
+                        .toolbar {
+                            ToolbarItemGroup(placement: .keyboard) {
+                                Spacer()
+                                Button("完了") {
+                                    isPromptFocused = false
+                                    UIApplication.shared.sendAction(
+                                        #selector(UIResponder.resignFirstResponder),
+                                        to: nil, from: nil, for: nil
+                                    )
+                                }
+                            }
+                        }
 
                     Button(role: .destructive) {
                         showResetPromptAlert = true
@@ -216,6 +232,7 @@ struct SettingsView: View {
             }
             .navigationTitle("設定")
             .navigationBarTitleDisplayMode(.inline)
+            .scrollDismissesKeyboard(.interactively)
         }
         .sheet(isPresented: $showingShareSheet) {
             if let url = exportURL {
