@@ -225,9 +225,10 @@ private struct PresetEditView: View {
 
     private func save() {
         if let existingPreset = target.preset {
+            let updatedName = isBuiltIn ? existingPreset.name : name
             let updated = PromptPreset(
                 id: existingPreset.id,
-                name: existingPreset.name,
+                name: updatedName,
                 conditions: conditions,
                 isBuiltIn: existingPreset.isBuiltIn
             )
