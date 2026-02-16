@@ -230,13 +230,7 @@ class SettingsManager: ObservableObject {
         let legacyKey = "promptConditions"
         if UserDefaults.standard.object(forKey: "promptPresets") == nil,
            let legacyConditions = UserDefaults.standard.string(forKey: legacyKey) {
-            let defaultConditions = """
-            条件：
-            - 日常会話、ビジネス、学習など多様なシーンの例文を含めてください
-            - カテゴリは「日常会話」「ビジネス」「学習・教育」「趣味・娯楽」「旅行」などから適切なものを選んでください
-            - 自然で実用的な例文にしてください
-            - 日本語訳は自然な日本語にしてください
-            """
+            let defaultConditions = PromptPreset.general.conditions
             if legacyConditions.trimmingCharacters(in: .whitespacesAndNewlines) !=
                defaultConditions.trimmingCharacters(in: .whitespacesAndNewlines) {
                 // User had a custom prompt — migrate it as a new custom preset
