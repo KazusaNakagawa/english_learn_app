@@ -77,9 +77,10 @@ class OpenAIService: ObservableObject {
     ///   - word: The English word to include in the example sentences.
     ///   - meaning: The Japanese meaning of the word (used as context for the prompt).
     ///   - count: The number of sentences to generate (default: 20).
+    ///   - conditions: The prompt conditions to use. If nil, uses the active preset's conditions.
     /// - Returns: An array of generated `Sentence` objects.
     /// - Throws: `OpenAIError` for missing API key, network errors, or parsing failures.
-    func generateSentences(for word: String, meaning: String, count: Int = 20) async throws -> [Sentence] {
+    func generateSentences(for word: String, meaning: String, count: Int = 20, conditions: String? = nil) async throws -> [Sentence] {
         guard let apiKey = SettingsManager.shared.openAIAPIKey, !apiKey.isEmpty else {
             throw OpenAIError.missingAPIKey
         }
@@ -88,6 +89,8 @@ class OpenAIService: ObservableObject {
             isLoading = true
             errorMessage = nil
         }
+
+        let resolvedConditions = conditions ?? SettingsManager.shared.activeConditions
 
         let systemPrompt = """
         あなたは英語学習アプリ用の例文を生成するアシスタントです。
@@ -107,7 +110,7 @@ class OpenAIService: ObservableObject {
         let userPrompt = """
         「\(word)」（\(meaning)）を使った例文を\(count)個生成してください。
 
-        \(SettingsManager.shared.promptConditions)
+        \(resolvedConditions)
         """
 
         let request = OpenAIRequest(

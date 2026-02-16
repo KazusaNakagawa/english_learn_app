@@ -7,7 +7,7 @@ import UniformTypeIdentifiers
 /// - Voice gender selection for text-to-speech
 /// - OpenAI API key configuration for sentence generation
 /// - OpenAI model selection
-/// - System prompt customization
+/// - Prompt preset management
 ///
 /// Settings are automatically persisted via `SettingsManager`.
 struct SettingsView: View {
@@ -19,12 +19,6 @@ struct SettingsView: View {
 
     /// Local state for the API key input field.
     @State private var apiKeyInput: String = ""
-
-    /// Controls visibility of the reset confirmation alert.
-    @State private var showResetPromptAlert = false
-
-    /// Tracks whether the prompt TextEditor is focused.
-    @FocusState private var isPromptFocused: Bool
 
     // MARK: - Export / Import state
     @State private var exportURL: URL? = nil
@@ -120,38 +114,13 @@ struct SettingsView: View {
                 }
 
                 Section(header: Text("例文生成の条件")) {
-                    TextEditor(text: $settings.promptConditions)
-                        .frame(minHeight: 160)
-                        .font(.caption)
-                        .focused($isPromptFocused)
-                        .toolbar {
-                            ToolbarItemGroup(placement: .keyboard) {
-                                Spacer()
-                                Button("完了") {
-                                    isPromptFocused = false
-                                    UIApplication.shared.sendAction(
-                                        #selector(UIResponder.resignFirstResponder),
-                                        to: nil, from: nil, for: nil
-                                    )
-                                }
-                            }
-                        }
-
-                    Button(role: .destructive) {
-                        showResetPromptAlert = true
-                    } label: {
+                    NavigationLink(destination: PromptPresetsView()) {
                         HStack {
-                            Image(systemName: "arrow.counterclockwise")
-                            Text("デフォルトに戻す")
+                            Text("プリセット管理")
+                            Spacer()
+                            Text(settings.activePreset.name)
+                                .foregroundColor(.secondary)
                         }
-                    }
-                    .alert("条件をリセット", isPresented: $showResetPromptAlert) {
-                        Button("リセット", role: .destructive) {
-                            settings.promptConditions = SettingsManager.defaultPromptConditions
-                        }
-                        Button("キャンセル", role: .cancel) {}
-                    } message: {
-                        Text("例文生成の条件をデフォルトの内容に戻します。よろしいですか？")
                     }
                 }
 
@@ -224,7 +193,7 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("AIモデルは精度やコストに応じて選択できます。GPT-4o miniは高速で低コスト、GPT-4oは高性能です。")
                             .font(.body)
-                        Text("例文生成の条件を編集することで、生成される例文のシーンやカテゴリをカスタマイズできます。")
+                        Text("例文生成の条件は「プリセット管理」から選択・編集できます。組み込みプリセットはデフォルトに戻すことができます。")
                             .font(.body)
                             .foregroundColor(.secondary)
                     }
@@ -294,6 +263,7 @@ struct SettingsView: View {
             Text(exportErrorMessage ?? "不明なエラーが発生しました")
         }
     }
+
 }
 
 // MARK: - UIKit Share Sheet bridge

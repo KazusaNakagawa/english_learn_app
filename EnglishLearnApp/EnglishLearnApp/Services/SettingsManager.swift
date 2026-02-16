@@ -45,12 +45,25 @@ class SettingsManager: ObservableObject {
         }
     }
 
-    /// The conditions appended to the user prompt for sentence generation.
-    ///
-    /// Changes are automatically persisted to UserDefaults.
-    @Published var promptConditions: String {
+    /// Custom (non-built-in) presets stored in UserDefaults.
+    @Published var customPresets: [PromptPreset] {
         didSet {
-            UserDefaults.standard.set(promptConditions, forKey: "promptConditions")
+            saveCustomPresets(customPresets)
+        }
+    }
+
+    /// The ID of the currently active preset.
+    @Published var activePresetID: UUID {
+        didSet {
+            UserDefaults.standard.set(activePresetID.uuidString, forKey: "activePresetID")
+        }
+    }
+
+    /// User edits to built-in preset conditions, keyed by UUID string.
+    /// Only the overridden text is stored; the name stays fixed.
+    @Published var builtInOverrides: [String: String] {
+        didSet {
+            saveBuiltInOverrides()
         }
     }
 
@@ -60,6 +73,35 @@ class SettingsManager: ObservableObject {
             UserDefaults.standard.set(voicevoxStyle.rawValue, forKey: "voicevoxStyle")
         }
     }
+
+    // MARK: - Computed Properties
+
+    /// All presets: built-ins (with any user edits applied) first, then custom.
+    var allPresets: [PromptPreset] {
+        let overriddenBuiltIns = PromptPreset.builtIns.map { preset -> PromptPreset in
+            if let overriddenConditions = builtInOverrides[preset.id.uuidString] {
+                return PromptPreset(id: preset.id, name: preset.name,
+                                   conditions: overriddenConditions, isBuiltIn: true)
+            }
+            return preset
+        }
+        return overriddenBuiltIns + customPresets
+    }
+
+    /// The currently active preset, falling back to the general preset.
+    var activePreset: PromptPreset {
+        allPresets.first { $0.id == activePresetID } ?? PromptPreset.general
+    }
+
+    /// The conditions string of the active preset.
+    var activeConditions: String {
+        activePreset.conditions
+    }
+
+    /// Maximum total number of presets (built-in + custom).
+    static let maxPresets = 10
+
+    // MARK: - Nested Types
 
     /// Voice gender options for text-to-speech.
     enum VoiceGender: String, CaseIterable {
@@ -130,17 +172,10 @@ class SettingsManager: ObservableObject {
         }
     }
 
-    /// The default conditions for the user prompt in sentence generation.
-    static let defaultPromptConditions = """
-    条件：
-    - 日常会話、ビジネス、学習など多様なシーンの例文を含めてください
-    - カテゴリは「日常会話」「ビジネス」「学習・教育」「趣味・娯楽」「旅行」などから適切なものを選んでください
-    - 自然で実用的な例文にしてください
-    - 日本語訳は自然な日本語にしてください
-    """
-
     /// The UserDefaults key for the OpenAI API key.
     private let openAIAPIKeyKey = "openAIAPIKey"
+
+    // MARK: - Initializer
 
     /// Initializes the settings manager and loads saved preferences.
     init() {
@@ -160,17 +195,104 @@ class SettingsManager: ObservableObject {
             self.openAIModel = .gpt4oMini
         }
 
-        if let saved = UserDefaults.standard.string(forKey: "promptConditions") {
-            self.promptConditions = saved
-        } else {
-            self.promptConditions = SettingsManager.defaultPromptConditions
-        }
-
         if let savedStyle = UserDefaults.standard.object(forKey: "voicevoxStyle") as? Int,
            let style = VoicevoxStyle(rawValue: savedStyle) {
             self.voicevoxStyle = style
         } else {
             self.voicevoxStyle = .normal
+        }
+
+        // Load custom presets
+        if let data = UserDefaults.standard.data(forKey: "promptPresets"),
+           let decoded = try? JSONDecoder().decode([PromptPreset].self, from: data) {
+            self.customPresets = decoded
+        } else {
+            self.customPresets = []
+        }
+
+        // Load active preset ID
+        if let idString = UserDefaults.standard.string(forKey: "activePresetID"),
+           let uuid = UUID(uuidString: idString) {
+            self.activePresetID = uuid
+        } else {
+            self.activePresetID = PromptPreset.general.id
+        }
+
+        // Load built-in overrides
+        if let data = UserDefaults.standard.data(forKey: "builtInOverrides"),
+           let decoded = try? JSONDecoder().decode([String: String].self, from: data) {
+            self.builtInOverrides = decoded
+        } else {
+            self.builtInOverrides = [:]
+        }
+
+        // Migration: convert legacy promptConditions to a custom preset if needed
+        let legacyKey = "promptConditions"
+        if UserDefaults.standard.object(forKey: "promptPresets") == nil,
+           let legacyConditions = UserDefaults.standard.string(forKey: legacyKey) {
+            let defaultConditions = PromptPreset.general.conditions
+            if legacyConditions.trimmingCharacters(in: .whitespacesAndNewlines) !=
+               defaultConditions.trimmingCharacters(in: .whitespacesAndNewlines) {
+                // User had a custom prompt — migrate it as a new custom preset
+                let migrated = PromptPreset(name: "マイプリセット", conditions: legacyConditions)
+                self.customPresets = [migrated]
+                self.activePresetID = migrated.id
+                saveCustomPresets([migrated])
+                UserDefaults.standard.set(migrated.id.uuidString, forKey: "activePresetID")
+            }
+            UserDefaults.standard.removeObject(forKey: legacyKey)
+        }
+    }
+
+    // MARK: - Preset Management
+
+    /// Adds a new custom preset if the total count is below the maximum.
+    func addPreset(_ preset: PromptPreset) {
+        guard allPresets.count < SettingsManager.maxPresets else { return }
+        customPresets.append(preset)
+    }
+
+    /// Updates a preset by ID.
+    /// For built-ins, stores the edited conditions in `builtInOverrides` (or clears the
+    /// override when the conditions are restored to the original).
+    /// For custom presets, updates the entry in `customPresets`.
+    func updatePreset(_ preset: PromptPreset) {
+        if preset.isBuiltIn {
+            let original = PromptPreset.builtIns.first { $0.id == preset.id }?.conditions ?? ""
+            if preset.conditions == original {
+                builtInOverrides.removeValue(forKey: preset.id.uuidString)
+            } else {
+                builtInOverrides[preset.id.uuidString] = preset.conditions
+            }
+        } else {
+            guard let idx = customPresets.firstIndex(where: { $0.id == preset.id }) else { return }
+            customPresets[idx] = preset
+        }
+    }
+
+    /// Restores a built-in preset's conditions to the hardcoded original.
+    func resetPreset(id: UUID) {
+        builtInOverrides.removeValue(forKey: id.uuidString)
+    }
+
+    /// Returns true if a built-in preset has been edited by the user.
+    func isPresetModified(id: UUID) -> Bool {
+        builtInOverrides[id.uuidString] != nil
+    }
+
+    /// Deletes a custom preset by ID. Built-in presets cannot be deleted.
+    func deletePreset(id: UUID) {
+        customPresets.removeAll { $0.id == id }
+        // If the deleted preset was active, fall back to general
+        if activePresetID == id {
+            activePresetID = PromptPreset.general.id
+        }
+    }
+
+    /// Persists custom presets to UserDefaults.
+    func saveCustomPresets(_ presets: [PromptPreset]) {
+        if let data = try? JSONEncoder().encode(presets) {
+            UserDefaults.standard.set(data, forKey: "promptPresets")
         }
     }
 
@@ -179,6 +301,13 @@ class SettingsManager: ObservableObject {
     /// Persists the voice gender setting to UserDefaults.
     private func saveVoiceGender() {
         UserDefaults.standard.set(voiceGender.rawValue, forKey: "voiceGender")
+    }
+
+    /// Persists built-in overrides to UserDefaults.
+    private func saveBuiltInOverrides() {
+        if let data = try? JSONEncoder().encode(builtInOverrides) {
+            UserDefaults.standard.set(data, forKey: "builtInOverrides")
+        }
     }
 
     /// Persists the OpenAI API key to UserDefaults.
