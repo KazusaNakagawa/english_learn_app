@@ -7,11 +7,13 @@ import SwiftUI
 ///
 /// ## Features
 /// - Input fields for word, meaning, and phonetic transcription
+/// - Prompt preset picker (local selection, defaults to global active preset)
 /// - Auto-generation of example sentences via OpenAI
 /// - Preview of generated sentences with categories
 /// - Save functionality to persist the word
 struct AddWordView: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var settings: SettingsManager
     @StateObject private var openAIService = OpenAIService()
 
     /// The English word to add.
@@ -32,6 +34,12 @@ struct AddWordView: View {
     /// The error message to display in the alert.
     @State private var alertMessage = ""
 
+    /// The locally selected preset ID (not bound back to global settings).
+    @State private var selectedPresetID: UUID = PromptPreset.general.id
+
+    /// Whether the preset disclosure group is expanded.
+    @State private var isPresetSectionExpanded: Bool = false
+
     /// Callback invoked when a word is successfully saved.
     var onSave: ((Word) -> Void)?
 
@@ -48,6 +56,38 @@ struct AddWordView: View {
                     TextField("発音記号", text: $phonetic)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                }
+
+                Section {
+                    DisclosureGroup(isExpanded: $isPresetSectionExpanded) {
+                        Picker("プリセット", selection: $selectedPresetID) {
+                            ForEach(settings.allPresets) { preset in
+                                Text(preset.name).tag(preset.id)
+                            }
+                        }
+                        .pickerStyle(.menu)
+
+                        let selectedPreset = settings.allPresets.first { $0.id == selectedPresetID }
+                        if let conditions = selectedPreset?.conditions {
+                            Text(conditions)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    } label: {
+                        HStack {
+                            Image(systemName: "text.alignleft")
+                                .foregroundColor(.accentColor)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("例文生成の条件")
+                                    .font(.body)
+                                let activeName = settings.allPresets.first { $0.id == selectedPresetID }?.name
+                                    ?? settings.activePreset.name
+                                Text(activeName)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
                 }
 
                 Section {
@@ -120,6 +160,9 @@ struct AddWordView: View {
                     }
                 }
             }
+            .onAppear {
+                selectedPresetID = settings.activePresetID
+            }
             .alert("エラー", isPresented: $showingAlert) {
                 Button("OK", role: .cancel) {}
             } message: {
@@ -132,11 +175,13 @@ struct AddWordView: View {
 
     /// Generates example sentences using the OpenAI service.
     ///
-    /// Calls the OpenAI API asynchronously to generate sentences for the current word.
+    /// Uses the locally selected preset's conditions for generation.
     /// Updates `generatedSentences` on success or shows an alert on failure.
     private func generateSentences() async {
+        let conditions = settings.allPresets.first { $0.id == selectedPresetID }?.conditions
+            ?? settings.activeConditions
         do {
-            let sentences = try await openAIService.generateSentences(for: word, meaning: meaning)
+            let sentences = try await openAIService.generateSentences(for: word, meaning: meaning, conditions: conditions)
             await MainActor.run {
                 generatedSentences = sentences
             }
@@ -167,4 +212,5 @@ struct AddWordView: View {
 
 #Preview {
     AddWordView()
+        .environmentObject(SettingsManager.shared)
 }
