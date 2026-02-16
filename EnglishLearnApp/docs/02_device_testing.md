@@ -71,8 +71,40 @@
 ### 「Unable to install」エラー
 → iPhone側でストレージ容量を確認してください
 
+### 「Failed Registering Bundle Identifier」エラー
+
+バンドルIDが無効な場合に発生します。
+
+- **原因:** `icloud.com.*` など Apple が予約しているプレフィックスを使用している
+- **解決:** 逆ドメイン形式のユニークなIDに変更する（例: `com.yourname.WordCraft`）
+- **設定箇所:** Signing & Capabilities → Bundle Identifier、または `project.pbxproj` 内の `PRODUCT_BUNDLE_IDENTIFIER`（Debug / Release 両方）
+
+### 「No profiles for '...' were found」エラー
+
+プロビジョニングプロファイルが見つからない場合に発生します。
+
+**「Communication with Apple failed — Your team has no devices」と表示される場合:**
+
+実機が登録されていないことが原因です。
+
+1. iPhoneをUSBケーブルでMacに接続する
+2. iPhone側で「このコンピュータを信頼」をタップ
+3. iPhoneの **デベロッパモード** を有効にする
+   - 設定 → プライバシーとセキュリティ → デベロッパモード → ON
+4. Xcodeの上部でターゲットデバイスに **接続したiPhone** を選択
+5. Signing & Capabilities の「**Try Again**」をクリック
+
+> デバイスが接続されていればプロビジョニングプロファイルが自動生成されます。
+
+**その他の場合:**
+
+1. Xcode → Settings (⌘+,) → Accounts でApple IDがサインインされているか確認
+2. 「Automatically manage signing」のチェックを一度外して再度チェックする
+3. Teamが正しく選択されているか確認
+
 ### 署名エラーが出る
-1. Bundle Identifierを変更（例: `com.yourname.EnglishLearnApp`）
+
+1. Bundle Identifierを変更（例: `com.yourname.WordCraft`）
 2. Teamが正しく選択されているか確認
 
 ### 7日後にアプリが起動しなくなった
