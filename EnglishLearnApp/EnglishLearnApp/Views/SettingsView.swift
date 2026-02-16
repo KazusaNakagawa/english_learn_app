@@ -129,6 +129,10 @@ struct SettingsView: View {
                                 Spacer()
                                 Button("完了") {
                                     isPromptFocused = false
+                                    UIApplication.shared.sendAction(
+                                        #selector(UIResponder.resignFirstResponder),
+                                        to: nil, from: nil, for: nil
+                                    )
                                 }
                             }
                         }
