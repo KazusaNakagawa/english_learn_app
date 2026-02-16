@@ -392,7 +392,6 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"EnglishLearnApp/Preview Content\"";
-				DEVELOPMENT_TEAM = 92Z8G96R6X;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = EnglishLearnApp/Info.plist;
@@ -426,7 +425,6 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"EnglishLearnApp/Preview Content\"";
-				DEVELOPMENT_TEAM = 92Z8G96R6X;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = EnglishLearnApp/Info.plist;
