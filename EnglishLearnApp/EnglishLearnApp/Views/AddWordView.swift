@@ -70,7 +70,7 @@ struct AddWordView: View {
                         let selectedPreset = settings.allPresets.first { $0.id == selectedPresetID }
                         if let conditions = selectedPreset?.conditions {
                             Text(conditions)
-                                .font(.caption)
+                                .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }
                     } label: {
