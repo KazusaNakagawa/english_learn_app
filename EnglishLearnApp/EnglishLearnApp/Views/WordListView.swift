@@ -169,7 +169,9 @@ struct WordListView: View {
                     HStack {
                         sortMenu
                         Button { showingAddWordView = true } label: { Image(systemName: "plus") }
-                        Button("選択") { isSelecting = true }
+                        if !filteredWords.isEmpty {
+                            Button("選択") { isSelecting = true }
+                        }
                     }
                 }
             }
@@ -190,8 +192,11 @@ struct WordListView: View {
         .onAppear {
             words = WordDataManager.shared.loadWords()
         }
+        .onChange(of: searchText) { _, _ in selectedIDs = [] }
+        .onChange(of: selectedLetter) { _, _ in selectedIDs = [] }
     }
 
+    /// Bottom action bar shown during selection mode with Archive and Trash actions.
     private var wordListActionBar: some View {
         HStack(spacing: 0) {
             Button {
@@ -222,10 +227,12 @@ struct WordListView: View {
         .overlay(alignment: .top) { Divider() }
     }
 
+    /// Toggles the selection state of a word by its ID.
     private func toggleSelection(_ id: UUID) {
         if selectedIDs.contains(id) { selectedIDs.remove(id) } else { selectedIDs.insert(id) }
     }
 
+    /// Exits selection mode and clears all selected IDs.
     private func exitSelectionMode() {
         isSelecting = false
         selectedIDs = []

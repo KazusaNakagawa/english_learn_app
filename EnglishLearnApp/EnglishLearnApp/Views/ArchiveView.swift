@@ -67,9 +67,8 @@ struct ArchiveView: View {
                     Button(allSelected ? "すべて解除" : "すべて選択") {
                         selectedIDs = allSelected ? [] : Set(archivedWords.map(\.id))
                     }
-                } else {
+                } else if !archivedWords.isEmpty {
                     Button("選択") { isSelecting = true }
-                        .opacity(archivedWords.isEmpty ? 0 : 1)
                 }
             }
             ToolbarItem(placement: .navigationBarLeading) {
@@ -81,6 +80,7 @@ struct ArchiveView: View {
         .onAppear { load() }
     }
 
+    /// Renders a single word row with word text, phonetic, meaning, and archive date.
     private func wordRow(_ word: Word) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(word.word)
@@ -100,6 +100,7 @@ struct ArchiveView: View {
         .padding(.vertical, 4)
     }
 
+    /// Bottom action bar shown during selection mode with an Unarchive action.
     private var archiveActionBar: some View {
         Button {
             WordDataManager.shared.unarchive(wordIds: Array(selectedIDs))
@@ -110,20 +111,25 @@ struct ArchiveView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
         }
+        .buttonStyle(.borderless)
+        .tint(.green)
         .disabled(selectedIDs.isEmpty)
         .background(.regularMaterial)
         .overlay(alignment: .top) { Divider() }
     }
 
+    /// Toggles the selection state of a word by its ID.
     private func toggleSelection(_ id: UUID) {
         if selectedIDs.contains(id) { selectedIDs.remove(id) } else { selectedIDs.insert(id) }
     }
 
+    /// Exits selection mode and clears all selected IDs.
     private func exitSelectionMode() {
         isSelecting = false
         selectedIDs = []
     }
 
+    /// Loads archived words from the data manager.
     private func load() {
         archivedWords = WordDataManager.shared.loadArchivedWords()
     }

@@ -78,9 +78,8 @@ struct TrashView: View {
                     Button(allSelected ? "すべて解除" : "すべて選択") {
                         selectedIDs = allSelected ? [] : Set(trashedWords.map(\.id))
                     }
-                } else {
+                } else if !trashedWords.isEmpty {
                     Button("選択") { isSelecting = true }
-                        .opacity(trashedWords.isEmpty ? 0 : 1)
                 }
             }
             ToolbarItem(placement: .navigationBarLeading) {
@@ -123,6 +122,7 @@ struct TrashView: View {
         }
     }
 
+    /// Renders a single word row with word text, meaning, and remaining days before deletion.
     private func wordRow(_ word: Word) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(word.word)
@@ -139,6 +139,7 @@ struct TrashView: View {
         .padding(.vertical, 4)
     }
 
+    /// Bottom action bar shown during selection mode with Restore and Permanent Delete actions.
     private var trashActionBar: some View {
         HStack(spacing: 0) {
             Button {
@@ -167,19 +168,23 @@ struct TrashView: View {
         .overlay(alignment: .top) { Divider() }
     }
 
+    /// Toggles the selection state of a word by its ID.
     private func toggleSelection(_ id: UUID) {
         if selectedIDs.contains(id) { selectedIDs.remove(id) } else { selectedIDs.insert(id) }
     }
 
+    /// Exits selection mode and clears all selected IDs.
     private func exitSelectionMode() {
         isSelecting = false
         selectedIDs = []
     }
 
+    /// Loads trashed words from the data manager.
     private func loadTrash() {
         trashedWords = WordDataManager.shared.loadTrashWords()
     }
 
+    /// Returns a localized string describing how many days remain before permanent deletion.
     private func remainingDaysText(from deletedAt: Date) -> String {
         let calendar = Calendar.current
         let expiryDate = calendar.date(byAdding: .day, value: 10, to: deletedAt)!

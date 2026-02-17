@@ -181,6 +181,7 @@ class WordDataManager {
 
     /// Soft-deletes multiple words in a single save.
     func moveToTrash(wordIds: [UUID]) {
+        guard !wordIds.isEmpty else { return }
         let idSet = Set(wordIds)
         var all = loadAllWords()
         let now = Date()
@@ -192,6 +193,7 @@ class WordDataManager {
 
     /// Archives multiple words in a single save.
     func archive(wordIds: [UUID]) {
+        guard !wordIds.isEmpty else { return }
         let idSet = Set(wordIds)
         var all = loadAllWords()
         let now = Date()
@@ -203,6 +205,7 @@ class WordDataManager {
 
     /// Unarchives multiple words in a single save.
     func unarchive(wordIds: [UUID]) {
+        guard !wordIds.isEmpty else { return }
         let idSet = Set(wordIds)
         var all = loadAllWords()
         for idx in all.indices where idSet.contains(all[idx].id) {
@@ -213,6 +216,7 @@ class WordDataManager {
 
     /// Restores multiple trashed words in a single save.
     func restoreFromTrash(wordIds: [UUID]) {
+        guard !wordIds.isEmpty else { return }
         let idSet = Set(wordIds)
         var all = loadAllWords()
         for idx in all.indices where idSet.contains(all[idx].id) {
@@ -223,6 +227,7 @@ class WordDataManager {
 
     /// Permanently removes multiple words in a single save.
     func permanentlyDelete(wordIds: [UUID]) {
+        guard !wordIds.isEmpty else { return }
         let idSet = Set(wordIds)
         var all = loadAllWords()
         all.removeAll { idSet.contains($0.id) }
