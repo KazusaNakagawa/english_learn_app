@@ -115,10 +115,6 @@ Two files must be created locally before building the iOS app:
 6. **Commit** — commit with a clear message referencing the Issue number.
 7. **Push and open a PR** — push the branch and create a pull request targeting `develop`.
 
-### Important Notes
-
-- **DEVELOPMENT_TEAM** does not commit to Debug or Release
-
 ## Current Security Posture
 
 The VOICEVOX API Gateway has **no authentication** (PoC state): CORS is `allowOrigins: ['*']`, no API keys, throttling is the only guard. Issues #11 (access control) and #12 (multi-env deploy) track the planned hardening for release.
