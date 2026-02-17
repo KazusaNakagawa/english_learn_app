@@ -109,7 +109,7 @@ struct AddWordView: View {
                         .frame(maxWidth: .infinity)
                         .frame(height: 44)
                     }
-                    .disabled(word.isEmpty || meaning.isEmpty || openAIService.isLoading)
+                    .disabled(word.isEmpty || openAIService.isLoading)
                 }
 
                 if !generatedSentences.isEmpty {
@@ -181,9 +181,13 @@ struct AddWordView: View {
         let conditions = settings.allPresets.first { $0.id == selectedPresetID }?.conditions
             ?? settings.activeConditions
         do {
-            let sentences = try await openAIService.generateSentences(for: word, meaning: meaning, conditions: conditions)
+            let content = try await openAIService.generateContent(for: word, conditions: conditions)
             await MainActor.run {
-                generatedSentences = sentences
+                if !content.meaning.isEmpty { meaning = content.meaning }
+                if !content.phonetic.isEmpty { phonetic = content.phonetic }
+                generatedSentences = content.sentences.map {
+                    Sentence(english: $0.english, japanese: $0.japanese, category: $0.category)
+                }
             }
         } catch {
             await MainActor.run {

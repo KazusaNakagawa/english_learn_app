@@ -8,7 +8,7 @@ import Foundation
 /// ## Usage
 /// ```swift
 /// let service = OpenAIService()
-/// let sentences = try await service.generateSentences(for: "rarity", meaning: "珍しさ")
+/// let content = try await service.generateContent(for: "rarity")
 /// ```
 ///
 /// - Note: You must set `SettingsManager.shared.openAIAPIKey` before using this service.
@@ -55,8 +55,10 @@ class OpenAIService: ObservableObject {
         }
     }
 
-    /// The JSON structure of generated sentences returned by the API.
-    struct GeneratedSentences: Codable {
+    /// The JSON structure returned by the API, including meaning, phonetic, and sentences.
+    struct GeneratedContent: Codable {
+        let meaning: String
+        let phonetic: String
         let sentences: [GeneratedSentence]
 
         struct GeneratedSentence: Codable {
@@ -68,19 +70,18 @@ class OpenAIService: ObservableObject {
 
     // MARK: - Public Methods
 
-    /// Generates example sentences for the specified word.
+    /// Generates meaning, phonetic transcription, and example sentences for the specified word.
     ///
-    /// Calls the OpenAI API to generate example sentences using the specified English word.
-    /// Each generated sentence includes an English sentence, Japanese translation, and category.
+    /// Calls the OpenAI API with a single request that returns the Japanese meaning,
+    /// IPA phonetic notation, and example sentences for the given English word.
     ///
     /// - Parameters:
-    ///   - word: The English word to include in the example sentences.
-    ///   - meaning: The Japanese meaning of the word (used as context for the prompt).
+    ///   - word: The English word to look up and generate sentences for.
     ///   - count: The number of sentences to generate (default: 20).
     ///   - conditions: The prompt conditions to use. If nil, uses the active preset's conditions.
-    /// - Returns: An array of generated `Sentence` objects.
+    /// - Returns: A `GeneratedContent` containing meaning, phonetic, and sentences.
     /// - Throws: `OpenAIError` for missing API key, network errors, or parsing failures.
-    func generateSentences(for word: String, meaning: String, count: Int = 20, conditions: String? = nil) async throws -> [Sentence] {
+    func generateContent(for word: String, count: Int = 20, conditions: String? = nil) async throws -> GeneratedContent {
         guard let apiKey = SettingsManager.shared.openAIAPIKey, !apiKey.isEmpty else {
             throw OpenAIError.missingAPIKey
         }
@@ -93,10 +94,12 @@ class OpenAIService: ObservableObject {
         let resolvedConditions = conditions ?? SettingsManager.shared.activeConditions
 
         let systemPrompt = """
-        あなたは英語学習アプリ用の例文を生成するアシスタントです。
-        与えられた英単語を使った自然な例文を生成してください。
+        あなたは英語学習アプリ用のアシスタントです。
+        与えられた英単語について、日本語の意味・IPA発音記号・自然な例文を生成してください。
         以下の形式のJSON形式で返答してください：
         {
+          "meaning": "日本語の意味（簡潔に）",
+          "phonetic": "/IPA発音記号/",
           "sentences": [
             {
               "english": "英文",
@@ -108,7 +111,7 @@ class OpenAIService: ObservableObject {
         """
 
         let userPrompt = """
-        「\(word)」（\(meaning)）を使った例文を\(count)個生成してください。
+        「\(word)」の意味・発音記号・例文を\(count)個生成してください。
 
         \(resolvedConditions)
         """
@@ -156,17 +159,11 @@ class OpenAIService: ObservableObject {
                 throw OpenAIError.invalidJSON
             }
 
-            let generatedSentences = try JSONDecoder().decode(GeneratedSentences.self, from: contentData)
+            let generatedContent = try JSONDecoder().decode(GeneratedContent.self, from: contentData)
 
             await MainActor.run { isLoading = false }
 
-            return generatedSentences.sentences.map { generated in
-                Sentence(
-                    english: generated.english,
-                    japanese: generated.japanese,
-                    category: generated.category
-                )
-            }
+            return generatedContent
         } catch {
             await MainActor.run { isLoading = false }
             throw error
