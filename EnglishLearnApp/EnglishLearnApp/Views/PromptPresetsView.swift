@@ -66,6 +66,8 @@ struct PromptPresetsView: View {
         }
     }
 
+    /// Renders a single preset row showing name, built-in badge, modified badge, and conditions text.
+    /// Tapping the row sets the preset as active.
     @ViewBuilder
     private func presetRow(_ preset: PromptPreset) -> some View {
         Button {
@@ -135,6 +137,10 @@ private struct PresetEditTarget: Identifiable, Hashable {
 
 // MARK: - Preset Edit View
 
+/// A form for creating or editing a prompt preset.
+///
+/// - For built-in presets: name is read-only; a "デフォルトに戻す" reset button is shown.
+/// - For custom presets: both name and conditions are editable.
 private struct PresetEditView: View {
     @EnvironmentObject private var settings: SettingsManager
     @Environment(\.dismiss) private var dismiss
@@ -145,6 +151,7 @@ private struct PresetEditView: View {
     @State private var conditions: String
     @State private var showResetAlert = false
 
+    /// `true` when the target preset is a built-in (non-deletable, name is read-only).
     private var isBuiltIn: Bool { target.preset?.isBuiltIn == true }
 
     /// Whether conditions have drifted from the hardcoded original.
@@ -218,11 +225,14 @@ private struct PresetEditView: View {
         }
     }
 
+    /// `true` when the Save button should be disabled.
+    /// Disabled when conditions are blank, or when the preset is custom and name is blank.
     private var isSaveDisabled: Bool {
         conditions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
         (!isBuiltIn && name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
     }
 
+    /// Persists the edited or newly created preset via `SettingsManager`.
     private func save() {
         if let existingPreset = target.preset {
             let updatedName = isBuiltIn ? existingPreset.name : name
