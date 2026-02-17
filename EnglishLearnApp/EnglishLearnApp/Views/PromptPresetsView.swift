@@ -97,7 +97,7 @@ struct PromptPresetsView: View {
                         }
                     }
                     Text(preset.conditions)
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundColor(.secondary)
                         .lineLimit(2)
                 }
@@ -174,7 +174,7 @@ private struct PresetEditView: View {
             Section(header: Text("条件")) {
                 TextEditor(text: $conditions)
                     .frame(minHeight: 200)
-                    .font(.caption)
+                    .font(.footnote)
             }
 
             if isBuiltIn {
