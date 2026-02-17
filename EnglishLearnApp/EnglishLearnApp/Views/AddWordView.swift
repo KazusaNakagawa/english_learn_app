@@ -51,9 +51,9 @@ struct AddWordView: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
 
-                    TextField("意味", text: $meaning)
+                    TextField("意味（未入力なら自動生成）", text: $meaning)
 
-                    TextField("発音記号", text: $phonetic)
+                    TextField("発音記号（未入力なら自動生成）", text: $phonetic)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                 }
@@ -183,8 +183,10 @@ struct AddWordView: View {
         do {
             let content = try await openAIService.generateContent(for: word, conditions: conditions)
             await MainActor.run {
-                if !content.meaning.isEmpty { meaning = content.meaning }
-                if !content.phonetic.isEmpty { phonetic = content.phonetic }
+                if meaning.isEmpty && !content.meaning.isEmpty { meaning = content.meaning }
+                if phonetic.isEmpty && !content.phonetic.isEmpty {
+                    phonetic = content.phonetic.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+                }
                 generatedSentences = content.sentences.map {
                     Sentence(english: $0.english, japanese: $0.japanese, category: $0.category)
                 }

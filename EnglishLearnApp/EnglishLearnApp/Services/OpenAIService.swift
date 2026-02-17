@@ -61,6 +61,13 @@ class OpenAIService: ObservableObject {
         let phonetic: String
         let sentences: [GeneratedSentence]
 
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.sentences = try container.decode([GeneratedSentence].self, forKey: .sentences)
+            self.meaning = (try? container.decode(String.self, forKey: .meaning)) ?? ""
+            self.phonetic = (try? container.decode(String.self, forKey: .phonetic)) ?? ""
+        }
+
         struct GeneratedSentence: Codable {
             let english: String
             let japanese: String
@@ -93,6 +100,9 @@ class OpenAIService: ObservableObject {
 
         let resolvedConditions = conditions ?? SettingsManager.shared.activeConditions
 
+        // Sanitize word: strip newlines and limit length to prevent prompt injection.
+        let sanitizedWord = String(word.replacingOccurrences(of: "\n", with: " ").prefix(100))
+
         let systemPrompt = """
         あなたは英語学習アプリ用のアシスタントです。
         与えられた英単語について、日本語の意味・IPA発音記号・自然な例文を生成してください。
@@ -111,7 +121,7 @@ class OpenAIService: ObservableObject {
         """
 
         let userPrompt = """
-        「\(word)」の意味・発音記号・例文を\(count)個生成してください。
+        「\(sanitizedWord)」の意味・発音記号・例文を\(count)個生成してください。
 
         \(resolvedConditions)
         """
@@ -127,6 +137,7 @@ class OpenAIService: ObservableObject {
 
         var urlRequest = URLRequest(url: URL(string: endpoint)!)
         urlRequest.httpMethod = "POST"
+        urlRequest.timeoutInterval = 120
         urlRequest.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
         urlRequest.httpBody = try JSONEncoder().encode(request)
