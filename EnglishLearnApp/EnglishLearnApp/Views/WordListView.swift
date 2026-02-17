@@ -37,6 +37,10 @@ struct WordListView: View {
 
     @State private var showingAddWordView = false
 
+    // MARK: Selection mode
+    @State private var isSelecting = false
+    @State private var selectedIDs: Set<UUID> = []
+
     private var sortOption: WordSortOption {
         WordSortOption(rawValue: sortOptionRaw) ?? .alphabeticalAZ
     }
@@ -87,55 +91,86 @@ struct WordListView: View {
         VStack(spacing: 0) {
             letterFilterBar
             List(filteredWords) { word in
-                NavigationLink(destination: destinationView(for: word)) {
-                    WordRowView(word: word, speechService: speechService)
-                }
-                .swipeActions(edge: .trailing) {
-                    Button(role: .destructive) {
-                        WordDataManager.shared.moveToTrash(wordId: word.id)
-                        words = WordDataManager.shared.loadWords()
-                    } label: {
-                        Label("ゴミ箱へ", systemImage: "trash")
-                    }
+                if isSelecting {
                     Button {
-                        WordDataManager.shared.archive(wordId: word.id)
-                        words = WordDataManager.shared.loadWords()
+                        toggleSelection(word.id)
                     } label: {
-                        Label("アーカイブ", systemImage: "archivebox")
+                        HStack(spacing: 12) {
+                            Image(systemName: selectedIDs.contains(word.id) ? "checkmark.circle.fill" : "circle")
+                                .foregroundColor(selectedIDs.contains(word.id) ? .accentColor : .secondary)
+                                .font(.title2)
+                            WordRowView(word: word, speechService: speechService)
+                        }
                     }
-                    .tint(.teal)
-                }
-                .swipeActions(edge: .leading) {
-                    Button {
-                        wordToEdit = word
-                    } label: {
-                        Label("編集", systemImage: "pencil")
+                    .buttonStyle(.plain)
+                } else {
+                    NavigationLink(destination: destinationView(for: word)) {
+                        WordRowView(word: word, speechService: speechService)
                     }
-                    .tint(.orange)
+                    .swipeActions(edge: .trailing) {
+                        Button(role: .destructive) {
+                            WordDataManager.shared.moveToTrash(wordId: word.id)
+                            words = WordDataManager.shared.loadWords()
+                        } label: {
+                            Label("ゴミ箱へ", systemImage: "trash")
+                        }
+                        Button {
+                            WordDataManager.shared.archive(wordId: word.id)
+                            words = WordDataManager.shared.loadWords()
+                        } label: {
+                            Label("アーカイブ", systemImage: "archivebox")
+                        }
+                        .tint(.teal)
+                    }
+                    .swipeActions(edge: .leading) {
+                        Button {
+                            wordToEdit = word
+                        } label: {
+                            Label("編集", systemImage: "pencil")
+                        }
+                        .tint(.orange)
+                    }
                 }
             }
             .searchable(text: $searchText, prompt: "単語・意味・発音記号で検索")
+            .safeAreaInset(edge: .bottom) {
+                if isSelecting {
+                    wordListActionBar
+                }
+            }
         }
         .navigationTitle("英単語リスト")
         .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                sortMenu
-            }
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button(action: {
-                    showingAddWordView = true
-                }) {
-                    Image(systemName: "plus")
+            ToolbarItem(placement: .navigationBarLeading) {
+                if isSelecting {
+                    Button("キャンセル") { exitSelectionMode() }
+                } else {
+                    HStack {
+                        NavigationLink(destination: ArchiveView()) {
+                            Image(systemName: "archivebox")
+                        }
+                        NavigationLink(destination: TrashView()) {
+                            Image(systemName: "trash")
+                        }
+                    }
                 }
             }
-            ToolbarItem(placement: .navigationBarLeading) {
-                NavigationLink(destination: ArchiveView()) {
-                    Image(systemName: "archivebox")
-                }
-            }
-            ToolbarItem(placement: .navigationBarLeading) {
-                NavigationLink(destination: TrashView()) {
-                    Image(systemName: "trash")
+            ToolbarItem(placement: .navigationBarTrailing) {
+                if isSelecting {
+                    let allSelected = !filteredWords.isEmpty && filteredWords.allSatisfy { selectedIDs.contains($0.id) }
+                    Button(allSelected ? "すべて解除" : "すべて選択") {
+                        if allSelected {
+                            selectedIDs = []
+                        } else {
+                            selectedIDs = Set(filteredWords.map(\.id))
+                        }
+                    }
+                } else {
+                    HStack {
+                        sortMenu
+                        Button { showingAddWordView = true } label: { Image(systemName: "plus") }
+                        Button("選択") { isSelecting = true }
+                    }
                 }
             }
         }
@@ -155,6 +190,45 @@ struct WordListView: View {
         .onAppear {
             words = WordDataManager.shared.loadWords()
         }
+    }
+
+    private var wordListActionBar: some View {
+        HStack(spacing: 0) {
+            Button {
+                WordDataManager.shared.archive(wordIds: Array(selectedIDs))
+                words = WordDataManager.shared.loadWords()
+                exitSelectionMode()
+            } label: {
+                Label("アーカイブ", systemImage: "archivebox")
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+            }
+            .disabled(selectedIDs.isEmpty)
+
+            Divider().frame(height: 44)
+
+            Button(role: .destructive) {
+                WordDataManager.shared.moveToTrash(wordIds: Array(selectedIDs))
+                words = WordDataManager.shared.loadWords()
+                exitSelectionMode()
+            } label: {
+                Label("ゴミ箱へ", systemImage: "trash")
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+            }
+            .disabled(selectedIDs.isEmpty)
+        }
+        .background(.regularMaterial)
+        .overlay(alignment: .top) { Divider() }
+    }
+
+    private func toggleSelection(_ id: UUID) {
+        if selectedIDs.contains(id) { selectedIDs.remove(id) } else { selectedIDs.insert(id) }
+    }
+
+    private func exitSelectionMode() {
+        isSelecting = false
+        selectedIDs = []
     }
 
     // MARK: - Subviews

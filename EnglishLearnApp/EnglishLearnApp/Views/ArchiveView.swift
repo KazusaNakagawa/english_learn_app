@@ -3,6 +3,10 @@ import SwiftUI
 struct ArchiveView: View {
     @State private var archivedWords: [Word] = []
 
+    // MARK: Selection mode
+    @State private var isSelecting = false
+    @State private var selectedIDs: Set<UUID> = []
+
     var body: some View {
         Group {
             if archivedWords.isEmpty {
@@ -22,37 +26,102 @@ struct ArchiveView: View {
             } else {
                 List {
                     ForEach(archivedWords) { word in
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(word.word)
-                                .font(.headline)
-                            Text(word.phonetic)
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                            Text(word.meaning)
-                                .font(.subheadline)
-                                .foregroundColor(.blue)
-                            if let archivedAt = word.archivedAt {
-                                Text("アーカイブ日: \(archivedAt.formatted(date: .abbreviated, time: .omitted))")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                        .padding(.vertical, 4)
-                        .swipeActions(edge: .leading) {
+                        if isSelecting {
                             Button {
-                                WordDataManager.shared.unarchive(wordId: word.id)
-                                load()
+                                toggleSelection(word.id)
                             } label: {
-                                Label("元に戻す", systemImage: "arrow.uturn.backward")
+                                HStack(spacing: 12) {
+                                    Image(systemName: selectedIDs.contains(word.id) ? "checkmark.circle.fill" : "circle")
+                                        .foregroundColor(selectedIDs.contains(word.id) ? .accentColor : .secondary)
+                                        .font(.title2)
+                                    wordRow(word)
+                                }
                             }
-                            .tint(.green)
+                            .buttonStyle(.plain)
+                        } else {
+                            wordRow(word)
+                                .swipeActions(edge: .leading) {
+                                    Button {
+                                        WordDataManager.shared.unarchive(wordId: word.id)
+                                        load()
+                                    } label: {
+                                        Label("元に戻す", systemImage: "arrow.uturn.backward")
+                                    }
+                                    .tint(.green)
+                                }
                         }
+                    }
+                }
+                .safeAreaInset(edge: .bottom) {
+                    if isSelecting {
+                        archiveActionBar
                     }
                 }
             }
         }
         .navigationTitle("アーカイブ")
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                if isSelecting {
+                    let allSelected = !archivedWords.isEmpty && archivedWords.allSatisfy { selectedIDs.contains($0.id) }
+                    Button(allSelected ? "すべて解除" : "すべて選択") {
+                        selectedIDs = allSelected ? [] : Set(archivedWords.map(\.id))
+                    }
+                } else {
+                    Button("選択") { isSelecting = true }
+                        .opacity(archivedWords.isEmpty ? 0 : 1)
+                }
+            }
+            ToolbarItem(placement: .navigationBarLeading) {
+                if isSelecting {
+                    Button("キャンセル") { exitSelectionMode() }
+                }
+            }
+        }
         .onAppear { load() }
+    }
+
+    private func wordRow(_ word: Word) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(word.word)
+                .font(.headline)
+            Text(word.phonetic)
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+            Text(word.meaning)
+                .font(.subheadline)
+                .foregroundColor(.blue)
+            if let archivedAt = word.archivedAt {
+                Text("アーカイブ日: \(archivedAt.formatted(date: .abbreviated, time: .omitted))")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var archiveActionBar: some View {
+        Button {
+            WordDataManager.shared.unarchive(wordIds: Array(selectedIDs))
+            load()
+            exitSelectionMode()
+        } label: {
+            Label("元に戻す", systemImage: "arrow.uturn.backward")
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+        }
+        .disabled(selectedIDs.isEmpty)
+        .background(.regularMaterial)
+        .overlay(alignment: .top) { Divider() }
+    }
+
+    private func toggleSelection(_ id: UUID) {
+        if selectedIDs.contains(id) { selectedIDs.remove(id) } else { selectedIDs.insert(id) }
+    }
+
+    private func exitSelectionMode() {
+        isSelecting = false
+        selectedIDs = []
     }
 
     private func load() {

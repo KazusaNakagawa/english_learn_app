@@ -177,6 +177,58 @@ class WordDataManager {
         saveAllWords(all)
     }
 
+    // MARK: - Batch Operations
+
+    /// Soft-deletes multiple words in a single save.
+    func moveToTrash(wordIds: [UUID]) {
+        let idSet = Set(wordIds)
+        var all = loadAllWords()
+        let now = Date()
+        for idx in all.indices where idSet.contains(all[idx].id) {
+            all[idx].deletedAt = now
+        }
+        saveAllWords(all)
+    }
+
+    /// Archives multiple words in a single save.
+    func archive(wordIds: [UUID]) {
+        let idSet = Set(wordIds)
+        var all = loadAllWords()
+        let now = Date()
+        for idx in all.indices where idSet.contains(all[idx].id) {
+            all[idx].archivedAt = now
+        }
+        saveAllWords(all)
+    }
+
+    /// Unarchives multiple words in a single save.
+    func unarchive(wordIds: [UUID]) {
+        let idSet = Set(wordIds)
+        var all = loadAllWords()
+        for idx in all.indices where idSet.contains(all[idx].id) {
+            all[idx].archivedAt = nil
+        }
+        saveAllWords(all)
+    }
+
+    /// Restores multiple trashed words in a single save.
+    func restoreFromTrash(wordIds: [UUID]) {
+        let idSet = Set(wordIds)
+        var all = loadAllWords()
+        for idx in all.indices where idSet.contains(all[idx].id) {
+            all[idx].deletedAt = nil
+        }
+        saveAllWords(all)
+    }
+
+    /// Permanently removes multiple words in a single save.
+    func permanentlyDelete(wordIds: [UUID]) {
+        let idSet = Set(wordIds)
+        var all = loadAllWords()
+        all.removeAll { idSet.contains($0.id) }
+        saveAllWords(all)
+    }
+
     // MARK: - Export / Import
 
     /// Exports all non-deleted words to a JSON file in the temp directory.
