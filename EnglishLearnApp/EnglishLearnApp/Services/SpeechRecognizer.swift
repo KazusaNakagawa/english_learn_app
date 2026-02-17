@@ -101,7 +101,9 @@ class SpeechRecognizer: ObservableObject {
         recognitionTask = nil
         isRecording = false
 
-        try? AVAudioSession.sharedInstance().setActive(false)
+        let session = AVAudioSession.sharedInstance()
+        try? session.setActive(false, options: .notifyOthersOnDeactivation)
+        try? session.setCategory(.playback)
     }
 
     func checkPronunciation(expected: String) -> PronunciationResult {
