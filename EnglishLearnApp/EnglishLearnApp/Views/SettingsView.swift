@@ -198,9 +198,11 @@ struct SettingsView: View {
             .navigationBarTitleDisplayMode(.inline)
             .scrollDismissesKeyboard(.interactively)
         }
-        .sheet(isPresented: $showingShareSheet) {
+        .background {
             if let url = exportURL {
-                ActivityView(activityItems: [url])
+                ActivityPresenter(activityItems: [url], isPresented: $showingShareSheet) {
+                    exportURL = nil
+                }
             }
         }
         .fileImporter(
@@ -259,18 +261,6 @@ struct SettingsView: View {
         }
     }
 
-}
-
-// MARK: - UIKit Share Sheet bridge
-
-private struct ActivityView: UIViewControllerRepresentable {
-    let activityItems: [Any]
-
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
-    }
-
-    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 #Preview {

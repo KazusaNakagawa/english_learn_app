@@ -6,12 +6,16 @@ import SwiftUI
 /// - Tap a row to set it as the active preset.
 /// - Swipe trailing "編集" to edit; "削除" to delete (custom only).
 /// - "+" toolbar button adds a new custom preset.
+/// - Export toolbar button shares all presets as a Markdown file.
 struct PromptPresetsView: View {
     @EnvironmentObject private var settings: SettingsManager
 
     @State private var navigationTarget: PresetEditTarget? = nil
     @State private var deletingPresetID: UUID? = nil
     @State private var showDeleteAlert = false
+    @State private var showShareSheet = false
+    @State private var exportURL: URL? = nil
+    @State private var showExportError = false
 
     var body: some View {
         List {
@@ -38,18 +42,42 @@ struct PromptPresetsView: View {
         .navigationTitle("例文生成の条件")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if settings.allPresets.count < SettingsManager.maxPresets {
-                ToolbarItem(placement: .navigationBarTrailing) {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                HStack(spacing: 16) {
                     Button {
-                        navigationTarget = .new()
+                        if let url = makeExportFile() {
+                            exportURL = url
+                            showShareSheet = true
+                        } else {
+                            showExportError = true
+                        }
                     } label: {
-                        Image(systemName: "plus")
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                    if settings.allPresets.count < SettingsManager.maxPresets {
+                        Button {
+                            navigationTarget = .new()
+                        } label: {
+                            Image(systemName: "plus")
+                        }
                     }
                 }
             }
         }
         .navigationDestination(item: $navigationTarget) { target in
             PresetEditView(target: target)
+        }
+        .background {
+            if let url = exportURL {
+                ActivityPresenter(activityItems: [url], isPresented: $showShareSheet) {
+                    exportURL = nil
+                }
+            }
+        }
+        .alert("エクスポートエラー", isPresented: $showExportError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("ファイルの書き出しに失敗しました。")
         }
         .alert("プリセットを削除", isPresented: $showDeleteAlert) {
             Button("削除", role: .destructive) {
@@ -63,6 +91,20 @@ struct PromptPresetsView: View {
             }
         } message: {
             Text("このプリセットを削除しますか？この操作は元に戻せません。")
+        }
+    }
+
+    /// Writes the Markdown export to a temp file and returns its URL, or nil on failure.
+    private func makeExportFile() -> URL? {
+        let content = settings.exportMarkdown
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("prompt_presets")
+            .appendingPathExtension("md")
+        do {
+            try content.write(to: url, atomically: true, encoding: .utf8)
+            return url
+        } catch {
+            return nil
         }
     }
 

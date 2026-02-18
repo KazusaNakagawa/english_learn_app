@@ -32,6 +32,7 @@
 		A100007B238D1234567890AB /* PromptPreset.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100007A238D1234567890AB /* PromptPreset.swift */; };
 		A100007D238D1234567890AB /* PromptPresetsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100007C238D1234567890AB /* PromptPresetsView.swift */; };
 		A100007F238D1234567890AB /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100007E238D1234567890AB /* OnboardingView.swift */; };
+		A1000081238D1234567890AB /* ActivityPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000080238D1234567890AB /* ActivityPresenter.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -62,6 +63,7 @@
 		A100007A238D1234567890AB /* PromptPreset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptPreset.swift; sourceTree = "<group>"; };
 		A100007C238D1234567890AB /* PromptPresetsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptPresetsView.swift; sourceTree = "<group>"; };
 		A100007E238D1234567890AB /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		A1000080238D1234567890AB /* ActivityPresenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityPresenter.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -144,8 +146,17 @@
 				A1000078238D1234567890AB /* TermsOfServiceView.swift */,
 				A100007E238D1234567890AB /* OnboardingView.swift */,
 				A100007C238D1234567890AB /* PromptPresetsView.swift */,
+				A1000082238D1234567890AB /* Helpers */,
 			);
 			path = Views;
+			sourceTree = "<group>";
+		};
+		A1000082238D1234567890AB /* Helpers */ = {
+			isa = PBXGroup;
+			children = (
+				A1000080238D1234567890AB /* ActivityPresenter.swift */,
+			);
+			path = Helpers;
 			sourceTree = "<group>";
 		};
 		A1000036238D1234567890AB /* Resources */ = {
@@ -258,6 +269,7 @@
 				A1000027238D1234567890AB /* AppConfig.swift in Sources */,
 				A100007B238D1234567890AB /* PromptPreset.swift in Sources */,
 				A100007D238D1234567890AB /* PromptPresetsView.swift in Sources */,
+				A1000081238D1234567890AB /* ActivityPresenter.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -396,6 +408,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"EnglishLearnApp/Preview Content\"";
+				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = EnglishLearnApp/Info.plist;
@@ -429,6 +442,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"EnglishLearnApp/Preview Content\"";
+				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = EnglishLearnApp/Info.plist;
