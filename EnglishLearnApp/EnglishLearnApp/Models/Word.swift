@@ -109,22 +109,10 @@ class WordDataManager {
     }
 
     /// Archives a word by setting archivedAt to now.
-    func archive(wordId: UUID) {
-        var all = loadAllWords()
-        if let idx = all.firstIndex(where: { $0.id == wordId }) {
-            all[idx].archivedAt = Date()
-            saveAllWords(all)
-        }
-    }
+    func archive(wordId: UUID) { archive(wordIds: [wordId]) }
 
     /// Restores an archived word by clearing archivedAt.
-    func unarchive(wordId: UUID) {
-        var all = loadAllWords()
-        if let idx = all.firstIndex(where: { $0.id == wordId }) {
-            all[idx].archivedAt = nil
-            saveAllWords(all)
-        }
-    }
+    func unarchive(wordId: UUID) { unarchive(wordIds: [wordId]) }
 
     /// Loads only trashed words within the 10-day retention window.
     func loadTrashWords() -> [Word] {
@@ -153,76 +141,40 @@ class WordDataManager {
     }
 
     /// Soft-deletes a word by setting deletedAt to now.
-    func moveToTrash(wordId: UUID) {
-        var all = loadAllWords()
-        if let idx = all.firstIndex(where: { $0.id == wordId }) {
-            all[idx].deletedAt = Date()
-            saveAllWords(all)
-        }
-    }
+    func moveToTrash(wordId: UUID) { moveToTrash(wordIds: [wordId]) }
 
     /// Restores a trashed word by clearing deletedAt.
-    func restoreFromTrash(wordId: UUID) {
-        var all = loadAllWords()
-        if let idx = all.firstIndex(where: { $0.id == wordId }) {
-            all[idx].deletedAt = nil
-            saveAllWords(all)
-        }
-    }
+    func restoreFromTrash(wordId: UUID) { restoreFromTrash(wordIds: [wordId]) }
 
     /// Permanently removes a word from storage.
-    func permanentlyDelete(wordId: UUID) {
-        var all = loadAllWords()
-        all.removeAll { $0.id == wordId }
-        saveAllWords(all)
-    }
+    func permanentlyDelete(wordId: UUID) { permanentlyDelete(wordIds: [wordId]) }
 
     // MARK: - Batch Operations
 
     /// Soft-deletes multiple words in a single save.
     func moveToTrash(wordIds: [UUID]) {
         guard !wordIds.isEmpty else { return }
-        let idSet = Set(wordIds)
-        var all = loadAllWords()
         let now = Date()
-        for idx in all.indices where idSet.contains(all[idx].id) {
-            all[idx].deletedAt = now
-        }
-        saveAllWords(all)
+        modifyWords(ids: Set(wordIds)) { $0.deletedAt = now }
     }
 
     /// Archives multiple words in a single save.
     func archive(wordIds: [UUID]) {
         guard !wordIds.isEmpty else { return }
-        let idSet = Set(wordIds)
-        var all = loadAllWords()
         let now = Date()
-        for idx in all.indices where idSet.contains(all[idx].id) {
-            all[idx].archivedAt = now
-        }
-        saveAllWords(all)
+        modifyWords(ids: Set(wordIds)) { $0.archivedAt = now }
     }
 
     /// Unarchives multiple words in a single save.
     func unarchive(wordIds: [UUID]) {
         guard !wordIds.isEmpty else { return }
-        let idSet = Set(wordIds)
-        var all = loadAllWords()
-        for idx in all.indices where idSet.contains(all[idx].id) {
-            all[idx].archivedAt = nil
-        }
-        saveAllWords(all)
+        modifyWords(ids: Set(wordIds)) { $0.archivedAt = nil }
     }
 
     /// Restores multiple trashed words in a single save.
     func restoreFromTrash(wordIds: [UUID]) {
         guard !wordIds.isEmpty else { return }
-        let idSet = Set(wordIds)
-        var all = loadAllWords()
-        for idx in all.indices where idSet.contains(all[idx].id) {
-            all[idx].deletedAt = nil
-        }
-        saveAllWords(all)
+        modifyWords(ids: Set(wordIds)) { $0.deletedAt = nil }
     }
 
     /// Permanently removes multiple words in a single save.
@@ -231,6 +183,17 @@ class WordDataManager {
         let idSet = Set(wordIds)
         var all = loadAllWords()
         all.removeAll { idSet.contains($0.id) }
+        saveAllWords(all)
+    }
+
+    // MARK: - Private Helpers
+
+    /// Applies `transform` to every word whose ID is in `ids`, then saves once.
+    private func modifyWords(ids: Set<UUID>, transform: (inout Word) -> Void) {
+        var all = loadAllWords()
+        for idx in all.indices where ids.contains(all[idx].id) {
+            transform(&all[idx])
+        }
         saveAllWords(all)
     }
 
