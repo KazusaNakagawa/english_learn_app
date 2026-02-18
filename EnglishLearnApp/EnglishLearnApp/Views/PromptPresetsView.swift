@@ -15,6 +15,7 @@ struct PromptPresetsView: View {
     @State private var showDeleteAlert = false
     @State private var showShareSheet = false
     @State private var exportURL: URL? = nil
+    @State private var showExportError = false
 
     var body: some View {
         List {
@@ -44,8 +45,12 @@ struct PromptPresetsView: View {
             ToolbarItem(placement: .navigationBarTrailing) {
                 HStack(spacing: 16) {
                     Button {
-                        exportURL = makeExportFile()
-                        showShareSheet = true
+                        if let url = makeExportFile() {
+                            exportURL = url
+                            showShareSheet = true
+                        } else {
+                            showExportError = true
+                        }
                     } label: {
                         Image(systemName: "square.and.arrow.up")
                     }
@@ -65,10 +70,15 @@ struct PromptPresetsView: View {
         .background(
             Group {
                 if let url = exportURL {
-                    ActivityPresenter(url: url, isPresented: $showShareSheet)
+                    ActivityPresenter(activityItems: [url], isPresented: $showShareSheet)
                 }
             }
         )
+        .alert("エクスポートエラー", isPresented: $showExportError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("ファイルの書き出しに失敗しました。")
+        }
         .alert("プリセットを削除", isPresented: $showDeleteAlert) {
             Button("削除", role: .destructive) {
                 if let id = deletingPresetID {
@@ -279,28 +289,6 @@ private struct PresetEditView: View {
             let newPreset = PromptPreset(name: name, conditions: conditions, isBuiltIn: false)
             settings.addPreset(newPreset)
         }
-    }
-}
-
-// MARK: - Activity Presenter (UIActivityViewController via UIKit present)
-
-/// Presents UIActivityViewController by calling `present()` on a transparent UIViewController.
-/// Using `.sheet()` to host UIActivityViewController causes a black screen; this avoids that.
-private struct ActivityPresenter: UIViewControllerRepresentable {
-    let url: URL
-    @Binding var isPresented: Bool
-
-    func makeUIViewController(context: Context) -> UIViewController {
-        UIViewController()
-    }
-
-    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {
-        guard isPresented, uiViewController.presentedViewController == nil else { return }
-        let vc = UIActivityViewController(activityItems: [url], applicationActivities: nil)
-        vc.completionWithItemsHandler = { _, _, _, _ in
-            isPresented = false
-        }
-        uiViewController.present(vc, animated: true)
     }
 }
 
