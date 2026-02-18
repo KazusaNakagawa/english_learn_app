@@ -144,15 +144,10 @@ struct SettingsView: View {
                             }
                         }
                     } label: {
-                        HStack {
-                            if isExporting {
-                                ProgressView()
-                                    .progressViewStyle(.circular)
-                                    .scaleEffect(0.85)
-                            } else {
-                                Image(systemName: "square.and.arrow.up")
-                            }
-                            Text(isExporting ? "エクスポート中..." : "単語リストをエクスポート")
+                        if isExporting {
+                            Label("エクスポート中...", systemImage: "square.and.arrow.up")
+                        } else {
+                            Label("単語リストをエクスポート", systemImage: "square.and.arrow.up")
                         }
                     }
                     .disabled(isExporting)
