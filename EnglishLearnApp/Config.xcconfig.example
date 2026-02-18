@@ -1,0 +1,8 @@
+// Xcode build configuration.
+// Copy this file to Config.xcconfig (gitignored) and fill in your values.
+//
+// DEVELOPMENT_TEAM: Your Apple Developer Team ID (10-character string).
+// Find it at https://developer.apple.com/account -> Membership Details.
+
+VOICEVOX_BASE_URL = https://your-api-gateway-url.execute-api.ap-northeast-1.amazonaws.com/prod
+DEVELOPMENT_TEAM = XXXXXXXXXX

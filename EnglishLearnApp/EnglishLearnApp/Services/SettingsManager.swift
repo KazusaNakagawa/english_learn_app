@@ -280,6 +280,22 @@ class SettingsManager: ObservableObject {
         builtInOverrides[id.uuidString] != nil
     }
 
+    /// Generates a Markdown string containing all presets.
+    /// Built-in presets are labelled with `(built-in)`.
+    var exportMarkdown: String {
+        var lines = ["# Prompt Presets", ""]
+        for preset in allPresets {
+            let title = preset.isBuiltIn ? "## \(preset.name) (built-in)" : "## \(preset.name)"
+            lines.append(title)
+            lines.append("")
+            lines.append(preset.conditions)
+            lines.append("")
+            lines.append("---")
+            lines.append("")
+        }
+        return lines.joined(separator: "\n")
+    }
+
     /// Deletes a custom preset by ID. Built-in presets cannot be deleted.
     func deletePreset(id: UUID) {
         customPresets.removeAll { $0.id == id }
