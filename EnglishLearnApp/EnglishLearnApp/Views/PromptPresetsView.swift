@@ -67,13 +67,13 @@ struct PromptPresetsView: View {
         .navigationDestination(item: $navigationTarget) { target in
             PresetEditView(target: target)
         }
-        .background(
-            Group {
-                if let url = exportURL {
-                    ActivityPresenter(activityItems: [url], isPresented: $showShareSheet)
+        .background {
+            if let url = exportURL {
+                ActivityPresenter(activityItems: [url], isPresented: $showShareSheet) {
+                    exportURL = nil
                 }
             }
-        )
+        }
         .alert("エクスポートエラー", isPresented: $showExportError) {
             Button("OK", role: .cancel) {}
         } message: {

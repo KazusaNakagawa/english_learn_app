@@ -198,13 +198,13 @@ struct SettingsView: View {
             .navigationBarTitleDisplayMode(.inline)
             .scrollDismissesKeyboard(.interactively)
         }
-        .background(
-            Group {
-                if let url = exportURL {
-                    ActivityPresenter(activityItems: [url], isPresented: $showingShareSheet)
+        .background {
+            if let url = exportURL {
+                ActivityPresenter(activityItems: [url], isPresented: $showingShareSheet) {
+                    exportURL = nil
                 }
             }
-        )
+        }
         .fileImporter(
             isPresented: $showingImportPicker,
             allowedContentTypes: [UTType.json]
