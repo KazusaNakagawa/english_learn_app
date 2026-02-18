@@ -6,12 +6,15 @@ import SwiftUI
 /// - Tap a row to set it as the active preset.
 /// - Swipe trailing "編集" to edit; "削除" to delete (custom only).
 /// - "+" toolbar button adds a new custom preset.
+/// - Export toolbar button shares all presets as a Markdown file.
 struct PromptPresetsView: View {
     @EnvironmentObject private var settings: SettingsManager
 
     @State private var navigationTarget: PresetEditTarget? = nil
     @State private var deletingPresetID: UUID? = nil
     @State private var showDeleteAlert = false
+    @State private var showShareSheet = false
+    @State private var exportURL: URL? = nil
 
     var body: some View {
         List {
@@ -38,12 +41,20 @@ struct PromptPresetsView: View {
         .navigationTitle("例文生成の条件")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if settings.allPresets.count < SettingsManager.maxPresets {
-                ToolbarItem(placement: .navigationBarTrailing) {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                HStack(spacing: 16) {
                     Button {
-                        navigationTarget = .new()
+                        exportURL = makeExportFile()
+                        showShareSheet = true
                     } label: {
-                        Image(systemName: "plus")
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                    if settings.allPresets.count < SettingsManager.maxPresets {
+                        Button {
+                            navigationTarget = .new()
+                        } label: {
+                            Image(systemName: "plus")
+                        }
                     }
                 }
             }
@@ -51,6 +62,13 @@ struct PromptPresetsView: View {
         .navigationDestination(item: $navigationTarget) { target in
             PresetEditView(target: target)
         }
+        .background(
+            Group {
+                if let url = exportURL {
+                    ActivityPresenter(url: url, isPresented: $showShareSheet)
+                }
+            }
+        )
         .alert("プリセットを削除", isPresented: $showDeleteAlert) {
             Button("削除", role: .destructive) {
                 if let id = deletingPresetID {
@@ -63,6 +81,20 @@ struct PromptPresetsView: View {
             }
         } message: {
             Text("このプリセットを削除しますか？この操作は元に戻せません。")
+        }
+    }
+
+    /// Writes the Markdown export to a temp file and returns its URL, or nil on failure.
+    private func makeExportFile() -> URL? {
+        let content = settings.exportMarkdown
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("prompt_presets")
+            .appendingPathExtension("md")
+        do {
+            try content.write(to: url, atomically: true, encoding: .utf8)
+            return url
+        } catch {
+            return nil
         }
     }
 
@@ -247,6 +279,28 @@ private struct PresetEditView: View {
             let newPreset = PromptPreset(name: name, conditions: conditions, isBuiltIn: false)
             settings.addPreset(newPreset)
         }
+    }
+}
+
+// MARK: - Activity Presenter (UIActivityViewController via UIKit present)
+
+/// Presents UIActivityViewController by calling `present()` on a transparent UIViewController.
+/// Using `.sheet()` to host UIActivityViewController causes a black screen; this avoids that.
+private struct ActivityPresenter: UIViewControllerRepresentable {
+    let url: URL
+    @Binding var isPresented: Bool
+
+    func makeUIViewController(context: Context) -> UIViewController {
+        UIViewController()
+    }
+
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {
+        guard isPresented, uiViewController.presentedViewController == nil else { return }
+        let vc = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+        vc.completionWithItemsHandler = { _, _, _, _ in
+            isPresented = false
+        }
+        uiViewController.present(vc, animated: true)
     }
 }
 
