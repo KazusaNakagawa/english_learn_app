@@ -1,5 +1,6 @@
 import Speech
 import AVFoundation
+import SwiftUI
 
 @MainActor
 class SpeechRecognizer: ObservableObject {
@@ -145,14 +146,11 @@ enum PronunciationResult {
         }
     }
 
-    var color: String {
+    var color: Color {
         switch self {
-        case .correct:
-            return "green"
-        case .close:
-            return "orange"
-        case .incorrect, .noInput:
-            return "red"
+        case .correct:   return .green
+        case .close:     return .orange
+        case .incorrect, .noInput: return .red
         }
     }
 }

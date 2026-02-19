@@ -44,40 +44,18 @@ struct SentencePracticeView: View {
                 // 操作ボタン
                 VStack(spacing: 16) {
                     // 英語読み上げボタン
-                    Button(action: {
-                        speechService.speak(sentence.english, voiceGender: settings.voiceGender)
-                    }) {
-                        HStack {
-                            Image(systemName: (speechService.isSpeaking && speechService.speakingLanguage != "ja-JP") ? "speaker.wave.3.fill" : "speaker.wave.2.fill")
-                                .font(.title2)
-                            Text("英語を聞く")
-                                .font(.headline)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 56)
-                        .background(Color.blue.opacity(0.1))
-                        .foregroundColor(.blue)
-                        .cornerRadius(12)
-                    }
-                    .padding(.horizontal)
+                    SpeechButton(
+                        text: sentence.english, label: "英語を聞く",
+                        isJapanese: false, color: .blue,
+                        speechService: speechService, voiceGender: settings.voiceGender
+                    )
 
                     // 日本語訳読み上げボタン
-                    Button(action: {
-                        speechService.speak(sentence.japanese, language: "ja-JP", voiceGender: settings.voiceGender)
-                    }) {
-                        HStack {
-                            Image(systemName: (speechService.isSpeaking && speechService.speakingLanguage == "ja-JP") ? "speaker.wave.3.fill" : "speaker.wave.2.fill")
-                                .font(.title2)
-                            Text("日本語訳を聞く")
-                                .font(.headline)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 56)
-                        .background(Color.orange.opacity(0.1))
-                        .foregroundColor(.orange)
-                        .cornerRadius(12)
-                    }
-                    .padding(.horizontal)
+                    SpeechButton(
+                        text: sentence.japanese, label: "日本語訳を聞く",
+                        isJapanese: true, color: .orange,
+                        speechService: speechService, voiceGender: settings.voiceGender
+                    )
 
                     // 発音チェックボタン
                     Button(action: {
@@ -108,34 +86,12 @@ struct SentencePracticeView: View {
 
                 // 認識結果表示
                 if !speechRecognizer.recognizedText.isEmpty {
-                    VStack(spacing: 8) {
-                        Text("認識結果:")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Text(speechRecognizer.recognizedText)
-                            .font(.body)
-                            .fontWeight(.medium)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal)
-                    }
-                    .padding()
-                    .frame(maxWidth: .infinity)
-                    .background(Color.gray.opacity(0.1))
-                    .cornerRadius(12)
-                    .padding(.horizontal)
+                    RecognitionResultView(recognizedText: speechRecognizer.recognizedText)
                 }
 
                 // 判定結果表示
                 if showResult, let result = pronunciationResult {
-                    Text(result.message)
-                        .font(.title3)
-                        .fontWeight(.semibold)
-                        .foregroundColor(resultColor(for: result))
-                        .padding()
-                        .frame(maxWidth: .infinity)
-                        .background(resultColor(for: result).opacity(0.1))
-                        .cornerRadius(12)
-                        .padding(.horizontal)
+                    PronunciationResultView(result: result)
                 }
 
                 // エラーメッセージ
@@ -167,16 +123,6 @@ struct SentencePracticeView: View {
         showResult = true
     }
 
-    private func resultColor(for result: PronunciationResult) -> Color {
-        switch result {
-        case .correct:
-            return .green
-        case .close:
-            return .orange
-        case .incorrect, .noInput:
-            return .red
-        }
-    }
 }
 
 #Preview {

@@ -88,28 +88,12 @@ struct WordPracticeView: View {
 
             // 認識結果表示
             if !speechRecognizer.recognizedText.isEmpty {
-                VStack(spacing: 8) {
-                    Text("認識結果:")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Text(speechRecognizer.recognizedText)
-                        .font(.title3)
-                        .fontWeight(.medium)
-                }
-                .padding()
-                .background(Color.gray.opacity(0.1))
-                .cornerRadius(12)
+                RecognitionResultView(recognizedText: speechRecognizer.recognizedText)
             }
 
             // 判定結果表示
             if showResult, let result = pronunciationResult {
-                Text(result.message)
-                    .font(.title2)
-                    .fontWeight(.semibold)
-                    .foregroundColor(resultColor(for: result))
-                    .padding()
-                    .background(resultColor(for: result).opacity(0.1))
-                    .cornerRadius(12)
+                PronunciationResultView(result: result, font: .title2)
             }
 
             // エラーメッセージ
@@ -141,16 +125,6 @@ struct WordPracticeView: View {
         showResult = true
     }
 
-    private func resultColor(for result: PronunciationResult) -> Color {
-        switch result {
-        case .correct:
-            return .green
-        case .close:
-            return .orange
-        case .incorrect, .noInput:
-            return .red
-        }
-    }
 }
 
 #Preview {

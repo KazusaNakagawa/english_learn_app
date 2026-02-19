@@ -13,19 +13,11 @@ struct TrashView: View {
     var body: some View {
         Group {
             if dataManager.trashedWords.isEmpty {
-                VStack(spacing: 16) {
-                    Image(systemName: "trash")
-                        .font(.system(size: 60))
-                        .foregroundColor(.secondary)
-                    Text("ゴミ箱は空です")
-                        .font(.title2)
-                        .foregroundColor(.secondary)
-                    Text("削除した単語は10日間ここに保管されます")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                EmptyListView(
+                    systemImage: "trash",
+                    title: "ゴミ箱は空です",
+                    message: "削除した単語は10日間ここに保管されます"
+                )
             } else {
                 List {
                     ForEach(dataManager.trashedWords) { word in

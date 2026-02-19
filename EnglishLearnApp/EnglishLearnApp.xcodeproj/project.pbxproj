@@ -33,6 +33,10 @@
 		A100007D238D1234567890AB /* PromptPresetsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100007C238D1234567890AB /* PromptPresetsView.swift */; };
 		A100007F238D1234567890AB /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100007E238D1234567890AB /* OnboardingView.swift */; };
 		A1000081238D1234567890AB /* ActivityPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000080238D1234567890AB /* ActivityPresenter.swift */; };
+		A1000085238D1234567890AB /* EmptyListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000086238D1234567890AB /* EmptyListView.swift */; };
+		A1000087238D1234567890AB /* PronunciationResultView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000088238D1234567890AB /* PronunciationResultView.swift */; };
+		A1000089238D1234567890AB /* RecognitionResultView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100008A238D1234567890AB /* RecognitionResultView.swift */; };
+		A100008B238D1234567890AB /* SpeechButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100008C238D1234567890AB /* SpeechButton.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -64,6 +68,10 @@
 		A100007C238D1234567890AB /* PromptPresetsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptPresetsView.swift; sourceTree = "<group>"; };
 		A100007E238D1234567890AB /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		A1000080238D1234567890AB /* ActivityPresenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityPresenter.swift; sourceTree = "<group>"; };
+		A1000086238D1234567890AB /* EmptyListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyListView.swift; sourceTree = "<group>"; };
+		A1000088238D1234567890AB /* PronunciationResultView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PronunciationResultView.swift; sourceTree = "<group>"; };
+		A100008A238D1234567890AB /* RecognitionResultView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecognitionResultView.swift; sourceTree = "<group>"; };
+		A100008C238D1234567890AB /* SpeechButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechButton.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -155,6 +163,10 @@
 			isa = PBXGroup;
 			children = (
 				A1000080238D1234567890AB /* ActivityPresenter.swift */,
+				A1000086238D1234567890AB /* EmptyListView.swift */,
+				A1000088238D1234567890AB /* PronunciationResultView.swift */,
+				A100008A238D1234567890AB /* RecognitionResultView.swift */,
+				A100008C238D1234567890AB /* SpeechButton.swift */,
 			);
 			path = Helpers;
 			sourceTree = "<group>";
@@ -270,6 +282,10 @@
 				A100007B238D1234567890AB /* PromptPreset.swift in Sources */,
 				A100007D238D1234567890AB /* PromptPresetsView.swift in Sources */,
 				A1000081238D1234567890AB /* ActivityPresenter.swift in Sources */,
+				A1000085238D1234567890AB /* EmptyListView.swift in Sources */,
+				A1000087238D1234567890AB /* PronunciationResultView.swift in Sources */,
+				A1000089238D1234567890AB /* RecognitionResultView.swift in Sources */,
+				A100008B238D1234567890AB /* SpeechButton.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
