@@ -223,13 +223,22 @@ struct WordListView: View {
         .overlay(alignment: .top) { Divider() }
     }
 
-    /// Bottom navigation bar with Archive and Settings links, shown when not in selection mode.
+    /// Bottom navigation bar with Archive, Trash, and Settings links, shown when not in selection mode.
     private var navigationFooterBar: some View {
         HStack(spacing: 0) {
             NavigationLink(destination: ArchiveView()) {
                 Image(systemName: "archivebox")
                     .badgeOverlay(dataManager.archivedWords.count,
                                   accessibilityLabel: "\(dataManager.archivedWords.count)件アーカイブ済み")
+                    .font(.title2)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+            }
+
+            Divider().frame(height: 44)
+
+            NavigationLink(destination: TrashView()) {
+                Image(systemName: "trash")
                     .font(.title2)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
