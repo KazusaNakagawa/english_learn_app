@@ -9,6 +9,9 @@ struct SentenceListView: View {
     @State private var isPlayingAll = false
     @State private var playingIndex: Int = 0  // flat index into allSentences
     @State private var playingStep: Int = 0   // 0=EN, 1=JA, 2=EN, 3=JA
+    // Non-@State flag: set synchronously before stop() so onChange guard sees it immediately,
+    // preventing a spurious advancePlayback() call during manual cancel.
+    private var isCanceling = false
 
     var groupedSentences: [(String, [Sentence])] {
         let grouped = Dictionary(grouping: word.sentences) { $0.category }
@@ -65,24 +68,25 @@ struct SentenceListView: View {
                 Section(header: Text(category)) {
                     ForEach(sentences) { sentence in
                         let isPlaying = playingSentenceID == sentence.id
-                        NavigationLink(destination: SentencePracticeView(sentence: sentence, word: word)) {
-                            HStack {
+                        // NavigationLink and play button are siblings in HStack so the
+                        // button tap is not intercepted by the NavigationLink gesture.
+                        HStack {
+                            NavigationLink(destination: SentencePracticeView(sentence: sentence, word: word)) {
                                 SentenceRowView(sentence: sentence, speechService: speechService)
-                                Spacer()
-                                Button {
-                                    if isPlaying {
-                                        stopPlayAll()
-                                    } else {
-                                        startPlayAll(from: sentence)
-                                    }
-                                } label: {
-                                    Image(systemName: isPlaying ? "stop.fill" : "play.fill")
-                                        .font(.subheadline)
-                                        .foregroundColor(isPlaying ? .red : .secondary)
-                                        .frame(width: 32, height: 32)
-                                }
-                                .buttonStyle(.borderless)
                             }
+                            Button {
+                                if isPlaying {
+                                    stopPlayAll()
+                                } else {
+                                    startPlayAll(from: sentence)
+                                }
+                            } label: {
+                                Image(systemName: isPlaying ? "stop.fill" : "play.fill")
+                                    .font(.subheadline)
+                                    .foregroundColor(isPlaying ? .red : .secondary)
+                                    .frame(width: 32, height: 32)
+                            }
+                            .buttonStyle(.borderless)
                         }
                         .listRowBackground(
                             isPlaying ? Color.accentColor.opacity(0.12) : nil
@@ -109,9 +113,10 @@ struct SentenceListView: View {
             }
         }
         .onChange(of: speechService.isSpeaking) { _, newValue in
-            // Advance to next step only when an utterance naturally finishes.
-            // If isPlayingAll was set to false (e.g. user stopped), guard exits early.
-            guard !newValue, isPlayingAll else { return }
+            // Advance only when an utterance finishes naturally.
+            // isCanceling is set synchronously before stop() is called, so this
+            // guard reliably prevents a spurious advancePlayback() on manual cancel.
+            guard !newValue, isPlayingAll, !isCanceling else { return }
             advancePlayback()
         }
         .onDisappear {
@@ -137,9 +142,11 @@ struct SentenceListView: View {
     }
 
     private func stopPlayAll() {
+        isCanceling = true        // set before stop() so onChange guard catches it
         isPlayingAll = false
         playingStep = 0
         speechService.stop()
+        isCanceling = false
     }
 
     /// Speak the text for the current (sentence, step) position.
