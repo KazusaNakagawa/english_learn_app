@@ -1,5 +1,12 @@
 import SwiftUI
 
+/// Reference-type flag that can be mutated synchronously from non-mutating
+/// struct methods, ensuring onChange guards see the update before any @State
+/// batching occurs.
+private final class CancelFlag {
+    var value = false
+}
+
 struct SentenceListView: View {
     let word: Word
     @StateObject private var speechService = SpeechService()
@@ -9,9 +16,13 @@ struct SentenceListView: View {
     @State private var isPlayingAll = false
     @State private var playingIndex: Int = 0  // flat index into allSentences
     @State private var playingStep: Int = 0   // 0=EN, 1=JA, 2=EN, 3=JA
-    // Non-@State flag: set synchronously before stop() so onChange guard sees it immediately,
-    // preventing a spurious advancePlayback() call during manual cancel.
-    private var isCanceling = false
+    // Reference-type flag: set synchronously before stop() so the onChange guard
+    // sees it immediately, preventing a spurious advancePlayback() on manual cancel.
+    private let isCanceling = CancelFlag()
+
+    init(word: Word) {
+        self.word = word
+    }
 
     var groupedSentences: [(String, [Sentence])] {
         let grouped = Dictionary(grouping: word.sentences) { $0.category }
@@ -114,9 +125,9 @@ struct SentenceListView: View {
         }
         .onChange(of: speechService.isSpeaking) { _, newValue in
             // Advance only when an utterance finishes naturally.
-            // isCanceling is set synchronously before stop() is called, so this
+            // isCanceling.value is set synchronously before stop() is called, so this
             // guard reliably prevents a spurious advancePlayback() on manual cancel.
-            guard !newValue, isPlayingAll, !isCanceling else { return }
+            guard !newValue, isPlayingAll, !isCanceling.value else { return }
             advancePlayback()
         }
         .onDisappear {
@@ -126,10 +137,12 @@ struct SentenceListView: View {
 
     // MARK: - Playback control
 
-    /// Start continuous playback. If `from` is given, begins at that sentence;
-    /// otherwise starts from the first sentence in the list.
+    /// Start continuous playback. Stops any ongoing playback first, then begins
+    /// at `from` if given, otherwise from the first sentence in the list.
     private func startPlayAll(from sentence: Sentence? = nil) {
         guard !allSentences.isEmpty else { return }
+        // Stop existing playback so isSpeaking/isPlayingAll are in a known state.
+        if isPlayingAll { stopPlayAll() }
         if let sentence,
            let idx = allSentences.firstIndex(where: { $0.id == sentence.id }) {
             playingIndex = idx
@@ -142,11 +155,11 @@ struct SentenceListView: View {
     }
 
     private func stopPlayAll() {
-        isCanceling = true        // set before stop() so onChange guard catches it
+        isCanceling.value = true   // set before stop() so onChange guard catches it
         isPlayingAll = false
         playingStep = 0
         speechService.stop()
-        isCanceling = false
+        isCanceling.value = false
     }
 
     /// Speak the text for the current (sentence, step) position.
