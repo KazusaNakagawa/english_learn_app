@@ -14,7 +14,7 @@ final class SelectionState {
         if selectedIDs.contains(id) { selectedIDs.remove(id) } else { selectedIDs.insert(id) }
     }
 
-    func exit() {
+    func exitSelectionMode() {
         isSelecting = false
         selectedIDs = []
     }

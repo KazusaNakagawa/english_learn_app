@@ -139,7 +139,7 @@ struct WordListView: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 if selection.isSelecting {
-                    Button("キャンセル") { selection.exit() }
+                    Button("キャンセル") { selection.exitSelectionMode() }
                 } else {
                     HStack {
                         NavigationLink(destination: ArchiveView()) {
@@ -178,6 +178,8 @@ struct WordListView: View {
                 WordDataManager.shared.updateWord(updatedWord)
             }
         }
+        // Intentionally only clears selectedIDs; isSelecting stays true so the
+        // user can continue selecting from the newly filtered results.
         .onChange(of: searchText) { _, _ in selection.selectedIDs = [] }
         .onChange(of: selectedLetter) { _, _ in selection.selectedIDs = [] }
     }
@@ -187,7 +189,7 @@ struct WordListView: View {
         HStack(spacing: 0) {
             Button {
                 WordDataManager.shared.archive(wordIds: Array(selection.selectedIDs))
-                selection.exit()
+                selection.exitSelectionMode()
             } label: {
                 Label("アーカイブ", systemImage: "archivebox")
                     .frame(maxWidth: .infinity)
@@ -199,7 +201,7 @@ struct WordListView: View {
 
             Button(role: .destructive) {
                 WordDataManager.shared.moveToTrash(wordIds: Array(selection.selectedIDs))
-                selection.exit()
+                selection.exitSelectionMode()
             } label: {
                 Label("ゴミ箱へ", systemImage: "trash")
                     .frame(maxWidth: .infinity)

@@ -81,7 +81,7 @@ struct TrashView: View {
             }
             ToolbarItem(placement: .navigationBarLeading) {
                 if selection.isSelecting {
-                    Button("キャンセル") { selection.exit() }
+                    Button("キャンセル") { selection.exitSelectionMode() }
                 }
             }
         }
@@ -106,7 +106,7 @@ struct TrashView: View {
         ) {
             Button("完全削除", role: .destructive) {
                 WordDataManager.shared.permanentlyDelete(wordIds: Array(selection.selectedIDs))
-                selection.exit()
+                selection.exitSelectionMode()
             }
             Button("キャンセル", role: .cancel) {}
         } message: {
@@ -136,7 +136,7 @@ struct TrashView: View {
         HStack(spacing: 0) {
             Button {
                 WordDataManager.shared.restoreFromTrash(wordIds: Array(selection.selectedIDs))
-                selection.exit()
+                selection.exitSelectionMode()
             } label: {
                 Label("元に戻す", systemImage: "arrow.uturn.backward")
                     .frame(maxWidth: .infinity)

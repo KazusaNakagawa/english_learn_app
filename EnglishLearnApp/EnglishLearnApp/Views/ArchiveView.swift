@@ -70,7 +70,7 @@ struct ArchiveView: View {
             }
             ToolbarItem(placement: .navigationBarLeading) {
                 if selection.isSelecting {
-                    Button("キャンセル") { selection.exit() }
+                    Button("キャンセル") { selection.exitSelectionMode() }
                 }
             }
         }
@@ -100,7 +100,7 @@ struct ArchiveView: View {
     private var archiveActionBar: some View {
         Button {
             WordDataManager.shared.unarchive(wordIds: Array(selection.selectedIDs))
-            selection.exit()
+            selection.exitSelectionMode()
         } label: {
             Label("元に戻す", systemImage: "arrow.uturn.backward")
                 .frame(maxWidth: .infinity)
