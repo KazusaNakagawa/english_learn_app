@@ -64,13 +64,28 @@ struct SentenceListView: View {
             ForEach(groupedSentences, id: \.0) { category, sentences in
                 Section(header: Text(category)) {
                     ForEach(sentences) { sentence in
+                        let isPlaying = playingSentenceID == sentence.id
                         NavigationLink(destination: SentencePracticeView(sentence: sentence, word: word)) {
-                            SentenceRowView(sentence: sentence, speechService: speechService)
+                            HStack {
+                                SentenceRowView(sentence: sentence, speechService: speechService)
+                                Spacer()
+                                Button {
+                                    if isPlaying {
+                                        stopPlayAll()
+                                    } else {
+                                        startPlayAll(from: sentence)
+                                    }
+                                } label: {
+                                    Image(systemName: isPlaying ? "stop.fill" : "play.fill")
+                                        .font(.subheadline)
+                                        .foregroundColor(isPlaying ? .red : .secondary)
+                                        .frame(width: 32, height: 32)
+                                }
+                                .buttonStyle(.borderless)
+                            }
                         }
                         .listRowBackground(
-                            playingSentenceID == sentence.id
-                                ? Color.accentColor.opacity(0.12)
-                                : nil
+                            isPlaying ? Color.accentColor.opacity(0.12) : nil
                         )
                     }
                 }
@@ -94,7 +109,7 @@ struct SentenceListView: View {
             }
         }
         .onChange(of: speechService.isSpeaking) { _, newValue in
-            // Advance to next step only when a utterance naturally finishes.
+            // Advance to next step only when an utterance naturally finishes.
             // If isPlayingAll was set to false (e.g. user stopped), guard exits early.
             guard !newValue, isPlayingAll else { return }
             advancePlayback()
@@ -106,10 +121,17 @@ struct SentenceListView: View {
 
     // MARK: - Playback control
 
-    private func startPlayAll() {
+    /// Start continuous playback. If `from` is given, begins at that sentence;
+    /// otherwise starts from the first sentence in the list.
+    private func startPlayAll(from sentence: Sentence? = nil) {
         guard !allSentences.isEmpty else { return }
+        if let sentence,
+           let idx = allSentences.firstIndex(where: { $0.id == sentence.id }) {
+            playingIndex = idx
+        } else {
+            playingIndex = 0
+        }
         isPlayingAll = true
-        playingIndex = 0
         playingStep = 0
         speakCurrentStep()
     }
@@ -184,7 +206,8 @@ struct SentenceRowView: View {
             meaning: "珍しさ・希少性",
             phonetic: "ˈrer.ə.t̬i",
             sentences: [
-                Sentence(english: "True friendship is a rarity.", japanese: "本当の友情は珍しい。", category: "一般的な使い方")
+                Sentence(english: "True friendship is a rarity.", japanese: "本当の友情は珍しい。", category: "一般的な使い方"),
+                Sentence(english: "Snow is a rarity in this region.", japanese: "この地域では雪は珍しい。", category: "一般的な使い方")
             ]
         ))
     }
