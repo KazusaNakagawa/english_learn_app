@@ -161,19 +161,6 @@
 			path = Views;
 			sourceTree = "<group>";
 		};
-		A1000082238D1234567890AB /* Helpers */ = {
-			isa = PBXGroup;
-			children = (
-				A1000080238D1234567890AB /* ActivityPresenter.swift */,
-				A1000084238D1234567890AB /* SelectionState.swift */,
-				A1000086238D1234567890AB /* EmptyListView.swift */,
-				A1000088238D1234567890AB /* PronunciationResultView.swift */,
-				A100008A238D1234567890AB /* RecognitionResultView.swift */,
-				A100008C238D1234567890AB /* SpeechButton.swift */,
-			);
-			path = Helpers;
-			sourceTree = "<group>";
-		};
 		A1000036238D1234567890AB /* Resources */ = {
 			isa = PBXGroup;
 			children = (
@@ -188,6 +175,19 @@
 				A100001A238D1234567890AB /* Preview Assets.xcassets */,
 			);
 			path = "Preview Content";
+			sourceTree = "<group>";
+		};
+		A1000082238D1234567890AB /* Helpers */ = {
+			isa = PBXGroup;
+			children = (
+				A1000080238D1234567890AB /* ActivityPresenter.swift */,
+				A1000084238D1234567890AB /* SelectionState.swift */,
+				A1000086238D1234567890AB /* EmptyListView.swift */,
+				A1000088238D1234567890AB /* PronunciationResultView.swift */,
+				A100008A238D1234567890AB /* RecognitionResultView.swift */,
+				A100008C238D1234567890AB /* SpeechButton.swift */,
+			);
+			path = Helpers;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */

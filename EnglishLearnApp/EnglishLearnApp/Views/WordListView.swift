@@ -29,6 +29,7 @@ struct WordListView: View {
     @State private var searchText: String = ""
     @State private var wordToEdit: Word? = nil
     @State private var selectedLetter: Character? = nil
+    @State private var selectedCategory: String? = nil
 
     @AppStorage("wordSortOption") private var sortOptionRaw: String = WordSortOption.alphabeticalAZ.rawValue
 
@@ -48,12 +49,23 @@ struct WordListView: View {
         return Array(Set(letters)).sorted()
     }
 
+    /// Unique categories from all active words' sentences, sorted.
+    private var availableCategories: [String] {
+        let cats = dataManager.words.flatMap { $0.sentences.map { $0.category } }
+        return Array(Set(cats)).sorted()
+    }
+
     private var filteredWords: [Word] {
         var result = dataManager.words
 
         // Letter filter
         if let letter = selectedLetter {
             result = result.filter { $0.word.uppercased().first == letter }
+        }
+
+        // Category filter: keep words that have at least one sentence in the selected category
+        if let category = selectedCategory {
+            result = result.filter { $0.sentences.contains { $0.category.contains(category) } }
         }
 
         // Search filter
@@ -85,10 +97,9 @@ struct WordListView: View {
         return result
     }
 
-    /// Shows total count when no filter is active; filtered count otherwise,
-    /// preventing a mismatch between the title number and the visible rows.
+    /// Shows total count when no filter is active; filtered count otherwise.
     private var titleWordCount: Int {
-        selectedLetter == nil && searchText.isEmpty
+        selectedLetter == nil && selectedCategory == nil && searchText.isEmpty
             ? dataManager.words.count
             : filteredWords.count
     }
@@ -96,6 +107,9 @@ struct WordListView: View {
     var body: some View {
         VStack(spacing: 0) {
             letterFilterBar
+            if !availableCategories.isEmpty {
+                categoryFilterBar
+            }
             List(filteredWords) { word in
                 if selection.isSelecting {
                     Button {
@@ -192,6 +206,7 @@ struct WordListView: View {
         // user can continue selecting from the newly filtered results.
         .onChange(of: searchText) { _, _ in selection.selectedIDs = [] }
         .onChange(of: selectedLetter) { _, _ in selection.selectedIDs = [] }
+        .onChange(of: selectedCategory) { _, _ in selection.selectedIDs = [] }
     }
 
     /// Bottom action bar shown during selection mode with Archive and Trash actions.
@@ -239,6 +254,21 @@ struct WordListView: View {
         .background(Color(.systemGroupedBackground))
     }
 
+    private var categoryFilterBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                categoryChip(nil, label: "すべて")
+                ForEach(availableCategories, id: \.self) { category in
+                    categoryChip(category, label: category)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+        }
+        .background(Color(.systemGroupedBackground))
+        .overlay(alignment: .top) { Divider() }
+    }
+
     private func letterChip(_ letter: Character?, label: String) -> some View {
         Button {
             selectedLetter = letter
@@ -249,6 +279,20 @@ struct WordListView: View {
                 .padding(.vertical, 6)
                 .background(selectedLetter == letter ? Color.accentColor : Color(.secondarySystemGroupedBackground))
                 .foregroundColor(selectedLetter == letter ? .white : .primary)
+                .cornerRadius(8)
+        }
+    }
+
+    private func categoryChip(_ category: String?, label: String) -> some View {
+        Button {
+            selectedCategory = category
+        } label: {
+            Text(label)
+                .font(.subheadline.bold())
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(selectedCategory == category ? Color.orange : Color(.secondarySystemGroupedBackground))
+                .foregroundColor(selectedCategory == category ? .white : .primary)
                 .cornerRadius(8)
         }
     }
