@@ -3,9 +3,7 @@ import SwiftUI
 struct ArchiveView: View {
     @ObservedObject private var dataManager = WordDataManager.shared
 
-    // MARK: Selection mode
-    @State private var isSelecting = false
-    @State private var selectedIDs: Set<UUID> = []
+    @State private var selection = SelectionState()
 
     var body: some View {
         Group {
@@ -18,13 +16,13 @@ struct ArchiveView: View {
             } else {
                 List {
                     ForEach(dataManager.archivedWords) { word in
-                        if isSelecting {
+                        if selection.isSelecting {
                             Button {
-                                toggleSelection(word.id)
+                                selection.toggle(word.id)
                             } label: {
                                 HStack(spacing: 12) {
-                                    Image(systemName: selectedIDs.contains(word.id) ? "checkmark.circle.fill" : "circle")
-                                        .foregroundColor(selectedIDs.contains(word.id) ? .accentColor : .secondary)
+                                    Image(systemName: selection.selectedIDs.contains(word.id) ? "checkmark.circle.fill" : "circle")
+                                        .foregroundColor(selection.selectedIDs.contains(word.id) ? .accentColor : .secondary)
                                         .font(.title2)
                                     wordRow(word)
                                 }
@@ -44,7 +42,7 @@ struct ArchiveView: View {
                     }
                 }
                 .safeAreaInset(edge: .bottom) {
-                    if isSelecting {
+                    if selection.isSelecting {
                         archiveActionBar
                     }
                 }
@@ -53,18 +51,18 @@ struct ArchiveView: View {
         .navigationTitle("アーカイブ")
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                if isSelecting {
-                    let allSelected = !dataManager.archivedWords.isEmpty && dataManager.archivedWords.allSatisfy { selectedIDs.contains($0.id) }
+                if selection.isSelecting {
+                    let allSelected = !dataManager.archivedWords.isEmpty && dataManager.archivedWords.allSatisfy { selection.selectedIDs.contains($0.id) }
                     Button(allSelected ? "すべて解除" : "すべて選択") {
-                        selectedIDs = allSelected ? [] : Set(dataManager.archivedWords.map(\.id))
+                        selection.selectedIDs = allSelected ? [] : Set(dataManager.archivedWords.map(\.id))
                     }
                 } else if !dataManager.archivedWords.isEmpty {
-                    Button("選択") { isSelecting = true }
+                    Button("選択") { selection.isSelecting = true }
                 }
             }
             ToolbarItem(placement: .navigationBarLeading) {
-                if isSelecting {
-                    Button("キャンセル") { exitSelectionMode() }
+                if selection.isSelecting {
+                    Button("キャンセル") { selection.exitSelectionMode() }
                 }
             }
         }
@@ -93,8 +91,8 @@ struct ArchiveView: View {
     /// Bottom action bar shown during selection mode with an Unarchive action.
     private var archiveActionBar: some View {
         Button {
-            WordDataManager.shared.unarchive(wordIds: Array(selectedIDs))
-            exitSelectionMode()
+            WordDataManager.shared.unarchive(wordIds: Array(selection.selectedIDs))
+            selection.exitSelectionMode()
         } label: {
             Label("元に戻す", systemImage: "arrow.uturn.backward")
                 .frame(maxWidth: .infinity)
@@ -102,20 +100,9 @@ struct ArchiveView: View {
         }
         .buttonStyle(.borderless)
         .tint(.green)
-        .disabled(selectedIDs.isEmpty)
+        .disabled(selection.selectedIDs.isEmpty)
         .background(.regularMaterial)
         .overlay(alignment: .top) { Divider() }
-    }
-
-    /// Toggles the selection state of a word by its ID.
-    private func toggleSelection(_ id: UUID) {
-        if selectedIDs.contains(id) { selectedIDs.remove(id) } else { selectedIDs.insert(id) }
-    }
-
-    /// Exits selection mode and clears all selected IDs.
-    private func exitSelectionMode() {
-        isSelecting = false
-        selectedIDs = []
     }
 
 }
