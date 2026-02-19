@@ -5,9 +5,7 @@ struct TrashView: View {
     @State private var wordToDelete: Word? = nil
     @State private var showingDeleteConfirm = false
 
-    // MARK: Selection mode
-    @State private var isSelecting = false
-    @State private var selectedIDs: Set<UUID> = []
+    @State private var selection = SelectionState()
     @State private var showingBatchDeleteConfirm = false
 
     var body: some View {
@@ -29,13 +27,13 @@ struct TrashView: View {
             } else {
                 List {
                     ForEach(dataManager.trashedWords) { word in
-                        if isSelecting {
+                        if selection.isSelecting {
                             Button {
-                                toggleSelection(word.id)
+                                selection.toggle(word.id)
                             } label: {
                                 HStack(spacing: 12) {
-                                    Image(systemName: selectedIDs.contains(word.id) ? "checkmark.circle.fill" : "circle")
-                                        .foregroundColor(selectedIDs.contains(word.id) ? .accentColor : .secondary)
+                                    Image(systemName: selection.selectedIDs.contains(word.id) ? "checkmark.circle.fill" : "circle")
+                                        .foregroundColor(selection.selectedIDs.contains(word.id) ? .accentColor : .secondary)
                                         .font(.title2)
                                     wordRow(word)
                                 }
@@ -63,7 +61,7 @@ struct TrashView: View {
                     }
                 }
                 .safeAreaInset(edge: .bottom) {
-                    if isSelecting {
+                    if selection.isSelecting {
                         trashActionBar
                     }
                 }
@@ -72,18 +70,18 @@ struct TrashView: View {
         .navigationTitle("ゴミ箱")
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                if isSelecting {
-                    let allSelected = !dataManager.trashedWords.isEmpty && dataManager.trashedWords.allSatisfy { selectedIDs.contains($0.id) }
+                if selection.isSelecting {
+                    let allSelected = !dataManager.trashedWords.isEmpty && dataManager.trashedWords.allSatisfy { selection.selectedIDs.contains($0.id) }
                     Button(allSelected ? "すべて解除" : "すべて選択") {
-                        selectedIDs = allSelected ? [] : Set(dataManager.trashedWords.map(\.id))
+                        selection.selectedIDs = allSelected ? [] : Set(dataManager.trashedWords.map(\.id))
                     }
                 } else if !dataManager.trashedWords.isEmpty {
-                    Button("選択") { isSelecting = true }
+                    Button("選択") { selection.isSelecting = true }
                 }
             }
             ToolbarItem(placement: .navigationBarLeading) {
-                if isSelecting {
-                    Button("キャンセル") { exitSelectionMode() }
+                if selection.isSelecting {
+                    Button("キャンセル") { selection.exit() }
                 }
             }
         }
@@ -102,13 +100,13 @@ struct TrashView: View {
             Text("この操作は取り消せません。")
         }
         .confirmationDialog(
-            "\(selectedIDs.count)件を完全削除しますか？",
+            "\(selection.selectedIDs.count)件を完全削除しますか？",
             isPresented: $showingBatchDeleteConfirm,
             titleVisibility: .visible
         ) {
             Button("完全削除", role: .destructive) {
-                WordDataManager.shared.permanentlyDelete(wordIds: Array(selectedIDs))
-                exitSelectionMode()
+                WordDataManager.shared.permanentlyDelete(wordIds: Array(selection.selectedIDs))
+                selection.exit()
             }
             Button("キャンセル", role: .cancel) {}
         } message: {
@@ -137,14 +135,14 @@ struct TrashView: View {
     private var trashActionBar: some View {
         HStack(spacing: 0) {
             Button {
-                WordDataManager.shared.restoreFromTrash(wordIds: Array(selectedIDs))
-                exitSelectionMode()
+                WordDataManager.shared.restoreFromTrash(wordIds: Array(selection.selectedIDs))
+                selection.exit()
             } label: {
                 Label("元に戻す", systemImage: "arrow.uturn.backward")
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
             }
-            .disabled(selectedIDs.isEmpty)
+            .disabled(selection.selectedIDs.isEmpty)
 
             Divider().frame(height: 44)
 
@@ -155,21 +153,10 @@ struct TrashView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
             }
-            .disabled(selectedIDs.isEmpty)
+            .disabled(selection.selectedIDs.isEmpty)
         }
         .background(.regularMaterial)
         .overlay(alignment: .top) { Divider() }
-    }
-
-    /// Toggles the selection state of a word by its ID.
-    private func toggleSelection(_ id: UUID) {
-        if selectedIDs.contains(id) { selectedIDs.remove(id) } else { selectedIDs.insert(id) }
-    }
-
-    /// Exits selection mode and clears all selected IDs.
-    private func exitSelectionMode() {
-        isSelecting = false
-        selectedIDs = []
     }
 
     /// Returns a localized string describing how many days remain before permanent deletion.

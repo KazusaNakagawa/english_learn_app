@@ -37,9 +37,7 @@ struct WordListView: View {
 
     @State private var showingAddWordView = false
 
-    // MARK: Selection mode
-    @State private var isSelecting = false
-    @State private var selectedIDs: Set<UUID> = []
+    @State private var selection = SelectionState()
 
     private var sortOption: WordSortOption {
         WordSortOption(rawValue: sortOptionRaw) ?? .alphabeticalAZ
@@ -91,13 +89,13 @@ struct WordListView: View {
         VStack(spacing: 0) {
             letterFilterBar
             List(filteredWords) { word in
-                if isSelecting {
+                if selection.isSelecting {
                     Button {
-                        toggleSelection(word.id)
+                        selection.toggle(word.id)
                     } label: {
                         HStack(spacing: 12) {
-                            Image(systemName: selectedIDs.contains(word.id) ? "checkmark.circle.fill" : "circle")
-                                .foregroundColor(selectedIDs.contains(word.id) ? .accentColor : .secondary)
+                            Image(systemName: selection.selectedIDs.contains(word.id) ? "checkmark.circle.fill" : "circle")
+                                .foregroundColor(selection.selectedIDs.contains(word.id) ? .accentColor : .secondary)
                                 .font(.title2)
                             WordRowView(word: word, speechService: speechService)
                         }
@@ -132,7 +130,7 @@ struct WordListView: View {
             }
             .searchable(text: $searchText, prompt: "単語・意味・発音記号で検索")
             .safeAreaInset(edge: .bottom) {
-                if isSelecting {
+                if selection.isSelecting {
                     wordListActionBar
                 }
             }
@@ -140,8 +138,8 @@ struct WordListView: View {
         .navigationTitle("英単語リスト")
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
-                if isSelecting {
-                    Button("キャンセル") { exitSelectionMode() }
+                if selection.isSelecting {
+                    Button("キャンセル") { selection.exit() }
                 } else {
                     HStack {
                         NavigationLink(destination: ArchiveView()) {
@@ -154,21 +152,17 @@ struct WordListView: View {
                 }
             }
             ToolbarItem(placement: .navigationBarTrailing) {
-                if isSelecting {
-                    let allSelected = !filteredWords.isEmpty && filteredWords.allSatisfy { selectedIDs.contains($0.id) }
+                if selection.isSelecting {
+                    let allSelected = !filteredWords.isEmpty && filteredWords.allSatisfy { selection.selectedIDs.contains($0.id) }
                     Button(allSelected ? "すべて解除" : "すべて選択") {
-                        if allSelected {
-                            selectedIDs = []
-                        } else {
-                            selectedIDs = Set(filteredWords.map(\.id))
-                        }
+                        selection.selectedIDs = allSelected ? [] : Set(filteredWords.map(\.id))
                     }
                 } else {
                     HStack {
                         sortMenu
                         Button { showingAddWordView = true } label: { Image(systemName: "plus") }
                         if !filteredWords.isEmpty {
-                            Button("選択") { isSelecting = true }
+                            Button("選択") { selection.isSelecting = true }
                         }
                     }
                 }
@@ -184,48 +178,37 @@ struct WordListView: View {
                 WordDataManager.shared.updateWord(updatedWord)
             }
         }
-        .onChange(of: searchText) { _, _ in selectedIDs = [] }
-        .onChange(of: selectedLetter) { _, _ in selectedIDs = [] }
+        .onChange(of: searchText) { _, _ in selection.selectedIDs = [] }
+        .onChange(of: selectedLetter) { _, _ in selection.selectedIDs = [] }
     }
 
     /// Bottom action bar shown during selection mode with Archive and Trash actions.
     private var wordListActionBar: some View {
         HStack(spacing: 0) {
             Button {
-                WordDataManager.shared.archive(wordIds: Array(selectedIDs))
-                exitSelectionMode()
+                WordDataManager.shared.archive(wordIds: Array(selection.selectedIDs))
+                selection.exit()
             } label: {
                 Label("アーカイブ", systemImage: "archivebox")
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
             }
-            .disabled(selectedIDs.isEmpty)
+            .disabled(selection.selectedIDs.isEmpty)
 
             Divider().frame(height: 44)
 
             Button(role: .destructive) {
-                WordDataManager.shared.moveToTrash(wordIds: Array(selectedIDs))
-                exitSelectionMode()
+                WordDataManager.shared.moveToTrash(wordIds: Array(selection.selectedIDs))
+                selection.exit()
             } label: {
                 Label("ゴミ箱へ", systemImage: "trash")
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
             }
-            .disabled(selectedIDs.isEmpty)
+            .disabled(selection.selectedIDs.isEmpty)
         }
         .background(.regularMaterial)
         .overlay(alignment: .top) { Divider() }
-    }
-
-    /// Toggles the selection state of a word by its ID.
-    private func toggleSelection(_ id: UUID) {
-        if selectedIDs.contains(id) { selectedIDs.remove(id) } else { selectedIDs.insert(id) }
-    }
-
-    /// Exits selection mode and clears all selected IDs.
-    private func exitSelectionMode() {
-        isSelecting = false
-        selectedIDs = []
     }
 
     // MARK: - Subviews
