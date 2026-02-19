@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ArchiveView: View {
-    @State private var archivedWords: [Word] = []
+    @ObservedObject private var dataManager = WordDataManager.shared
 
     // MARK: Selection mode
     @State private var isSelecting = false
@@ -9,7 +9,7 @@ struct ArchiveView: View {
 
     var body: some View {
         Group {
-            if archivedWords.isEmpty {
+            if dataManager.archivedWords.isEmpty {
                 VStack(spacing: 16) {
                     Image(systemName: "archivebox")
                         .font(.system(size: 60))
@@ -25,7 +25,7 @@ struct ArchiveView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List {
-                    ForEach(archivedWords) { word in
+                    ForEach(dataManager.archivedWords) { word in
                         if isSelecting {
                             Button {
                                 toggleSelection(word.id)
@@ -43,7 +43,6 @@ struct ArchiveView: View {
                                 .swipeActions(edge: .leading) {
                                     Button {
                                         WordDataManager.shared.unarchive(wordId: word.id)
-                                        load()
                                     } label: {
                                         Label("元に戻す", systemImage: "arrow.uturn.backward")
                                     }
@@ -63,11 +62,11 @@ struct ArchiveView: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 if isSelecting {
-                    let allSelected = !archivedWords.isEmpty && archivedWords.allSatisfy { selectedIDs.contains($0.id) }
+                    let allSelected = !dataManager.archivedWords.isEmpty && dataManager.archivedWords.allSatisfy { selectedIDs.contains($0.id) }
                     Button(allSelected ? "すべて解除" : "すべて選択") {
-                        selectedIDs = allSelected ? [] : Set(archivedWords.map(\.id))
+                        selectedIDs = allSelected ? [] : Set(dataManager.archivedWords.map(\.id))
                     }
-                } else if !archivedWords.isEmpty {
+                } else if !dataManager.archivedWords.isEmpty {
                     Button("選択") { isSelecting = true }
                 }
             }
@@ -77,7 +76,6 @@ struct ArchiveView: View {
                 }
             }
         }
-        .onAppear { load() }
     }
 
     /// Renders a single word row with word text, phonetic, meaning, and archive date.
@@ -104,7 +102,6 @@ struct ArchiveView: View {
     private var archiveActionBar: some View {
         Button {
             WordDataManager.shared.unarchive(wordIds: Array(selectedIDs))
-            load()
             exitSelectionMode()
         } label: {
             Label("元に戻す", systemImage: "arrow.uturn.backward")
@@ -129,10 +126,6 @@ struct ArchiveView: View {
         selectedIDs = []
     }
 
-    /// Loads archived words from the data manager.
-    private func load() {
-        archivedWords = WordDataManager.shared.loadArchivedWords()
-    }
 }
 
 #Preview {
