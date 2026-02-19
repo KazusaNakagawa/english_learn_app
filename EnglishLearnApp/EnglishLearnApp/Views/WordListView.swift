@@ -135,7 +135,7 @@ struct WordListView: View {
                 }
             }
         }
-        .navigationTitle("英単語リスト")
+        .navigationTitle("英単語リスト (\(dataManager.words.count))")
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 if selection.isSelecting {
@@ -144,6 +144,18 @@ struct WordListView: View {
                     HStack {
                         NavigationLink(destination: ArchiveView()) {
                             Image(systemName: "archivebox")
+                                .overlay(alignment: .topTrailing) {
+                                    if dataManager.archivedWords.count > 0 {
+                                        Text("\(dataManager.archivedWords.count)")
+                                            .font(.system(size: 10, weight: .bold))
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 4)
+                                            .padding(.vertical, 2)
+                                            .background(Color.accentColor)
+                                            .clipShape(Capsule())
+                                            .offset(x: 8, y: -6)
+                                    }
+                                }
                         }
                         NavigationLink(destination: TrashView()) {
                             Image(systemName: "trash")
