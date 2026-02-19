@@ -25,7 +25,7 @@ enum WordSortOption: String, CaseIterable {
 // MARK: - WordListView
 
 struct WordListView: View {
-    @State private var words: [Word] = []
+    @ObservedObject private var dataManager = WordDataManager.shared
     @State private var searchText: String = ""
     @State private var wordToEdit: Word? = nil
     @State private var selectedLetter: Character? = nil
@@ -46,12 +46,12 @@ struct WordListView: View {
     }
 
     private var availableLetters: [Character] {
-        let letters = words.compactMap { $0.word.uppercased().first }
+        let letters = dataManager.words.compactMap { $0.word.uppercased().first }
         return Array(Set(letters)).sorted()
     }
 
     private var filteredWords: [Word] {
-        var result = words
+        var result = dataManager.words
 
         // Letter filter
         if let letter = selectedLetter {
@@ -110,13 +110,11 @@ struct WordListView: View {
                     .swipeActions(edge: .trailing) {
                         Button(role: .destructive) {
                             WordDataManager.shared.moveToTrash(wordId: word.id)
-                            words = WordDataManager.shared.loadWords()
                         } label: {
                             Label("ゴミ箱へ", systemImage: "trash")
                         }
                         Button {
                             WordDataManager.shared.archive(wordId: word.id)
-                            words = WordDataManager.shared.loadWords()
                         } label: {
                             Label("アーカイブ", systemImage: "archivebox")
                         }
@@ -178,19 +176,13 @@ struct WordListView: View {
         }
         .sheet(isPresented: $showingAddWordView) {
             AddWordView { newWord in
-                let all = WordDataManager.shared.loadAllWords() + [newWord]
-                WordDataManager.shared.saveAllWords(all)
-                words = WordDataManager.shared.loadWords()
+                WordDataManager.shared.addWord(newWord)
             }
         }
         .sheet(item: $wordToEdit) { word in
             EditWordView(word: word) { updatedWord in
                 WordDataManager.shared.updateWord(updatedWord)
-                words = WordDataManager.shared.loadWords()
             }
-        }
-        .onAppear {
-            words = WordDataManager.shared.loadWords()
         }
         .onChange(of: searchText) { _, _ in selectedIDs = [] }
         .onChange(of: selectedLetter) { _, _ in selectedIDs = [] }
@@ -201,7 +193,6 @@ struct WordListView: View {
         HStack(spacing: 0) {
             Button {
                 WordDataManager.shared.archive(wordIds: Array(selectedIDs))
-                words = WordDataManager.shared.loadWords()
                 exitSelectionMode()
             } label: {
                 Label("アーカイブ", systemImage: "archivebox")
@@ -214,7 +205,6 @@ struct WordListView: View {
 
             Button(role: .destructive) {
                 WordDataManager.shared.moveToTrash(wordIds: Array(selectedIDs))
-                words = WordDataManager.shared.loadWords()
                 exitSelectionMode()
             } label: {
                 Label("ゴミ箱へ", systemImage: "trash")

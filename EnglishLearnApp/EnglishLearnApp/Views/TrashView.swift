@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct TrashView: View {
-    @State private var trashedWords: [Word] = []
+    @ObservedObject private var dataManager = WordDataManager.shared
     @State private var wordToDelete: Word? = nil
     @State private var showingDeleteConfirm = false
 
@@ -12,7 +12,7 @@ struct TrashView: View {
 
     var body: some View {
         Group {
-            if trashedWords.isEmpty {
+            if dataManager.trashedWords.isEmpty {
                 VStack(spacing: 16) {
                     Image(systemName: "trash")
                         .font(.system(size: 60))
@@ -28,7 +28,7 @@ struct TrashView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List {
-                    ForEach(trashedWords) { word in
+                    ForEach(dataManager.trashedWords) { word in
                         if isSelecting {
                             Button {
                                 toggleSelection(word.id)
@@ -46,7 +46,6 @@ struct TrashView: View {
                                 .swipeActions(edge: .leading) {
                                     Button {
                                         WordDataManager.shared.restoreFromTrash(wordId: word.id)
-                                        loadTrash()
                                     } label: {
                                         Label("元に戻す", systemImage: "arrow.uturn.backward")
                                     }
@@ -74,11 +73,11 @@ struct TrashView: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 if isSelecting {
-                    let allSelected = !trashedWords.isEmpty && trashedWords.allSatisfy { selectedIDs.contains($0.id) }
+                    let allSelected = !dataManager.trashedWords.isEmpty && dataManager.trashedWords.allSatisfy { selectedIDs.contains($0.id) }
                     Button(allSelected ? "すべて解除" : "すべて選択") {
-                        selectedIDs = allSelected ? [] : Set(trashedWords.map(\.id))
+                        selectedIDs = allSelected ? [] : Set(dataManager.trashedWords.map(\.id))
                     }
-                } else if !trashedWords.isEmpty {
+                } else if !dataManager.trashedWords.isEmpty {
                     Button("選択") { isSelecting = true }
                 }
             }
@@ -88,9 +87,6 @@ struct TrashView: View {
                 }
             }
         }
-        .onAppear {
-            loadTrash()
-        }
         .confirmationDialog(
             "完全削除しますか？",
             isPresented: $showingDeleteConfirm,
@@ -99,7 +95,6 @@ struct TrashView: View {
             Button("完全削除", role: .destructive) {
                 if let word = wordToDelete {
                     WordDataManager.shared.permanentlyDelete(wordId: word.id)
-                    loadTrash()
                 }
             }
             Button("キャンセル", role: .cancel) {}
@@ -113,7 +108,6 @@ struct TrashView: View {
         ) {
             Button("完全削除", role: .destructive) {
                 WordDataManager.shared.permanentlyDelete(wordIds: Array(selectedIDs))
-                loadTrash()
                 exitSelectionMode()
             }
             Button("キャンセル", role: .cancel) {}
@@ -144,7 +138,6 @@ struct TrashView: View {
         HStack(spacing: 0) {
             Button {
                 WordDataManager.shared.restoreFromTrash(wordIds: Array(selectedIDs))
-                loadTrash()
                 exitSelectionMode()
             } label: {
                 Label("元に戻す", systemImage: "arrow.uturn.backward")
@@ -177,11 +170,6 @@ struct TrashView: View {
     private func exitSelectionMode() {
         isSelecting = false
         selectedIDs = []
-    }
-
-    /// Loads trashed words from the data manager.
-    private func loadTrash() {
-        trashedWords = WordDataManager.shared.loadTrashWords()
     }
 
     /// Returns a localized string describing how many days remain before permanent deletion.

@@ -44,13 +44,22 @@ struct WordList: Codable {
     let words: [Word]
 }
 
-class WordDataManager {
+class WordDataManager: ObservableObject {
     static let shared = WordDataManager()
+
+    /// Active (non-deleted, non-archived) words. Updated automatically after every mutation.
+    @Published private(set) var words: [Word] = []
+    /// Words in the trash within the 10-day retention window.
+    @Published private(set) var trashedWords: [Word] = []
+    /// Archived words.
+    @Published private(set) var archivedWords: [Word] = []
 
     private let documentsFileName = "words.json"
     private let trashRetentionDays = 10
 
-    private init() {}
+    private init() {
+        refreshPublishedWords()
+    }
 
     private var documentsURL: URL? {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?
@@ -123,21 +132,17 @@ class WordDataManager {
         }
     }
 
-    /// Saves all words (active + trashed) to Documents.
+    /// Adds a new word to storage.
+    func addWord(_ word: Word) {
+        var all = loadAllWords()
+        all.append(word)
+        saveAllWords(all)
+    }
+
+    /// Saves all words (active + trashed) to Documents and refreshes published properties.
     func saveAllWords(_ words: [Word]) {
-        guard let url = documentsURL else {
-            print("Could not get Documents URL")
-            return
-        }
-        do {
-            let wordList = WordList(words: words)
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = .prettyPrinted
-            let data = try encoder.encode(wordList)
-            try data.write(to: url)
-        } catch {
-            print("Error saving words: \(error)")
-        }
+        writeToDisk(words)
+        refreshPublishedWords()
     }
 
     /// Soft-deletes a word by setting deletedAt to now.
@@ -251,6 +256,38 @@ class WordDataManager {
     }
 
     // MARK: - Private Methods
+
+    /// Writes words to disk without triggering a published-property refresh.
+    /// Use this inside `refreshPublishedWords` to avoid re-entrancy.
+    private func writeToDisk(_ words: [Word]) {
+        guard let url = documentsURL else {
+            print("Could not get Documents URL")
+            return
+        }
+        do {
+            let wordList = WordList(words: words)
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .prettyPrinted
+            let data = try encoder.encode(wordList)
+            try data.write(to: url)
+        } catch {
+            print("Error saving words: \(error)")
+        }
+    }
+
+    /// Reloads all words from disk, auto-purges expired trash, and updates published properties.
+    private func refreshPublishedWords() {
+        var all = loadAllWords()
+        let cutoff = Calendar.current.date(byAdding: .day, value: -trashRetentionDays, to: Date())!
+        let expired = all.filter { ($0.deletedAt ?? .distantFuture) < cutoff }
+        if !expired.isEmpty {
+            all.removeAll { ($0.deletedAt ?? .distantFuture) < cutoff }
+            writeToDisk(all)
+        }
+        words = all.filter { $0.deletedAt == nil && $0.archivedAt == nil }
+        trashedWords = all.filter { ($0.deletedAt ?? .distantFuture) >= cutoff && $0.deletedAt != nil }
+        archivedWords = all.filter { $0.archivedAt != nil && $0.deletedAt == nil }
+    }
 
     private func loadFromDocuments() -> [Word]? {
         guard let url = documentsURL else { return nil }
