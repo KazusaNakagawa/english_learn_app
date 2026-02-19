@@ -48,7 +48,7 @@ struct ArchiveView: View {
                 }
             }
         }
-        .navigationTitle("アーカイブ (\(dataManager.archivedWords.count))")
+        .navigationTitle("アーカイブ")
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 if selection.isSelecting {

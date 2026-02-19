@@ -97,13 +97,6 @@ struct WordListView: View {
         return result
     }
 
-    /// Shows total count when no filter is active; filtered count otherwise.
-    private var titleWordCount: Int {
-        selectedLetter == nil && selectedCategory == nil && searchText.isEmpty
-            ? dataManager.words.count
-            : filteredWords.count
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             letterFilterBar
@@ -157,7 +150,7 @@ struct WordListView: View {
                 }
             }
         }
-        .navigationTitle("英単語リスト (\(titleWordCount))")
+        .navigationTitle("英単語リスト")
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 if selection.isSelecting {
