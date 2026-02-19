@@ -8,19 +8,11 @@ struct ArchiveView: View {
     var body: some View {
         Group {
             if dataManager.archivedWords.isEmpty {
-                VStack(spacing: 16) {
-                    Image(systemName: "archivebox")
-                        .font(.system(size: 60))
-                        .foregroundColor(.secondary)
-                    Text("アーカイブは空です")
-                        .font(.title2)
-                        .foregroundColor(.secondary)
-                    Text("習得済みの単語をアーカイブに移動できます")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                EmptyListView(
+                    systemImage: "archivebox",
+                    title: "アーカイブは空です",
+                    message: "習得済みの単語をアーカイブに移動できます"
+                )
             } else {
                 List {
                     ForEach(dataManager.archivedWords) { word in

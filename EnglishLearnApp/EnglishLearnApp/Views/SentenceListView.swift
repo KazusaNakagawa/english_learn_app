@@ -28,35 +28,16 @@ struct SentenceListView: View {
                         .foregroundColor(.blue)
 
                     HStack(spacing: 12) {
-                        Button(action: {
-                            speechService.speak(word.word, voiceGender: settings.voiceGender)
-                        }) {
-                            HStack {
-                                Image(systemName: (speechService.isSpeaking && speechService.speakingLanguage != "ja-JP") ? "speaker.wave.3.fill" : "speaker.wave.2.fill")
-                                Text("英語を聞く")
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                            .background(Color.blue.opacity(0.1))
-                            .cornerRadius(8)
-                        }
-                        .foregroundColor(.blue)
-                        .buttonStyle(.borderless)
-
-                        Button(action: {
-                            speechService.speak(word.meaning, language: "ja-JP", voiceGender: settings.voiceGender)
-                        }) {
-                            HStack {
-                                Image(systemName: (speechService.isSpeaking && speechService.speakingLanguage == "ja-JP") ? "speaker.wave.3.fill" : "speaker.wave.2.fill")
-                                Text("日本語を聞く")
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                            .background(Color.orange.opacity(0.1))
-                            .cornerRadius(8)
-                        }
-                        .foregroundColor(.orange)
-                        .buttonStyle(.borderless)
+                        SpeechButton(
+                            text: word.word, label: "英語を聞く",
+                            isJapanese: false, color: .blue, style: .pill,
+                            speechService: speechService, voiceGender: settings.voiceGender
+                        )
+                        SpeechButton(
+                            text: word.meaning, label: "日本語を聞く",
+                            isJapanese: true, color: .orange, style: .pill,
+                            speechService: speechService, voiceGender: settings.voiceGender
+                        )
                     }
                     .padding(.top, 4)
                 }
