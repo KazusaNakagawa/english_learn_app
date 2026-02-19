@@ -1,13 +1,42 @@
 import SwiftUI
 
+/// Reference-type flag that can be mutated synchronously from non-mutating
+/// struct methods, ensuring onChange guards see the update before any @State
+/// batching occurs.
+private final class CancelFlag {
+    var value = false
+}
+
 struct SentenceListView: View {
     let word: Word
     @StateObject private var speechService = SpeechService()
     @EnvironmentObject private var settings: SettingsManager
 
+    // MARK: Continuous playback
+    @State private var isPlayingAll = false
+    @State private var playingIndex: Int = 0  // flat index into allSentences
+    @State private var playingStep: Int = 0   // 0=EN, 1=JA, 2=EN, 3=JA
+    // Reference-type flag: set synchronously before stop() so the onChange guard
+    // sees it immediately, preventing a spurious advancePlayback() on manual cancel.
+    private let isCanceling = CancelFlag()
+
+    init(word: Word) {
+        self.word = word
+    }
+
     var groupedSentences: [(String, [Sentence])] {
         let grouped = Dictionary(grouping: word.sentences) { $0.category }
         return grouped.sorted { $0.key < $1.key }
+    }
+
+    /// Flattened sentence list in display order, used for continuous playback indexing.
+    private var allSentences: [Sentence] {
+        groupedSentences.flatMap { $0.1 }
+    }
+
+    private var playingSentenceID: UUID? {
+        guard isPlayingAll, playingIndex < allSentences.count else { return nil }
+        return allSentences[playingIndex].id
     }
 
     var body: some View {
@@ -49,15 +78,127 @@ struct SentenceListView: View {
             ForEach(groupedSentences, id: \.0) { category, sentences in
                 Section(header: Text(category)) {
                     ForEach(sentences) { sentence in
-                        NavigationLink(destination: SentencePracticeView(sentence: sentence, word: word)) {
-                            SentenceRowView(sentence: sentence, speechService: speechService)
+                        let isPlaying = playingSentenceID == sentence.id
+                        // NavigationLink and play button are siblings in HStack so the
+                        // button tap is not intercepted by the NavigationLink gesture.
+                        HStack {
+                            NavigationLink(destination: SentencePracticeView(sentence: sentence, word: word)) {
+                                SentenceRowView(sentence: sentence, speechService: speechService)
+                            }
+                            Button {
+                                if isPlaying {
+                                    stopPlayAll()
+                                } else {
+                                    startPlayAll(from: sentence)
+                                }
+                            } label: {
+                                Image(systemName: isPlaying ? "stop.fill" : "play.fill")
+                                    .font(.subheadline)
+                                    .foregroundColor(isPlaying ? .red : .secondary)
+                                    .frame(width: 32, height: 32)
+                            }
+                            .buttonStyle(.borderless)
                         }
+                        .listRowBackground(
+                            isPlaying ? Color.accentColor.opacity(0.12) : nil
+                        )
                     }
                 }
             }
         }
         .navigationTitle("例文一覧")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                if isPlayingAll {
+                    Button { stopPlayAll() } label: {
+                        Image(systemName: "stop.fill")
+                    }
+                    .tint(.red)
+                } else {
+                    Button { startPlayAll() } label: {
+                        Image(systemName: "play.fill")
+                    }
+                    .disabled(allSentences.isEmpty)
+                }
+            }
+        }
+        .onChange(of: speechService.isSpeaking) { _, newValue in
+            // Advance only when an utterance finishes naturally.
+            // isCanceling.value is set synchronously before stop() is called, so this
+            // guard reliably prevents a spurious advancePlayback() on manual cancel.
+            guard !newValue, isPlayingAll, !isCanceling.value else { return }
+            advancePlayback()
+        }
+        .onDisappear {
+            if isPlayingAll { stopPlayAll() }
+        }
+    }
+
+    // MARK: - Playback control
+
+    /// Start continuous playback. Stops any ongoing playback first, then begins
+    /// at `from` if given, otherwise from the first sentence in the list.
+    private func startPlayAll(from sentence: Sentence? = nil) {
+        guard !allSentences.isEmpty else { return }
+        // Stop existing playback so isSpeaking/isPlayingAll are in a known state.
+        if isPlayingAll { stopPlayAll() }
+        if let sentence,
+           let idx = allSentences.firstIndex(where: { $0.id == sentence.id }) {
+            playingIndex = idx
+        } else {
+            playingIndex = 0
+        }
+        isPlayingAll = true
+        playingStep = 0
+        speakCurrentStep()
+    }
+
+    private func stopPlayAll() {
+        isCanceling.value = true   // set before stop() so onChange guard catches it
+        isPlayingAll = false
+        playingStep = 0
+        speechService.stop()
+        isCanceling.value = false
+    }
+
+    /// Speak the text for the current (sentence, step) position.
+    private func speakCurrentStep() {
+        guard playingIndex < allSentences.count else {
+            stopPlayAll()
+            return
+        }
+        let sentence = allSentences[playingIndex]
+        switch playingStep {
+        case 0, 2:
+            speechService.speak(sentence.english, voiceGender: settings.voiceGender)
+        case 1, 3:
+            speechService.speak(sentence.japanese, language: "ja-JP", voiceGender: settings.voiceGender)
+        default:
+            break
+        }
+    }
+
+    /// Called when the current utterance finishes; moves to the next step or sentence.
+    private func advancePlayback() {
+        let nextStep = playingStep + 1
+        if nextStep < 4 {
+            // More steps remain within the current sentence (EN→JA→EN→JA)
+            playingStep = nextStep
+            speakCurrentStep()
+        } else {
+            // Move to the next sentence
+            let nextIdx = playingIndex + 1
+            if nextIdx < allSentences.count {
+                playingIndex = nextIdx
+                playingStep = 0
+                speakCurrentStep()
+            } else {
+                // All sentences done
+                isPlayingAll = false
+                playingStep = 0
+            }
+        }
     }
 }
 
@@ -85,7 +226,8 @@ struct SentenceRowView: View {
             meaning: "珍しさ・希少性",
             phonetic: "ˈrer.ə.t̬i",
             sentences: [
-                Sentence(english: "True friendship is a rarity.", japanese: "本当の友情は珍しい。", category: "一般的な使い方")
+                Sentence(english: "True friendship is a rarity.", japanese: "本当の友情は珍しい。", category: "一般的な使い方"),
+                Sentence(english: "Snow is a rarity in this region.", japanese: "この地域では雪は珍しい。", category: "一般的な使い方")
             ]
         ))
     }
