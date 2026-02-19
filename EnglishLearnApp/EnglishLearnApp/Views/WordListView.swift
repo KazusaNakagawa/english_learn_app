@@ -147,6 +147,8 @@ struct WordListView: View {
             .safeAreaInset(edge: .bottom) {
                 if selection.isSelecting {
                     wordListActionBar
+                } else {
+                    navigationFooterBar
                 }
             }
         }
@@ -156,17 +158,6 @@ struct WordListView: View {
             ToolbarItem(placement: .navigationBarLeading) {
                 if selection.isSelecting {
                     Button("キャンセル") { selection.exitSelectionMode() }
-                } else {
-                    HStack {
-                        NavigationLink(destination: ArchiveView()) {
-                            Image(systemName: "archivebox")
-                                .badgeOverlay(dataManager.archivedWords.count,
-                                              accessibilityLabel: "\(dataManager.archivedWords.count)件アーカイブ済み")
-                        }
-                        NavigationLink(destination: TrashView()) {
-                            Image(systemName: "trash")
-                        }
-                    }
                 }
             }
             ToolbarItem(placement: .navigationBarTrailing) {
@@ -227,6 +218,29 @@ struct WordListView: View {
                     .padding(.vertical, 14)
             }
             .disabled(selection.selectedIDs.isEmpty)
+        }
+        .background(.regularMaterial)
+        .overlay(alignment: .top) { Divider() }
+    }
+
+    /// Bottom navigation bar with Archive and Trash links, shown when not in selection mode.
+    private var navigationFooterBar: some View {
+        HStack(spacing: 0) {
+            NavigationLink(destination: ArchiveView()) {
+                Label("アーカイブ", systemImage: "archivebox")
+                    .badgeOverlay(dataManager.archivedWords.count,
+                                  accessibilityLabel: "\(dataManager.archivedWords.count)件アーカイブ済み")
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+            }
+
+            Divider().frame(height: 44)
+
+            NavigationLink(destination: TrashView()) {
+                Label("ゴミ箱", systemImage: "trash")
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+            }
         }
         .background(.regularMaterial)
         .overlay(alignment: .top) { Divider() }
