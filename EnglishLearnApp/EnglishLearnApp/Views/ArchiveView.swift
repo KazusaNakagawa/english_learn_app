@@ -49,6 +49,7 @@ struct ArchiveView: View {
             }
         }
         .navigationTitle("アーカイブ")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 if selection.isSelecting {

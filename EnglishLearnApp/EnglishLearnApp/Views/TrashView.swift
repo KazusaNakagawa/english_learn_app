@@ -60,6 +60,7 @@ struct TrashView: View {
             }
         }
         .navigationTitle("ゴミ箱")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 if selection.isSelecting {

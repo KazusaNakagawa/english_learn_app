@@ -151,6 +151,7 @@ struct WordListView: View {
             }
         }
         .navigationTitle("英単語リスト")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 if selection.isSelecting {
