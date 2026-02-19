@@ -85,6 +85,14 @@ struct WordListView: View {
         return result
     }
 
+    /// Shows total count when no filter is active; filtered count otherwise,
+    /// preventing a mismatch between the title number and the visible rows.
+    private var titleWordCount: Int {
+        selectedLetter == nil && searchText.isEmpty
+            ? dataManager.words.count
+            : filteredWords.count
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             letterFilterBar
@@ -135,7 +143,7 @@ struct WordListView: View {
                 }
             }
         }
-        .navigationTitle("英単語リスト")
+        .navigationTitle("英単語リスト (\(titleWordCount))")
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 if selection.isSelecting {
@@ -144,6 +152,8 @@ struct WordListView: View {
                     HStack {
                         NavigationLink(destination: ArchiveView()) {
                             Image(systemName: "archivebox")
+                                .badgeOverlay(dataManager.archivedWords.count,
+                                              accessibilityLabel: "\(dataManager.archivedWords.count)件アーカイブ済み")
                         }
                         NavigationLink(destination: TrashView()) {
                             Image(systemName: "trash")
@@ -333,5 +343,28 @@ struct WordRowView: View {
 #Preview {
     NavigationStack {
         WordListView()
+    }
+}
+
+// MARK: - Badge Overlay
+
+extension View {
+    /// Overlays a numeric badge at the top-trailing corner of any view.
+    /// Caps at "99+" to prevent the badge from overflowing narrow icons.
+    func badgeOverlay(_ count: Int, accessibilityLabel: String = "") -> some View {
+        overlay(alignment: .topTrailing) {
+            if count > 0 {
+                let label = count < 100 ? "\(count)" : "99+"
+                Text(label)
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 2)
+                    .background(Color.accentColor)
+                    .clipShape(Capsule())
+                    .offset(x: 8, y: -6)
+                    .accessibilityLabel(accessibilityLabel.isEmpty ? label : accessibilityLabel)
+            }
+        }
     }
 }
