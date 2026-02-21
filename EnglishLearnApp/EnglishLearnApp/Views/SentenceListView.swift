@@ -144,10 +144,27 @@ struct SentenceListView: View {
         }
         .onChange(of: speechService.isSpeaking) { _, newValue in
             // Advance only when an utterance finishes naturally.
-            // isCanceling.value is set synchronously before stop() is called, so this
-            // guard reliably prevents a spurious advancePlayback() on manual cancel.
-            guard !newValue, isPlayingAll, !isCanceling.value else { return }
-            advancePlayback()
+            guard !newValue, isPlayingAll else { return }
+
+            if !isCanceling.value {
+                advancePlayback()
+            } else {
+                // isCanceling is still true (likely from a recent startPlayAll/stopPlayAll).
+                // Wait for it to clear before advancing to avoid spurious triggers.
+                Task { @MainActor in
+                    // Poll for isCanceling to clear (max 200ms total)
+                    for _ in 0..<10 {
+                        try? await Task.sleep(nanoseconds: 20_000_000) // 20ms
+                        if !isCanceling.value {
+                            // Double-check conditions before advancing
+                            if !speechService.isSpeaking && isPlayingAll {
+                                advancePlayback()
+                            }
+                            break
+                        }
+                    }
+                }
+            }
         }
         .onDisappear {
             if isPlayingAll { stopPlayAll() }
