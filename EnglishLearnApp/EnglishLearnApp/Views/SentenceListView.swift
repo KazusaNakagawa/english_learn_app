@@ -151,7 +151,10 @@ struct SentenceListView: View {
         }
         isPlayingAll = true
         playingStep = 0
+        // Guard against spurious onChange from speak()'s internal stop() call
+        isCanceling.value = true
         speakCurrentStep()
+        isCanceling.value = false
     }
 
     private func stopPlayAll() {
@@ -185,14 +188,18 @@ struct SentenceListView: View {
         if nextStep < 4 {
             // More steps remain within the current sentence (EN→JA→EN→JA)
             playingStep = nextStep
+            isCanceling.value = true
             speakCurrentStep()
+            isCanceling.value = false
         } else {
             // Move to the next sentence
             let nextIdx = playingIndex + 1
             if nextIdx < allSentences.count {
                 playingIndex = nextIdx
                 playingStep = 0
+                isCanceling.value = true
                 speakCurrentStep()
+                isCanceling.value = false
             } else {
                 // All sentences done
                 isPlayingAll = false
