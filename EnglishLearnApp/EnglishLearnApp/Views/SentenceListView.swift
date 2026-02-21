@@ -15,7 +15,6 @@ struct SentenceListView: View {
 
     init(word: Word) {
         self.word = word
-        setupRemoteCommandCenter()
     }
 
     /// Groups sentences by category and returns them in sorted order.
@@ -121,6 +120,9 @@ struct SentenceListView: View {
             guard expectedGeneration == playbackGeneration else { return }
 
             advancePlayback()
+        }
+        .onAppear {
+            setupRemoteCommandCenter()
         }
         .onDisappear {
             // Always stop to invalidate any pending async tasks via generation increment
