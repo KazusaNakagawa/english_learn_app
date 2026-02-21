@@ -2,9 +2,28 @@ import SwiftUI
 
 /// Reference-type flag that can be mutated synchronously from non-mutating
 /// struct methods, ensuring onChange guards see the update before any @State
-/// batching occurs.
+/// batching occurs. Includes a generation counter to prevent race conditions
+/// where older async tasks might clear a newer canceling state.
 private final class CancelFlag {
     var value = false
+    private var generation = 0
+
+    /// Sets the flag to true and increments the generation counter
+    func set() {
+        value = true
+        generation += 1
+    }
+
+    /// Schedules the flag to be cleared after a delay, but only if the generation hasn't changed
+    func scheduleClear(after nanoseconds: UInt64) {
+        let currentGen = generation
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: nanoseconds)
+            if generation == currentGen {
+                value = false
+            }
+        }
+    }
 }
 
 struct SentenceListView: View {
@@ -142,7 +161,7 @@ struct SentenceListView: View {
     private func startPlayAll(from sentence: Sentence? = nil) {
         guard !allSentences.isEmpty else { return }
         // Set isCanceling early to cover both stop and speak operations
-        isCanceling.value = true
+        isCanceling.set()
 
         // Stop existing playback so isSpeaking/isPlayingAll are in a known state.
         if isPlayingAll {
@@ -162,22 +181,16 @@ struct SentenceListView: View {
         speakCurrentStep()
 
         // Wait briefly before clearing isCanceling to ensure any delayed delegates complete
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
-            isCanceling.value = false
-        }
+        isCanceling.scheduleClear(after: 100_000_000) // 100ms
     }
 
     private func stopPlayAll() {
-        isCanceling.value = true   // set before stop() so onChange guard catches it
+        isCanceling.set()   // set before stop() so onChange guard catches it
         isPlayingAll = false
         playingStep = 0
         speechService.stop()
         // Wait briefly before clearing isCanceling to ensure any delayed delegates complete
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
-            isCanceling.value = false
-        }
+        isCanceling.scheduleClear(after: 100_000_000) // 100ms
     }
 
     /// Speak the text for the current (sentence, step) position.
@@ -203,24 +216,14 @@ struct SentenceListView: View {
         if nextStep < 4 {
             // More steps remain within the current sentence (EN→JA→EN→JA)
             playingStep = nextStep
-            isCanceling.value = true
             speakCurrentStep()
-            Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
-                isCanceling.value = false
-            }
         } else {
             // Move to the next sentence
             let nextIdx = playingIndex + 1
             if nextIdx < allSentences.count {
                 playingIndex = nextIdx
                 playingStep = 0
-                isCanceling.value = true
                 speakCurrentStep()
-                Task { @MainActor in
-                    try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
-                    isCanceling.value = false
-                }
             } else {
                 // All sentences done
                 isPlayingAll = false
