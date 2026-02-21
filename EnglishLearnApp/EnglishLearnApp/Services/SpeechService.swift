@@ -1,12 +1,18 @@
 import AVFoundation
+import Combine
 
 class SpeechService: NSObject, ObservableObject {
     nonisolated(unsafe) private let synthesizer = AVSpeechSynthesizer()
     private var audioPlayer: AVAudioPlayer?
+    private var currentUtterance: AVSpeechUtterance?
 
     @Published var isSpeaking = false
     @Published var speakingLanguage: String? = nil
     @Published var voiceGender: SettingsManager.VoiceGender = .default_
+
+    /// Publisher that emits when speech finishes naturally (not cancelled).
+    /// Use this instead of onChange(of: isSpeaking) for reliable completion detection.
+    let speechFinishedPublisher = PassthroughSubject<Void, Never>()
 
     override init() {
         super.init()
@@ -50,6 +56,7 @@ class SpeechService: NSObject, ObservableObject {
         utterance.pitchMultiplier = 1.0
         utterance.volume = 1.0
 
+        currentUtterance = utterance
         isSpeaking = true
         synthesizer.speak(utterance)
     }
@@ -122,6 +129,7 @@ class SpeechService: NSObject, ObservableObject {
     }
 
     func stop() {
+        currentUtterance = nil
         synthesizer.stopSpeaking(at: .immediate)
         audioPlayer?.stop()
         audioPlayer = nil
@@ -133,12 +141,18 @@ class SpeechService: NSObject, ObservableObject {
 extension SpeechService: AVSpeechSynthesizerDelegate {
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         DispatchQueue.main.async {
+            // Only process if this utterance is the current one (not an old cancelled one)
+            guard utterance === self.currentUtterance, self.isSpeaking else { return }
             self.isSpeaking = false
+            self.speechFinishedPublisher.send()  // Notify natural completion
         }
     }
 
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
         DispatchQueue.main.async {
+            // Only process if this utterance is still the current one
+            // If a new speech started, currentUtterance will be different
+            guard utterance === self.currentUtterance else { return }
             self.isSpeaking = false
         }
     }
@@ -147,7 +161,10 @@ extension SpeechService: AVSpeechSynthesizerDelegate {
 extension SpeechService: AVAudioPlayerDelegate {
     func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         DispatchQueue.main.async {
-            self.isSpeaking = false
+            if self.isSpeaking {
+                self.isSpeaking = false
+                self.speechFinishedPublisher.send()  // Notify natural completion
+            }
         }
     }
 }

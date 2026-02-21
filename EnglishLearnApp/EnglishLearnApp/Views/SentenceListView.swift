@@ -1,31 +1,5 @@
 import SwiftUI
 
-/// Reference-type flag that can be mutated synchronously from non-mutating
-/// struct methods, ensuring onChange guards see the update before any @State
-/// batching occurs. Includes a generation counter to prevent race conditions
-/// where older async tasks might clear a newer canceling state.
-private final class CancelFlag {
-    var value = false
-    private var generation = 0
-
-    /// Sets the flag to true and increments the generation counter
-    func set() {
-        value = true
-        generation += 1
-    }
-
-    /// Schedules the flag to be cleared after a delay, but only if the generation hasn't changed
-    func scheduleClear(after nanoseconds: UInt64) {
-        let currentGen = generation
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: nanoseconds)
-            if generation == currentGen {
-                value = false
-            }
-        }
-    }
-}
-
 struct SentenceListView: View {
     let word: Word
     @StateObject private var speechService = SpeechService()
@@ -35,9 +9,8 @@ struct SentenceListView: View {
     @State private var isPlayingAll = false
     @State private var playingIndex: Int = 0  // flat index into allSentences
     @State private var playingStep: Int = 0   // 0=EN, 1=JA, 2=EN, 3=JA
-    // Reference-type flag: set synchronously before stop() so the onChange guard
-    // sees it immediately, preventing a spurious advancePlayback() on manual cancel.
-    private let isCanceling = CancelFlag()
+    @State private var playbackGeneration = 0  // Increment to invalidate old async tasks
+    @State private var expectedGeneration = 0  // Set when starting speech, checked on completion
 
     init(word: Word) {
         self.word = word
@@ -127,44 +100,14 @@ struct SentenceListView: View {
         }
         .navigationTitle("例文一覧")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                if isPlayingAll {
-                    Button { stopPlayAll() } label: {
-                        Image(systemName: "stop.fill")
-                    }
-                    .tint(.red)
-                } else {
-                    Button { startPlayAll() } label: {
-                        Image(systemName: "play.fill")
-                    }
-                    .disabled(allSentences.isEmpty)
-                }
-            }
-        }
-        .onChange(of: speechService.isSpeaking) { _, newValue in
-            // Advance only when an utterance finishes naturally.
-            guard !newValue, isPlayingAll else { return }
+        .onReceive(speechService.speechFinishedPublisher) { _ in
+            // Called only when speech finishes naturally (not cancelled)
+            guard isPlayingAll else { return }
 
-            if !isCanceling.value {
-                advancePlayback()
-            } else {
-                // isCanceling is still true (likely from a recent startPlayAll/stopPlayAll).
-                // Wait for it to clear before advancing to avoid spurious triggers.
-                Task { @MainActor in
-                    // Poll for isCanceling to clear (max 200ms total)
-                    for _ in 0..<10 {
-                        try? await Task.sleep(nanoseconds: 20_000_000) // 20ms
-                        if !isCanceling.value {
-                            // Double-check conditions before advancing
-                            if !speechService.isSpeaking && isPlayingAll {
-                                advancePlayback()
-                            }
-                            break
-                        }
-                    }
-                }
-            }
+            // Check if this completion is for the current playback session
+            guard expectedGeneration == playbackGeneration else { return }
+
+            advancePlayback()
         }
         .onDisappear {
             if isPlayingAll { stopPlayAll() }
@@ -177,37 +120,47 @@ struct SentenceListView: View {
     /// at `from` if given, otherwise from the first sentence in the list.
     private func startPlayAll(from sentence: Sentence? = nil) {
         guard !allSentences.isEmpty else { return }
-        // Set isCanceling early to cover both stop and speak operations
-        isCanceling.set()
 
-        // Stop existing playback so isSpeaking/isPlayingAll are in a known state.
-        if isPlayingAll {
-            isPlayingAll = false
-            playingStep = 0
-            speechService.stop()
-        }
+        // Increment generation to invalidate all pending async tasks
+        playbackGeneration += 1
+        let currentGen = playbackGeneration
 
-        if let sentence,
-           let idx = allSentences.firstIndex(where: { $0.id == sentence.id }) {
-            playingIndex = idx
-        } else {
-            playingIndex = 0
-        }
-        isPlayingAll = true
-        playingStep = 0
-        speakCurrentStep()
-
-        // Wait briefly before clearing isCanceling to ensure any delayed delegates complete
-        isCanceling.scheduleClear(after: 100_000_000) // 100ms
-    }
-
-    private func stopPlayAll() {
-        isCanceling.set()   // set before stop() so onChange guard catches it
+        // Immediately stop everything
         isPlayingAll = false
         playingStep = 0
         speechService.stop()
-        // Wait briefly before clearing isCanceling to ensure any delayed delegates complete
-        isCanceling.scheduleClear(after: 100_000_000) // 100ms
+
+        Task { @MainActor in
+            // Wait for speech to actually stop (poll for max 500ms)
+            for _ in 0..<25 {
+                if !speechService.isSpeaking {
+                    break
+                }
+                try? await Task.sleep(nanoseconds: 20_000_000) // 20ms
+            }
+
+            // Check if this task is still valid (no new startPlayAll was called)
+            guard currentGen == playbackGeneration else { return }
+
+            // Set up new playback position
+            if let sentence,
+               let idx = allSentences.firstIndex(where: { $0.id == sentence.id }) {
+                playingIndex = idx
+            } else {
+                playingIndex = 0
+            }
+            isPlayingAll = true
+            playingStep = 0
+            speakCurrentStep()
+        }
+    }
+
+    private func stopPlayAll() {
+        // Increment generation to invalidate all pending tasks
+        playbackGeneration += 1
+        isPlayingAll = false
+        playingStep = 0
+        speechService.stop()
     }
 
     /// Speak the text for the current (sentence, step) position.
@@ -216,6 +169,9 @@ struct SentenceListView: View {
             stopPlayAll()
             return
         }
+        // Record the current generation before starting speech
+        expectedGeneration = playbackGeneration
+
         let sentence = allSentences[playingIndex]
         switch playingStep {
         case 0, 2:
