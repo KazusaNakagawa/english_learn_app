@@ -12,6 +12,11 @@ struct SentenceListView: View {
     @State private var playingStep: Int = 0   // 0=EN, 1=JA, 2=EN, 3=JA
     @State private var playbackGeneration = 0  // Increment to invalidate old async tasks
     @State private var expectedGeneration = 0  // Set when starting speech, checked on completion
+    // Tokens returned by MPRemoteCommand.addTarget(handler:) so we can remove them
+    @State private var playCommandToken: Any? = nil
+    @State private var pauseCommandToken: Any? = nil
+    @State private var nextCommandToken: Any? = nil
+    @State private var previousCommandToken: Any? = nil
 
     init(word: Word) {
         self.word = word
@@ -127,6 +132,16 @@ struct SentenceListView: View {
         .onDisappear {
             // Always stop to invalidate any pending async tasks via generation increment
             stopPlayAll()
+            // Remove remote command handlers to avoid leaked handlers after view disappears
+            let commandCenter = MPRemoteCommandCenter.shared()
+            if let t = playCommandToken { commandCenter.playCommand.removeTarget(t) }
+            if let t = pauseCommandToken { commandCenter.pauseCommand.removeTarget(t) }
+            if let t = nextCommandToken { commandCenter.nextTrackCommand.removeTarget(t) }
+            if let t = previousCommandToken { commandCenter.previousTrackCommand.removeTarget(t) }
+            playCommandToken = nil
+            pauseCommandToken = nil
+            nextCommandToken = nil
+            previousCommandToken = nil
         }
     }
 
@@ -248,8 +263,10 @@ struct SentenceListView: View {
         let commandCenter = MPRemoteCommandCenter.shared()
 
         // Play command
-        commandCenter.playCommand.addTarget { _ in
+        playCommandToken = commandCenter.playCommand.addTarget { _ in
             if !self.isPlayingAll {
+                // Invalidate any previous playback tasks and start fresh
+                self.playbackGeneration += 1
                 self.startPlayAll()
                 return .success
             }
@@ -257,7 +274,7 @@ struct SentenceListView: View {
         }
 
         // Pause command
-        commandCenter.pauseCommand.addTarget { _ in
+        pauseCommandToken = commandCenter.pauseCommand.addTarget { _ in
             if self.isPlayingAll {
                 self.stopPlayAll()
                 return .success
@@ -266,8 +283,10 @@ struct SentenceListView: View {
         }
 
         // Next track command (skip to next sentence)
-        commandCenter.nextTrackCommand.addTarget { _ in
+        nextCommandToken = commandCenter.nextTrackCommand.addTarget { _ in
             if self.isPlayingAll && self.playingIndex + 1 < self.allSentences.count {
+                // Invalidate any previous completion handlers to avoid races
+                self.playbackGeneration += 1
                 self.playingIndex += 1
                 self.playingStep = 0
                 self.speakCurrentStep()
@@ -277,8 +296,10 @@ struct SentenceListView: View {
         }
 
         // Previous track command (go back to previous sentence)
-        commandCenter.previousTrackCommand.addTarget { _ in
+        previousCommandToken = commandCenter.previousTrackCommand.addTarget { _ in
             if self.isPlayingAll && self.playingIndex > 0 {
+                // Invalidate any previous completion handlers to avoid races
+                self.playbackGeneration += 1
                 self.playingIndex -= 1
                 self.playingStep = 0
                 self.speakCurrentStep()
@@ -296,7 +317,9 @@ struct SentenceListView: View {
         guard playingIndex < allSentences.count else { return }
 
         let sentence = allSentences[playingIndex]
-        let stepLabel = ["English (1st)", "Japanese (1st)", "English (2nd)", "Japanese (2nd)"][playingStep]
+        // Clamp playingStep to valid range to avoid out-of-bounds access
+        let clampedStep = min(max(playingStep, 0), 3)
+        let stepLabel = ["English (1st)", "Japanese (1st)", "English (2nd)", "Japanese (2nd)"][clampedStep]
 
         var nowPlayingInfo = [String: Any]()
         nowPlayingInfo[MPMediaItemPropertyTitle] = sentence.english

@@ -25,13 +25,28 @@ class SpeechService: NSObject, ObservableObject {
     ///
     /// Sets the audio session category to `.playback` to allow audio to continue
     /// playing when the app is in the background or the screen is locked.
+    /// Activation is deferred until actual playback begins to avoid interrupting other apps.
     private func configureAudioSession() {
         do {
             let audioSession = AVAudioSession.sharedInstance()
+            // Set category now but delay activation until actual playback to avoid
+            // interrupting other audio apps. Activation will be attempted when
+            // speaking starts.
             try audioSession.setCategory(.playback, mode: .default)
-            try audioSession.setActive(true)
         } catch {
             print("Failed to configure audio session: \(error.localizedDescription)")
+        }
+    }
+
+    /// Activates the audio session for playback. Returns true on success.
+    private func activateAudioSession() -> Bool {
+        let audioSession = AVAudioSession.sharedInstance()
+        do {
+            try audioSession.setActive(true)
+            return true
+        } catch {
+            print("Failed to activate audio session: \(error.localizedDescription)")
+            return false
         }
     }
 
@@ -69,6 +84,8 @@ class SpeechService: NSObject, ObservableObject {
         if voiceGender == .zundamon {
             isSpeaking = true
             Task { @MainActor [weak self] in
+                // Activate audio session before VOICEVOX playback
+                _ = self?.activateAudioSession()
                 await self?.speakWithVoicevox(text)
             }
             return
@@ -82,6 +99,9 @@ class SpeechService: NSObject, ObservableObject {
 
         currentUtterance = utterance
         isSpeaking = true
+        // Activate audio session right before starting local TTS to avoid
+        // preempting other audio until necessary.
+        _ = activateAudioSession()
         synthesizer.speak(utterance)
     }
 
@@ -137,6 +157,8 @@ class SpeechService: NSObject, ObservableObject {
 
             audioPlayer = try AVAudioPlayer(data: audioData)
             audioPlayer?.delegate = self
+            // Ensure audio session is active before playing synthesized audio
+            _ = activateAudioSession()
             audioPlayer?.play()
         } catch {
             print("VOICEVOX error: \(error.localizedDescription)")
@@ -182,6 +204,14 @@ class SpeechService: NSObject, ObservableObject {
         audioPlayer = nil
         isSpeaking = false
         speakingLanguage = nil
+        // Deactivate audio session to allow other audio to resume.
+        let audioSession = AVAudioSession.sharedInstance()
+        do {
+            try audioSession.setActive(false, options: .notifyOthersOnDeactivation)
+        } catch {
+            // Non-fatal — just log.
+            print("Failed to deactivate audio session: \(error.localizedDescription)")
+        }
     }
 }
 
