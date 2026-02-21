@@ -1,4 +1,5 @@
 import SwiftUI
+import MediaPlayer
 
 struct SentenceListView: View {
     let word: Word
@@ -14,6 +15,7 @@ struct SentenceListView: View {
 
     init(word: Word) {
         self.word = word
+        setupRemoteCommandCenter()
     }
 
     /// Groups sentences by category and returns them in sorted order.
@@ -174,6 +176,7 @@ struct SentenceListView: View {
         isPlayingAll = false
         playingStep = 0
         speechService.stop()
+        clearNowPlayingInfo()
     }
 
     /// Speaks the text for the current sentence and playback step.
@@ -200,6 +203,9 @@ struct SentenceListView: View {
         default:
             break
         }
+
+        // Update Now Playing info for lock screen/Control Center
+        updateNowPlayingInfo()
     }
 
     /// Advances to the next playback step or sentence after natural speech completion.
@@ -224,8 +230,89 @@ struct SentenceListView: View {
                 // All sentences done
                 isPlayingAll = false
                 playingStep = 0
+                clearNowPlayingInfo()
             }
         }
+    }
+
+    // MARK: - Media Controls
+
+    /// Sets up remote command center handlers for lock screen/Control Center controls.
+    ///
+    /// Registers handlers for play, pause, next track, and previous track commands.
+    /// These allow users to control playback from the lock screen, Control Center,
+    /// and external devices like AirPods.
+    private func setupRemoteCommandCenter() {
+        let commandCenter = MPRemoteCommandCenter.shared()
+
+        // Play command
+        commandCenter.playCommand.addTarget { [weak self] _ in
+            guard let self = self else { return .commandFailed }
+            if !self.isPlayingAll {
+                self.startPlayAll()
+                return .success
+            }
+            return .commandFailed
+        }
+
+        // Pause command
+        commandCenter.pauseCommand.addTarget { [weak self] _ in
+            guard let self = self else { return .commandFailed }
+            if self.isPlayingAll {
+                self.stopPlayAll()
+                return .success
+            }
+            return .commandFailed
+        }
+
+        // Next track command (skip to next sentence)
+        commandCenter.nextTrackCommand.addTarget { [weak self] _ in
+            guard let self = self else { return .commandFailed }
+            if self.isPlayingAll && self.playingIndex + 1 < self.allSentences.count {
+                self.playingIndex += 1
+                self.playingStep = 0
+                self.speakCurrentStep()
+                return .success
+            }
+            return .commandFailed
+        }
+
+        // Previous track command (go back to previous sentence)
+        commandCenter.previousTrackCommand.addTarget { [weak self] _ in
+            guard let self = self else { return .commandFailed }
+            if self.isPlayingAll && self.playingIndex > 0 {
+                self.playingIndex -= 1
+                self.playingStep = 0
+                self.speakCurrentStep()
+                return .success
+            }
+            return .commandFailed
+        }
+    }
+
+    /// Updates the Now Playing info displayed on lock screen and Control Center.
+    ///
+    /// Shows the current sentence being played along with metadata like word,
+    /// meaning, and playback position.
+    private func updateNowPlayingInfo() {
+        guard playingIndex < allSentences.count else { return }
+
+        let sentence = allSentences[playingIndex]
+        let stepLabel = ["English (1st)", "Japanese (1st)", "English (2nd)", "Japanese (2nd)"][playingStep]
+
+        var nowPlayingInfo = [String: Any]()
+        nowPlayingInfo[MPMediaItemPropertyTitle] = sentence.english
+        nowPlayingInfo[MPMediaItemPropertyArtist] = "\(word.word) - \(stepLabel)"
+        nowPlayingInfo[MPMediaItemPropertyAlbumTitle] = word.meaning
+        nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] = isPlayingAll ? 1.0 : 0.0
+        nowPlayingInfo[MPNowPlayingInfoPropertyMediaType] = MPNowPlayingInfoMediaType.audio.rawValue
+
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
+    }
+
+    /// Clears the Now Playing info when playback stops.
+    private func clearNowPlayingInfo() {
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
     }
 }
 

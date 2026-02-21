@@ -4,5 +4,9 @@
 <dict>
 	<key>VOICEVOX_BASE_URL</key>
 	<string>$(VOICEVOX_BASE_URL)</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
 </dict>
 </plist>
