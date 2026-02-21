@@ -18,21 +18,6 @@ class SpeechService: NSObject, ObservableObject {
         super.init()
         synthesizer.delegate = self
         observeSettingsChanges()
-        configureAudioSession()
-    }
-
-    /// Configures the audio session for background playback.
-    ///
-    /// Sets the audio session category to `.playback` to allow audio to continue
-    /// playing when the app is in the background or the screen is locked.
-    private func configureAudioSession() {
-        do {
-            let audioSession = AVAudioSession.sharedInstance()
-            try audioSession.setCategory(.playback, mode: .default)
-            try audioSession.setActive(true)
-        } catch {
-            print("Failed to configure audio session: \(error.localizedDescription)")
-        }
     }
 
     private func observeSettingsChanges() {
