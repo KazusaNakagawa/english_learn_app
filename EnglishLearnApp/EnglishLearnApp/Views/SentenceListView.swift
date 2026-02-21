@@ -16,16 +16,27 @@ struct SentenceListView: View {
         self.word = word
     }
 
+    /// Groups sentences by category and returns them in sorted order.
+    ///
+    /// - Returns: An array of tuples containing category names and their sentences
     var groupedSentences: [(String, [Sentence])] {
         let grouped = Dictionary(grouping: word.sentences) { $0.category }
         return grouped.sorted { $0.key < $1.key }
     }
 
-    /// Flattened sentence list in display order, used for continuous playback indexing.
+    /// Flattens the grouped sentences into a single array for continuous playback.
+    ///
+    /// This computed property provides the sentences in display order, which is used
+    /// for indexing during continuous playback operations.
+    ///
+    /// - Returns: An array of all sentences in display order
     private var allSentences: [Sentence] {
         groupedSentences.flatMap { $0.1 }
     }
 
+    /// Returns the UUID of the currently playing sentence, if any.
+    ///
+    /// - Returns: The sentence ID if playback is active and index is valid, otherwise nil
     private var playingSentenceID: UUID? {
         guard isPlayingAll, playingIndex < allSentences.count else { return nil }
         return allSentences[playingIndex].id
@@ -116,8 +127,13 @@ struct SentenceListView: View {
 
     // MARK: - Playback control
 
-    /// Start continuous playback. Stops any ongoing playback first, then begins
-    /// at `from` if given, otherwise from the first sentence in the list.
+    /// Starts continuous playback with proper race condition handling.
+    ///
+    /// This method uses a generation counter to invalidate any pending async tasks
+    /// from previous playback sessions, preventing race conditions when rapidly
+    /// switching between sentences during playback.
+    ///
+    /// - Parameter sentence: The sentence to start from, or nil to start from the first sentence
     private func startPlayAll(from sentence: Sentence? = nil) {
         guard !allSentences.isEmpty else { return }
 
@@ -155,6 +171,10 @@ struct SentenceListView: View {
         }
     }
 
+    /// Stops all continuous playback and invalidates pending async tasks.
+    ///
+    /// Increments the playback generation counter to ensure any in-flight
+    /// completion callbacks from the previous session are ignored.
     private func stopPlayAll() {
         // Increment generation to invalidate all pending tasks
         playbackGeneration += 1
@@ -163,7 +183,13 @@ struct SentenceListView: View {
         speechService.stop()
     }
 
-    /// Speak the text for the current (sentence, step) position.
+    /// Speaks the text for the current sentence and playback step.
+    ///
+    /// Records the current playback generation before starting speech to enable
+    /// validation in the completion callback. This prevents stale completion events
+    /// from affecting new playback sessions.
+    ///
+    /// Playback steps: 0=EN, 1=JA, 2=EN, 3=JA (4 steps per sentence)
     private func speakCurrentStep() {
         guard playingIndex < allSentences.count else {
             stopPlayAll()
@@ -183,7 +209,11 @@ struct SentenceListView: View {
         }
     }
 
-    /// Called when the current utterance finishes; moves to the next step or sentence.
+    /// Advances to the next playback step or sentence after natural speech completion.
+    ///
+    /// This method is called only when speech finishes naturally (not on cancellation)
+    /// via the speechFinishedPublisher. It progresses through the 4-step playback cycle
+    /// (EN→JA→EN→JA) and moves to the next sentence when all steps complete.
     private func advancePlayback() {
         let nextStep = playingStep + 1
         if nextStep < 4 {

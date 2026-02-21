@@ -38,6 +38,15 @@ class SpeechService: NSObject, ObservableObject {
         }
     }
 
+    /// Speaks the given text using the specified language and voice gender.
+    ///
+    /// This method stops any ongoing speech before starting new playback. It tracks
+    /// the current utterance to prevent race conditions from stale delegate callbacks.
+    ///
+    /// - Parameters:
+    ///   - text: The text to be spoken
+    ///   - language: The language code (default: "en-US")
+    ///   - voiceGender: The voice gender preference (default: .default_)
     func speak(_ text: String, language: String = "en-US", voiceGender: SettingsManager.VoiceGender = .default_) {
         stop()
         speakingLanguage = language
@@ -61,6 +70,13 @@ class SpeechService: NSObject, ObservableObject {
         synthesizer.speak(utterance)
     }
 
+    /// Synthesizes speech using the VOICEVOX API and plays it via AVAudioPlayer.
+    ///
+    /// This method makes two HTTP requests to the VOICEVOX server:
+    /// 1. POST /audio_query to generate query parameters
+    /// 2. POST /synthesis to synthesize audio from the query
+    ///
+    /// - Parameter text: The Japanese text to be spoken
     @MainActor
     private func speakWithVoicevox(_ text: String) async {
         let settings = SettingsManager.shared
@@ -109,6 +125,12 @@ class SpeechService: NSObject, ObservableObject {
         }
     }
 
+    /// Returns an appropriate AVSpeechSynthesisVoice for the specified gender and language.
+    ///
+    /// - Parameters:
+    ///   - gender: The desired voice gender
+    ///   - language: The language code for the voice
+    /// - Returns: An AVSpeechSynthesisVoice, or nil for zundamon (uses VOICEVOX instead)
     private func getVoiceForGender(_ gender: SettingsManager.VoiceGender, language: String) -> AVSpeechSynthesisVoice? {
         let availableVoices = AVSpeechSynthesisVoice.speechVoices()
 
@@ -128,6 +150,11 @@ class SpeechService: NSObject, ObservableObject {
         }
     }
 
+    /// Immediately stops all ongoing speech synthesis and clears the current utterance.
+    ///
+    /// This method stops both AVSpeechSynthesizer and AVAudioPlayer (VOICEVOX) playback,
+    /// resets the isSpeaking flag, and clears the currentUtterance reference to prevent
+    /// race conditions from stale delegate callbacks.
     func stop() {
         currentUtterance = nil
         synthesizer.stopSpeaking(at: .immediate)
