@@ -141,8 +141,16 @@ struct SentenceListView: View {
     /// at `from` if given, otherwise from the first sentence in the list.
     private func startPlayAll(from sentence: Sentence? = nil) {
         guard !allSentences.isEmpty else { return }
+        // Set isCanceling early to cover both stop and speak operations
+        isCanceling.value = true
+
         // Stop existing playback so isSpeaking/isPlayingAll are in a known state.
-        if isPlayingAll { stopPlayAll() }
+        if isPlayingAll {
+            isPlayingAll = false
+            playingStep = 0
+            speechService.stop()
+        }
+
         if let sentence,
            let idx = allSentences.firstIndex(where: { $0.id == sentence.id }) {
             playingIndex = idx
@@ -151,10 +159,13 @@ struct SentenceListView: View {
         }
         isPlayingAll = true
         playingStep = 0
-        // Guard against spurious onChange from speak()'s internal stop() call
-        isCanceling.value = true
         speakCurrentStep()
-        isCanceling.value = false
+
+        // Wait briefly before clearing isCanceling to ensure any delayed delegates complete
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+            isCanceling.value = false
+        }
     }
 
     private func stopPlayAll() {
@@ -162,7 +173,11 @@ struct SentenceListView: View {
         isPlayingAll = false
         playingStep = 0
         speechService.stop()
-        isCanceling.value = false
+        // Wait briefly before clearing isCanceling to ensure any delayed delegates complete
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+            isCanceling.value = false
+        }
     }
 
     /// Speak the text for the current (sentence, step) position.
@@ -190,7 +205,10 @@ struct SentenceListView: View {
             playingStep = nextStep
             isCanceling.value = true
             speakCurrentStep()
-            isCanceling.value = false
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+                isCanceling.value = false
+            }
         } else {
             // Move to the next sentence
             let nextIdx = playingIndex + 1
@@ -199,7 +217,10 @@ struct SentenceListView: View {
                 playingStep = 0
                 isCanceling.value = true
                 speakCurrentStep()
-                isCanceling.value = false
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+                    isCanceling.value = false
+                }
             } else {
                 // All sentences done
                 isPlayingAll = false
