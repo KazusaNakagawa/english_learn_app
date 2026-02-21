@@ -1,12 +1,18 @@
 import AVFoundation
+import Combine
 
 class SpeechService: NSObject, ObservableObject {
     nonisolated(unsafe) private let synthesizer = AVSpeechSynthesizer()
     private var audioPlayer: AVAudioPlayer?
+    private var currentUtterance: AVSpeechUtterance?
 
     @Published var isSpeaking = false
     @Published var speakingLanguage: String? = nil
     @Published var voiceGender: SettingsManager.VoiceGender = .default_
+
+    /// Publisher that emits when speech finishes naturally (not cancelled).
+    /// Use this instead of onChange(of: isSpeaking) for reliable completion detection.
+    let speechFinishedPublisher = PassthroughSubject<Void, Never>()
 
     override init() {
         super.init()
@@ -32,6 +38,15 @@ class SpeechService: NSObject, ObservableObject {
         }
     }
 
+    /// Speaks the given text using the specified language and voice gender.
+    ///
+    /// This method stops any ongoing speech before starting new playback. It tracks
+    /// the current utterance to prevent race conditions from stale delegate callbacks.
+    ///
+    /// - Parameters:
+    ///   - text: The text to be spoken
+    ///   - language: The language code (default: "en-US")
+    ///   - voiceGender: The voice gender preference (default: .default_)
     func speak(_ text: String, language: String = "en-US", voiceGender: SettingsManager.VoiceGender = .default_) {
         stop()
         speakingLanguage = language
@@ -50,16 +65,25 @@ class SpeechService: NSObject, ObservableObject {
         utterance.pitchMultiplier = 1.0
         utterance.volume = 1.0
 
+        currentUtterance = utterance
         isSpeaking = true
         synthesizer.speak(utterance)
     }
 
+    /// Synthesizes speech using the VOICEVOX API and plays it via AVAudioPlayer.
+    ///
+    /// This method makes two HTTP requests to the VOICEVOX server:
+    /// 1. POST /audio_query to generate query parameters
+    /// 2. POST /synthesis to synthesize audio from the query
+    ///
+    /// - Parameter text: The Japanese text to be spoken
     @MainActor
     private func speakWithVoicevox(_ text: String) async {
         let settings = SettingsManager.shared
         let baseURL = AppConfig.voicevoxBaseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         guard !baseURL.isEmpty else {
             isSpeaking = false
+            speechFinishedPublisher.send()  // Notify failure to allow playback to continue or stop gracefully
             return
         }
 
@@ -69,6 +93,7 @@ class SpeechService: NSObject, ObservableObject {
               let queryURL = URL(string: "\(baseURL)/audio_query?text=\(encodedText)&speaker=\(speakerID)"),
               let synthURL = URL(string: "\(baseURL)/synthesis?speaker=\(speakerID)") else {
             isSpeaking = false
+            speechFinishedPublisher.send()  // Notify failure to allow playback to continue or stop gracefully
             return
         }
 
@@ -79,6 +104,7 @@ class SpeechService: NSObject, ObservableObject {
             guard let queryHTTP = queryResponse as? HTTPURLResponse, (200...299).contains(queryHTTP.statusCode) else {
                 print("VOICEVOX audio_query failed: \((queryResponse as? HTTPURLResponse)?.statusCode ?? -1)")
                 isSpeaking = false
+                speechFinishedPublisher.send()  // Notify failure to allow playback to continue or stop gracefully
                 return
             }
 
@@ -90,6 +116,7 @@ class SpeechService: NSObject, ObservableObject {
             guard let synthHTTP = synthResponse as? HTTPURLResponse, (200...299).contains(synthHTTP.statusCode) else {
                 print("VOICEVOX synthesis failed: \((synthResponse as? HTTPURLResponse)?.statusCode ?? -1)")
                 isSpeaking = false
+                speechFinishedPublisher.send()  // Notify failure to allow playback to continue or stop gracefully
                 return
             }
 
@@ -99,9 +126,16 @@ class SpeechService: NSObject, ObservableObject {
         } catch {
             print("VOICEVOX error: \(error.localizedDescription)")
             isSpeaking = false
+            speechFinishedPublisher.send()  // Notify failure to allow playback to continue or stop gracefully
         }
     }
 
+    /// Returns an appropriate AVSpeechSynthesisVoice for the specified gender and language.
+    ///
+    /// - Parameters:
+    ///   - gender: The desired voice gender
+    ///   - language: The language code for the voice
+    /// - Returns: An AVSpeechSynthesisVoice, or nil for zundamon (uses VOICEVOX instead)
     private func getVoiceForGender(_ gender: SettingsManager.VoiceGender, language: String) -> AVSpeechSynthesisVoice? {
         let availableVoices = AVSpeechSynthesisVoice.speechVoices()
 
@@ -121,7 +155,13 @@ class SpeechService: NSObject, ObservableObject {
         }
     }
 
+    /// Immediately stops all ongoing speech synthesis and clears the current utterance.
+    ///
+    /// This method stops both AVSpeechSynthesizer and AVAudioPlayer (VOICEVOX) playback,
+    /// resets the isSpeaking flag, and clears the currentUtterance reference to prevent
+    /// race conditions from stale delegate callbacks.
     func stop() {
+        currentUtterance = nil
         synthesizer.stopSpeaking(at: .immediate)
         audioPlayer?.stop()
         audioPlayer = nil
@@ -133,12 +173,18 @@ class SpeechService: NSObject, ObservableObject {
 extension SpeechService: AVSpeechSynthesizerDelegate {
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         DispatchQueue.main.async {
+            // Only process if this utterance is the current one (not an old cancelled one)
+            guard utterance === self.currentUtterance, self.isSpeaking else { return }
             self.isSpeaking = false
+            self.speechFinishedPublisher.send()  // Notify natural completion
         }
     }
 
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
         DispatchQueue.main.async {
+            // Only process if this utterance is still the current one
+            // If a new speech started, currentUtterance will be different
+            guard utterance === self.currentUtterance else { return }
             self.isSpeaking = false
         }
     }
@@ -147,7 +193,10 @@ extension SpeechService: AVSpeechSynthesizerDelegate {
 extension SpeechService: AVAudioPlayerDelegate {
     func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         DispatchQueue.main.async {
+            // Only process if this player is still the current one (not an old cancelled one)
+            guard self.audioPlayer === player, self.isSpeaking else { return }
             self.isSpeaking = false
+            self.speechFinishedPublisher.send()  // Notify natural completion
         }
     }
 }

@@ -1,12 +1,5 @@
 import SwiftUI
 
-/// Reference-type flag that can be mutated synchronously from non-mutating
-/// struct methods, ensuring onChange guards see the update before any @State
-/// batching occurs.
-private final class CancelFlag {
-    var value = false
-}
-
 struct SentenceListView: View {
     let word: Word
     @StateObject private var speechService = SpeechService()
@@ -16,24 +9,34 @@ struct SentenceListView: View {
     @State private var isPlayingAll = false
     @State private var playingIndex: Int = 0  // flat index into allSentences
     @State private var playingStep: Int = 0   // 0=EN, 1=JA, 2=EN, 3=JA
-    // Reference-type flag: set synchronously before stop() so the onChange guard
-    // sees it immediately, preventing a spurious advancePlayback() on manual cancel.
-    private let isCanceling = CancelFlag()
+    @State private var playbackGeneration = 0  // Increment to invalidate old async tasks
+    @State private var expectedGeneration = 0  // Set when starting speech, checked on completion
 
     init(word: Word) {
         self.word = word
     }
 
+    /// Groups sentences by category and returns them in sorted order.
+    ///
+    /// - Returns: An array of tuples containing category names and their sentences
     var groupedSentences: [(String, [Sentence])] {
         let grouped = Dictionary(grouping: word.sentences) { $0.category }
         return grouped.sorted { $0.key < $1.key }
     }
 
-    /// Flattened sentence list in display order, used for continuous playback indexing.
+    /// Flattens the grouped sentences into a single array for continuous playback.
+    ///
+    /// This computed property provides the sentences in display order, which is used
+    /// for indexing during continuous playback operations.
+    ///
+    /// - Returns: An array of all sentences in display order
     private var allSentences: [Sentence] {
         groupedSentences.flatMap { $0.1 }
     }
 
+    /// Returns the UUID of the currently playing sentence, if any.
+    ///
+    /// - Returns: The sentence ID if playback is active and index is valid, otherwise nil
     private var playingSentenceID: UUID? {
         guard isPlayingAll, playingIndex < allSentences.count else { return nil }
         return allSentences[playingIndex].id
@@ -108,66 +111,86 @@ struct SentenceListView: View {
         }
         .navigationTitle("例文一覧")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                if isPlayingAll {
-                    Button { stopPlayAll() } label: {
-                        Image(systemName: "stop.fill")
-                    }
-                    .tint(.red)
-                } else {
-                    Button { startPlayAll() } label: {
-                        Image(systemName: "play.fill")
-                    }
-                    .disabled(allSentences.isEmpty)
-                }
-            }
-        }
-        .onChange(of: speechService.isSpeaking) { _, newValue in
-            // Advance only when an utterance finishes naturally.
-            // isCanceling.value is set synchronously before stop() is called, so this
-            // guard reliably prevents a spurious advancePlayback() on manual cancel.
-            guard !newValue, isPlayingAll, !isCanceling.value else { return }
+        .onReceive(speechService.speechFinishedPublisher) { _ in
+            // Called only when speech finishes naturally (not cancelled)
+            guard isPlayingAll else { return }
+
+            // Check if this completion is for the current playback session
+            guard expectedGeneration == playbackGeneration else { return }
+
             advancePlayback()
         }
         .onDisappear {
-            if isPlayingAll { stopPlayAll() }
+            // Always stop to invalidate any pending async tasks via generation increment
+            stopPlayAll()
         }
     }
 
     // MARK: - Playback control
 
-    /// Start continuous playback. Stops any ongoing playback first, then begins
-    /// at `from` if given, otherwise from the first sentence in the list.
+    /// Starts continuous playback with proper race condition handling.
+    ///
+    /// This method uses a generation counter to invalidate any pending async tasks
+    /// from previous playback sessions, preventing race conditions when rapidly
+    /// switching between sentences during playback.
+    ///
+    /// - Parameter sentence: The sentence to start from, or nil to start from the first sentence
     private func startPlayAll(from sentence: Sentence? = nil) {
         guard !allSentences.isEmpty else { return }
-        // Stop existing playback so isSpeaking/isPlayingAll are in a known state.
-        if isPlayingAll { stopPlayAll() }
-        if let sentence,
-           let idx = allSentences.firstIndex(where: { $0.id == sentence.id }) {
-            playingIndex = idx
-        } else {
-            playingIndex = 0
-        }
-        isPlayingAll = true
-        playingStep = 0
-        speakCurrentStep()
-    }
 
-    private func stopPlayAll() {
-        isCanceling.value = true   // set before stop() so onChange guard catches it
+        // Increment generation to invalidate all pending async tasks
+        playbackGeneration += 1
+        let currentGen = playbackGeneration
+
+        // Immediately stop everything
         isPlayingAll = false
         playingStep = 0
         speechService.stop()
-        isCanceling.value = false
+
+        Task { @MainActor in
+            // Check if this task is still valid (no new startPlayAll was called)
+            guard currentGen == playbackGeneration else { return }
+
+            // Set up new playback position
+            if let sentence,
+               let idx = allSentences.firstIndex(where: { $0.id == sentence.id }) {
+                playingIndex = idx
+            } else {
+                playingIndex = 0
+            }
+            isPlayingAll = true
+            playingStep = 0
+            speakCurrentStep()
+        }
     }
 
-    /// Speak the text for the current (sentence, step) position.
+    /// Stops all continuous playback and invalidates pending async tasks.
+    ///
+    /// Increments the playback generation counter to ensure any in-flight
+    /// completion callbacks from the previous session are ignored.
+    private func stopPlayAll() {
+        // Increment generation to invalidate all pending tasks
+        playbackGeneration += 1
+        isPlayingAll = false
+        playingStep = 0
+        speechService.stop()
+    }
+
+    /// Speaks the text for the current sentence and playback step.
+    ///
+    /// Records the current playback generation before starting speech to enable
+    /// validation in the completion callback. This prevents stale completion events
+    /// from affecting new playback sessions.
+    ///
+    /// Playback steps: 0=EN, 1=JA, 2=EN, 3=JA (4 steps per sentence)
     private func speakCurrentStep() {
         guard playingIndex < allSentences.count else {
             stopPlayAll()
             return
         }
+        // Record the current generation before starting speech
+        expectedGeneration = playbackGeneration
+
         let sentence = allSentences[playingIndex]
         switch playingStep {
         case 0, 2:
@@ -179,7 +202,11 @@ struct SentenceListView: View {
         }
     }
 
-    /// Called when the current utterance finishes; moves to the next step or sentence.
+    /// Advances to the next playback step or sentence after natural speech completion.
+    ///
+    /// This method is called only when speech finishes naturally (not on cancellation)
+    /// via the speechFinishedPublisher. It progresses through the 4-step playback cycle
+    /// (EN→JA→EN→JA) and moves to the next sentence when all steps complete.
     private func advancePlayback() {
         let nextStep = playingStep + 1
         if nextStep < 4 {
