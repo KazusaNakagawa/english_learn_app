@@ -106,11 +106,11 @@ struct TrashView: View {
                 .font(.headline)
             Text(word.meaning)
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
             if let deletedAt = word.deletedAt {
                 Text(remainingDaysText(from: deletedAt))
                     .font(.caption)
-                    .foregroundColor(.red)
+                    .foregroundStyle(.red)
             }
         }
         .padding(.vertical, 4)
@@ -147,7 +147,9 @@ struct TrashView: View {
     /// Returns a localized string describing how many days remain before permanent deletion.
     private func remainingDaysText(from deletedAt: Date) -> String {
         let calendar = Calendar.current
-        let expiryDate = calendar.date(byAdding: .day, value: 10, to: deletedAt)!
+        guard let expiryDate = calendar.date(byAdding: .day, value: 10, to: deletedAt) else {
+            return "あと0日で完全削除"
+        }
         let remaining = calendar.dateComponents([.day], from: Date(), to: expiryDate).day ?? 0
         let days = max(0, remaining)
         return "あと\(days)日で完全削除"
