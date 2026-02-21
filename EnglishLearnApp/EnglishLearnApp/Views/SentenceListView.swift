@@ -248,8 +248,7 @@ struct SentenceListView: View {
         let commandCenter = MPRemoteCommandCenter.shared()
 
         // Play command
-        commandCenter.playCommand.addTarget { [weak self] _ in
-            guard let self = self else { return .commandFailed }
+        commandCenter.playCommand.addTarget { _ in
             if !self.isPlayingAll {
                 self.startPlayAll()
                 return .success
@@ -258,8 +257,7 @@ struct SentenceListView: View {
         }
 
         // Pause command
-        commandCenter.pauseCommand.addTarget { [weak self] _ in
-            guard let self = self else { return .commandFailed }
+        commandCenter.pauseCommand.addTarget { _ in
             if self.isPlayingAll {
                 self.stopPlayAll()
                 return .success
@@ -268,8 +266,7 @@ struct SentenceListView: View {
         }
 
         // Next track command (skip to next sentence)
-        commandCenter.nextTrackCommand.addTarget { [weak self] _ in
-            guard let self = self else { return .commandFailed }
+        commandCenter.nextTrackCommand.addTarget { _ in
             if self.isPlayingAll && self.playingIndex + 1 < self.allSentences.count {
                 self.playingIndex += 1
                 self.playingStep = 0
@@ -280,8 +277,7 @@ struct SentenceListView: View {
         }
 
         // Previous track command (go back to previous sentence)
-        commandCenter.previousTrackCommand.addTarget { [weak self] _ in
-            guard let self = self else { return .commandFailed }
+        commandCenter.previousTrackCommand.addTarget { _ in
             if self.isPlayingAll && self.playingIndex > 0 {
                 self.playingIndex -= 1
                 self.playingStep = 0
