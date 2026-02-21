@@ -36,8 +36,6 @@ struct WordListView: View {
     @StateObject private var speechService = SpeechService()
     @EnvironmentObject private var settings: SettingsManager
 
-    @State private var showingAddWordView = false
-
     @State private var selection = SelectionState()
 
     private var sortOption: WordSortOption {
@@ -105,17 +103,9 @@ struct WordListView: View {
             }
             List(filteredWords) { word in
                 if selection.isSelecting {
-                    Button {
-                        selection.toggle(word.id)
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: selection.selectedIDs.contains(word.id) ? "checkmark.circle.fill" : "circle")
-                                .foregroundColor(selection.selectedIDs.contains(word.id) ? .accentColor : .secondary)
-                                .font(.title2)
-                            WordRowView(word: word, speechService: speechService)
-                        }
+                    SelectableListRow(id: word.id, selection: selection) {
+                        WordRowView(word: word, speechService: speechService)
                     }
-                    .buttonStyle(.plain)
                 } else {
                     NavigationLink(destination: destinationView(for: word)) {
                         WordRowView(word: word, speechService: speechService)
@@ -156,17 +146,6 @@ struct WordListView: View {
             ToolbarItem(placement: .navigationBarLeading) {
                 if selection.isSelecting {
                     Button("キャンセル") { selection.exitSelectionMode() }
-                } else {
-                    HStack {
-                        NavigationLink(destination: ArchiveView()) {
-                            Image(systemName: "archivebox")
-                                .badgeOverlay(dataManager.archivedWords.count,
-                                              accessibilityLabel: "\(dataManager.archivedWords.count)件アーカイブ済み")
-                        }
-                        NavigationLink(destination: TrashView()) {
-                            Image(systemName: "trash")
-                        }
-                    }
                 }
             }
             ToolbarItem(placement: .navigationBarTrailing) {
@@ -178,17 +157,11 @@ struct WordListView: View {
                 } else {
                     HStack {
                         sortMenu
-                        Button { showingAddWordView = true } label: { Image(systemName: "plus") }
                         if !filteredWords.isEmpty {
                             Button("選択") { selection.isSelecting = true }
                         }
                     }
                 }
-            }
-        }
-        .sheet(isPresented: $showingAddWordView) {
-            AddWordView { newWord in
-                WordDataManager.shared.addWord(newWord)
             }
         }
         .sheet(item: $wordToEdit) { word in
@@ -205,31 +178,30 @@ struct WordListView: View {
 
     /// Bottom action bar shown during selection mode with Archive and Trash actions.
     private var wordListActionBar: some View {
-        HStack(spacing: 0) {
-            Button {
-                WordDataManager.shared.archive(wordIds: Array(selection.selectedIDs))
-                selection.exitSelectionMode()
-            } label: {
-                Label("アーカイブ", systemImage: "archivebox")
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-            }
-            .disabled(selection.selectedIDs.isEmpty)
+        ActionBar {
+            HStack(spacing: 0) {
+                ActionBarButton(
+                    "アーカイブ",
+                    systemImage: "archivebox",
+                    isDisabled: selection.selectedIDs.isEmpty
+                ) {
+                    WordDataManager.shared.archive(wordIds: Array(selection.selectedIDs))
+                    selection.exitSelectionMode()
+                }
 
-            Divider().frame(height: 44)
+                Divider().frame(height: 44)
 
-            Button(role: .destructive) {
-                WordDataManager.shared.moveToTrash(wordIds: Array(selection.selectedIDs))
-                selection.exitSelectionMode()
-            } label: {
-                Label("ゴミ箱へ", systemImage: "trash")
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
+                ActionBarButton(
+                    "ゴミ箱へ",
+                    systemImage: "trash",
+                    role: .destructive,
+                    isDisabled: selection.selectedIDs.isEmpty
+                ) {
+                    WordDataManager.shared.moveToTrash(wordIds: Array(selection.selectedIDs))
+                    selection.exitSelectionMode()
+                }
             }
-            .disabled(selection.selectedIDs.isEmpty)
         }
-        .background(.regularMaterial)
-        .overlay(alignment: .top) { Divider() }
     }
 
     // MARK: - Subviews

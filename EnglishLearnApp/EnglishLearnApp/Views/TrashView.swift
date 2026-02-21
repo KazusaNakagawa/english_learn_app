@@ -20,17 +20,9 @@ struct TrashView: View {
                 List {
                     ForEach(dataManager.trashedWords) { word in
                         if selection.isSelecting {
-                            Button {
-                                selection.toggle(word.id)
-                            } label: {
-                                HStack(spacing: 12) {
-                                    Image(systemName: selection.selectedIDs.contains(word.id) ? "checkmark.circle.fill" : "circle")
-                                        .foregroundColor(selection.selectedIDs.contains(word.id) ? .accentColor : .secondary)
-                                        .font(.title2)
-                                    wordRow(word)
-                                }
+                            SelectableListRow(id: word.id, selection: selection) {
+                                wordRow(word)
                             }
-                            .buttonStyle(.plain)
                         } else {
                             wordRow(word)
                                 .swipeActions(edge: .leading) {
@@ -114,11 +106,11 @@ struct TrashView: View {
                 .font(.headline)
             Text(word.meaning)
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
             if let deletedAt = word.deletedAt {
                 Text(remainingDaysText(from: deletedAt))
                     .font(.caption)
-                    .foregroundColor(.red)
+                    .foregroundStyle(.red)
             }
         }
         .padding(.vertical, 4)
@@ -126,36 +118,38 @@ struct TrashView: View {
 
     /// Bottom action bar shown during selection mode with Restore and Permanent Delete actions.
     private var trashActionBar: some View {
-        HStack(spacing: 0) {
-            Button {
-                WordDataManager.shared.restoreFromTrash(wordIds: Array(selection.selectedIDs))
-                selection.exitSelectionMode()
-            } label: {
-                Label("元に戻す", systemImage: "arrow.uturn.backward")
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-            }
-            .disabled(selection.selectedIDs.isEmpty)
+        ActionBar {
+            HStack(spacing: 0) {
+                ActionBarButton(
+                    "元に戻す",
+                    systemImage: "arrow.uturn.backward",
+                    isDisabled: selection.selectedIDs.isEmpty
+                ) {
+                    WordDataManager.shared.restoreFromTrash(wordIds: Array(selection.selectedIDs))
+                    selection.exitSelectionMode()
+                }
+                .tint(.green)
 
-            Divider().frame(height: 44)
+                Divider().frame(height: 44)
 
-            Button(role: .destructive) {
-                showingBatchDeleteConfirm = true
-            } label: {
-                Label("完全削除", systemImage: "trash.fill")
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
+                ActionBarButton(
+                    "完全削除",
+                    systemImage: "trash.fill",
+                    role: .destructive,
+                    isDisabled: selection.selectedIDs.isEmpty
+                ) {
+                    showingBatchDeleteConfirm = true
+                }
             }
-            .disabled(selection.selectedIDs.isEmpty)
         }
-        .background(.regularMaterial)
-        .overlay(alignment: .top) { Divider() }
     }
 
     /// Returns a localized string describing how many days remain before permanent deletion.
     private func remainingDaysText(from deletedAt: Date) -> String {
         let calendar = Calendar.current
-        let expiryDate = calendar.date(byAdding: .day, value: 10, to: deletedAt)!
+        guard let expiryDate = calendar.date(byAdding: .day, value: 10, to: deletedAt) else {
+            return "あと0日で完全削除"
+        }
         let remaining = calendar.dateComponents([.day], from: Date(), to: expiryDate).day ?? 0
         let days = max(0, remaining)
         return "あと\(days)日で完全削除"
