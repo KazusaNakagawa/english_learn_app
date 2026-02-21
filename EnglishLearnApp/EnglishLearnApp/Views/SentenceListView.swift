@@ -124,10 +124,25 @@ struct SentenceListView: View {
             // Check if this completion is for the current playback session
             guard expectedGeneration == playbackGeneration else { return }
 
-            advancePlayback()
+            // Add a delay before advancing to the next step for better pacing
+            let capturedGeneration = playbackGeneration
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 800_000_000)  // 0.8 second delay
+                // Verify generation hasn't changed during the delay
+                guard capturedGeneration == playbackGeneration else { return }
+                advancePlayback()
+            }
         }
         .onAppear {
             setupRemoteCommandCenter()
+        }
+        .onChange(of: settings.playbackMode) { _, _ in
+            // If playback is active, restart current sentence from step 0 when mode changes
+            if isPlayingAll {
+                playbackGeneration += 1
+                playingStep = 0
+                speakCurrentStep()
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .speechServiceDidStartNewPlayback)) { _ in
             // When individual playback starts (e.g., user taps "英語を聞く" button),
@@ -215,7 +230,8 @@ struct SentenceListView: View {
     /// validation in the completion callback. This prevents stale completion events
     /// from affecting new playback sessions.
     ///
-    /// Playback steps: 0=EN, 1=JA, 2=EN, 3=JA (4 steps per sentence)
+    /// Playback steps (bilingual): 0=EN, 1=JA, 2=EN (3 steps per sentence)
+    /// Playback steps (English-only): 0=EN, 1=EN (2 steps per sentence)
     private func speakCurrentStep() {
         guard playingIndex < allSentences.count else {
             stopPlayAll()
@@ -225,13 +241,20 @@ struct SentenceListView: View {
         expectedGeneration = playbackGeneration
 
         let sentence = allSentences[playingIndex]
-        switch playingStep {
-        case 0, 2:
+
+        switch settings.playbackMode {
+        case .bilingual:
+            switch playingStep {
+            case 0, 2:
+                speechService.speak(sentence.english, voiceGender: settings.voiceGender, isContinuousPlayback: true)
+            case 1:
+                speechService.speak(sentence.japanese, language: "ja-JP", voiceGender: settings.voiceGender, isContinuousPlayback: true)
+            default:
+                break
+            }
+        case .englishOnly:
+            // Both steps 0 and 1 play English
             speechService.speak(sentence.english, voiceGender: settings.voiceGender, isContinuousPlayback: true)
-        case 1, 3:
-            speechService.speak(sentence.japanese, language: "ja-JP", voiceGender: settings.voiceGender, isContinuousPlayback: true)
-        default:
-            break
         }
 
         // Update Now Playing info for lock screen/Control Center
@@ -241,12 +264,14 @@ struct SentenceListView: View {
     /// Advances to the next playback step or sentence after natural speech completion.
     ///
     /// This method is called only when speech finishes naturally (not on cancellation)
-    /// via the speechFinishedPublisher. It progresses through the 4-step playback cycle
-    /// (EN→JA→EN→JA) and moves to the next sentence when all steps complete.
+    /// via the speechFinishedPublisher. It progresses through the playback cycle
+    /// (bilingual: EN→JA→EN, English-only: EN→EN) and moves to the next sentence when all steps complete.
     private func advancePlayback() {
+        let maxSteps = settings.playbackMode == .bilingual ? 3 : 2
         let nextStep = playingStep + 1
-        if nextStep < 4 {
-            // More steps remain within the current sentence (EN→JA→EN→JA)
+
+        if nextStep < maxSteps {
+            // More steps remain within the current sentence
             playingStep = nextStep
             speakCurrentStep()
         } else {
@@ -329,9 +354,15 @@ struct SentenceListView: View {
         guard playingIndex < allSentences.count else { return }
 
         let sentence = allSentences[playingIndex]
-        // Clamp playingStep to valid range to avoid out-of-bounds access
-        let clampedStep = min(max(playingStep, 0), 3)
-        let stepLabel = ["English (1st)", "Japanese (1st)", "English (2nd)", "Japanese (2nd)"][clampedStep]
+        let maxSteps = settings.playbackMode == .bilingual ? 3 : 2
+        let clampedStep = min(max(playingStep, 0), maxSteps - 1)
+
+        let stepLabel: String
+        if settings.playbackMode == .bilingual {
+            stepLabel = ["English (1st)", "Japanese", "English (2nd)"][clampedStep]
+        } else {
+            stepLabel = ["English (1st)", "English (2nd)"][clampedStep]
+        }
 
         var nowPlayingInfo = [String: Any]()
         nowPlayingInfo[MPMediaItemPropertyTitle] = sentence.english

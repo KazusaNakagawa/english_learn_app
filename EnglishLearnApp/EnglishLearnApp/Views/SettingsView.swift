@@ -64,6 +64,26 @@ struct SettingsView: View {
                     .listRowSeparator(.hidden)
                 }
 
+                Section(header: Text("連続再生設定")) {
+                    Picker("再生モード", selection: $settings.playbackMode) {
+                        ForEach(SettingsManager.PlaybackMode.allCases, id: \.self) { mode in
+                            Text(mode.label).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("連続再生時の音声パターンを選択できます")
+                            .font(.body)
+                        Text("バイリンガル: 英語→日本語→英語の順で再生")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text("英語のみ: 英語のみを2回繰り返します")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
                 Section(header: Text("OpenAI API設定")) {
                     SecureField("APIキー", text: $apiKeyInput)
                         .textInputAutocapitalization(.never)

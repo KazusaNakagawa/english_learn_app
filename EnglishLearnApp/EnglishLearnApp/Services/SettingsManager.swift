@@ -74,6 +74,13 @@ class SettingsManager: ObservableObject {
         }
     }
 
+    /// The selected playback mode for continuous playback.
+    @Published var playbackMode: PlaybackMode {
+        didSet {
+            UserDefaults.standard.set(playbackMode.rawValue, forKey: "playbackMode")
+        }
+    }
+
     // MARK: - Computed Properties
 
     /// All presets: built-ins (with any user edits applied) first, then custom.
@@ -151,6 +158,21 @@ class SettingsManager: ObservableObject {
         }
     }
 
+    /// Playback mode options for continuous playback.
+    enum PlaybackMode: String, CaseIterable {
+        case bilingual = "bilingual"
+        case englishOnly = "english_only"
+
+        var label: String {
+            switch self {
+            case .bilingual:
+                return "バイリンガル (EN→JA→EN)"
+            case .englishOnly:
+                return "英語のみ (EN→EN)"
+            }
+        }
+    }
+
     /// OpenAI model options for sentence generation.
     enum OpenAIModel: String, CaseIterable {
         case gpt4oMini = "gpt-4o-mini"
@@ -200,6 +222,13 @@ class SettingsManager: ObservableObject {
             self.voicevoxStyle = style
         } else {
             self.voicevoxStyle = .normal
+        }
+
+        if let saved = UserDefaults.standard.string(forKey: "playbackMode"),
+           let mode = PlaybackMode(rawValue: saved) {
+            self.playbackMode = mode
+        } else {
+            self.playbackMode = .bilingual
         }
 
         // Load custom presets
