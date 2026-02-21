@@ -51,7 +51,8 @@ class SpeechService: NSObject, ObservableObject {
         stop()
         speakingLanguage = language
 
-        if voiceGender == .zundamon {
+        // VOICEVOX is Japanese-only TTS, fallback to AVSpeech for other languages
+        if voiceGender == .zundamon && language == "ja-JP" {
             isSpeaking = true
             Task { @MainActor [weak self] in
                 await self?.speakWithVoicevox(text)
@@ -83,6 +84,7 @@ class SpeechService: NSObject, ObservableObject {
         let baseURL = AppConfig.voicevoxBaseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         guard !baseURL.isEmpty else {
             isSpeaking = false
+            speechFinishedPublisher.send()  // Notify failure to allow playback to continue or stop gracefully
             return
         }
 
@@ -92,6 +94,7 @@ class SpeechService: NSObject, ObservableObject {
               let queryURL = URL(string: "\(baseURL)/audio_query?text=\(encodedText)&speaker=\(speakerID)"),
               let synthURL = URL(string: "\(baseURL)/synthesis?speaker=\(speakerID)") else {
             isSpeaking = false
+            speechFinishedPublisher.send()  // Notify failure to allow playback to continue or stop gracefully
             return
         }
 
@@ -102,6 +105,7 @@ class SpeechService: NSObject, ObservableObject {
             guard let queryHTTP = queryResponse as? HTTPURLResponse, (200...299).contains(queryHTTP.statusCode) else {
                 print("VOICEVOX audio_query failed: \((queryResponse as? HTTPURLResponse)?.statusCode ?? -1)")
                 isSpeaking = false
+                speechFinishedPublisher.send()  // Notify failure to allow playback to continue or stop gracefully
                 return
             }
 
@@ -113,6 +117,7 @@ class SpeechService: NSObject, ObservableObject {
             guard let synthHTTP = synthResponse as? HTTPURLResponse, (200...299).contains(synthHTTP.statusCode) else {
                 print("VOICEVOX synthesis failed: \((synthResponse as? HTTPURLResponse)?.statusCode ?? -1)")
                 isSpeaking = false
+                speechFinishedPublisher.send()  // Notify failure to allow playback to continue or stop gracefully
                 return
             }
 
@@ -122,6 +127,7 @@ class SpeechService: NSObject, ObservableObject {
         } catch {
             print("VOICEVOX error: \(error.localizedDescription)")
             isSpeaking = false
+            speechFinishedPublisher.send()  // Notify failure to allow playback to continue or stop gracefully
         }
     }
 
@@ -188,10 +194,10 @@ extension SpeechService: AVSpeechSynthesizerDelegate {
 extension SpeechService: AVAudioPlayerDelegate {
     func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         DispatchQueue.main.async {
-            if self.isSpeaking {
-                self.isSpeaking = false
-                self.speechFinishedPublisher.send()  // Notify natural completion
-            }
+            // Only process if this player is still the current one (not an old cancelled one)
+            guard self.audioPlayer === player, self.isSpeaking else { return }
+            self.isSpeaking = false
+            self.speechFinishedPublisher.send()  // Notify natural completion
         }
     }
 }

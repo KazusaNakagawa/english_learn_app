@@ -121,7 +121,8 @@ struct SentenceListView: View {
             advancePlayback()
         }
         .onDisappear {
-            if isPlayingAll { stopPlayAll() }
+            // Always stop to invalidate any pending async tasks via generation increment
+            stopPlayAll()
         }
     }
 
@@ -147,14 +148,6 @@ struct SentenceListView: View {
         speechService.stop()
 
         Task { @MainActor in
-            // Wait for speech to actually stop (poll for max 500ms)
-            for _ in 0..<25 {
-                if !speechService.isSpeaking {
-                    break
-                }
-                try? await Task.sleep(nanoseconds: 20_000_000) // 20ms
-            }
-
             // Check if this task is still valid (no new startPlayAll was called)
             guard currentGen == playbackGeneration else { return }
 
