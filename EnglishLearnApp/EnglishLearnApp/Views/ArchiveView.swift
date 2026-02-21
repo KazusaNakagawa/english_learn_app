@@ -17,17 +17,9 @@ struct ArchiveView: View {
                 List {
                     ForEach(dataManager.archivedWords) { word in
                         if selection.isSelecting {
-                            Button {
-                                selection.toggle(word.id)
-                            } label: {
-                                HStack(spacing: 12) {
-                                    Image(systemName: selection.selectedIDs.contains(word.id) ? "checkmark.circle.fill" : "circle")
-                                        .foregroundColor(selection.selectedIDs.contains(word.id) ? .accentColor : .secondary)
-                                        .font(.title2)
-                                    wordRow(word)
-                                }
+                            SelectableListRow(id: word.id, selection: selection) {
+                                wordRow(word)
                             }
-                            .buttonStyle(.plain)
                         } else {
                             wordRow(word)
                                 .swipeActions(edge: .leading) {
@@ -91,19 +83,17 @@ struct ArchiveView: View {
 
     /// Bottom action bar shown during selection mode with an Unarchive action.
     private var archiveActionBar: some View {
-        Button {
-            WordDataManager.shared.unarchive(wordIds: Array(selection.selectedIDs))
-            selection.exitSelectionMode()
-        } label: {
-            Label("元に戻す", systemImage: "arrow.uturn.backward")
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
+        ActionBar {
+            ActionBarButton(
+                "元に戻す",
+                systemImage: "arrow.uturn.backward",
+                isDisabled: selection.selectedIDs.isEmpty
+            ) {
+                WordDataManager.shared.unarchive(wordIds: Array(selection.selectedIDs))
+                selection.exitSelectionMode()
+            }
+            .tint(.green)
         }
-        .buttonStyle(.borderless)
-        .tint(.green)
-        .disabled(selection.selectedIDs.isEmpty)
-        .background(.regularMaterial)
-        .overlay(alignment: .top) { Divider() }
     }
 
 }
