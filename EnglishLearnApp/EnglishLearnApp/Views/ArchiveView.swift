@@ -51,6 +51,11 @@ struct ArchiveView: View {
         .navigationTitle("アーカイブ")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                if selection.isSelecting {
+                    Button("キャンセル") { selection.exitSelectionMode() }
+                }
+            }
             ToolbarItem(placement: .navigationBarTrailing) {
                 if selection.isSelecting {
                     let allSelected = !dataManager.archivedWords.isEmpty && dataManager.archivedWords.allSatisfy { selection.selectedIDs.contains($0.id) }
@@ -59,11 +64,6 @@ struct ArchiveView: View {
                     }
                 } else if !dataManager.archivedWords.isEmpty {
                     Button("選択") { selection.isSelecting = true }
-                }
-            }
-            ToolbarItem(placement: .navigationBarLeading) {
-                if selection.isSelecting {
-                    Button("キャンセル") { selection.exitSelectionMode() }
                 }
             }
         }

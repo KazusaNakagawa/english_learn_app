@@ -36,8 +36,6 @@ struct WordListView: View {
     @StateObject private var speechService = SpeechService()
     @EnvironmentObject private var settings: SettingsManager
 
-    @State private var showingAddWordView = false
-
     @State private var selection = SelectionState()
 
     private var sortOption: WordSortOption {
@@ -147,8 +145,6 @@ struct WordListView: View {
             .safeAreaInset(edge: .bottom) {
                 if selection.isSelecting {
                     wordListActionBar
-                } else {
-                    navigationFooterBar
                 }
             }
         }
@@ -169,17 +165,11 @@ struct WordListView: View {
                 } else {
                     HStack {
                         sortMenu
-                        Button { showingAddWordView = true } label: { Image(systemName: "plus") }
                         if !filteredWords.isEmpty {
                             Button("選択") { selection.isSelecting = true }
                         }
                     }
                 }
-            }
-        }
-        .sheet(isPresented: $showingAddWordView) {
-            AddWordView { newWord in
-                WordDataManager.shared.addWord(newWord)
             }
         }
         .sheet(item: $wordToEdit) { word in
@@ -218,40 +208,6 @@ struct WordListView: View {
                     .padding(.vertical, 14)
             }
             .disabled(selection.selectedIDs.isEmpty)
-        }
-        .background(.regularMaterial)
-        .overlay(alignment: .top) { Divider() }
-    }
-
-    /// Bottom navigation bar with Archive, Trash, and Settings links, shown when not in selection mode.
-    private var navigationFooterBar: some View {
-        HStack(spacing: 0) {
-            NavigationLink(destination: ArchiveView()) {
-                Image(systemName: "archivebox")
-                    .badgeOverlay(dataManager.archivedWords.count,
-                                  accessibilityLabel: "\(dataManager.archivedWords.count)件アーカイブ済み")
-                    .font(.title2)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-            }
-
-            Divider().frame(height: 44)
-
-            NavigationLink(destination: TrashView()) {
-                Image(systemName: "trash")
-                    .font(.title2)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-            }
-
-            Divider().frame(height: 44)
-
-            NavigationLink(destination: SettingsView()) {
-                Image(systemName: "gearshape")
-                    .font(.title2)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-            }
         }
         .background(.regularMaterial)
         .overlay(alignment: .top) { Divider() }
