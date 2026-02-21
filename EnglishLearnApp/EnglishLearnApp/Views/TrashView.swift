@@ -128,6 +128,7 @@ struct TrashView: View {
                     WordDataManager.shared.restoreFromTrash(wordIds: Array(selection.selectedIDs))
                     selection.exitSelectionMode()
                 }
+                .tint(.green)
 
                 Divider().frame(height: 44)
 
