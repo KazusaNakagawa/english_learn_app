@@ -51,8 +51,7 @@ class SpeechService: NSObject, ObservableObject {
         stop()
         speakingLanguage = language
 
-        // VOICEVOX is Japanese-only TTS, fallback to AVSpeech for other languages
-        if voiceGender == .zundamon && language == "ja-JP" {
+        if voiceGender == .zundamon {
             isSpeaking = true
             Task { @MainActor [weak self] in
                 await self?.speakWithVoicevox(text)
