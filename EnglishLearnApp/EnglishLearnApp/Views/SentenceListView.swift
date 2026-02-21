@@ -129,6 +129,17 @@ struct SentenceListView: View {
         .onAppear {
             setupRemoteCommandCenter()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .speechServiceDidStartNewPlayback)) { _ in
+            // When individual playback starts (e.g., user taps "英語を聞く" button),
+            // stop continuous playback cleanly to avoid state confusion.
+            // The audio session remains active to allow seamless transition.
+            if isPlayingAll {
+                playbackGeneration += 1
+                isPlayingAll = false
+                playingStep = 0
+                clearNowPlayingInfo()
+            }
+        }
         .onDisappear {
             // Always stop to invalidate any pending async tasks via generation increment
             stopPlayAll()
@@ -187,12 +198,14 @@ struct SentenceListView: View {
     ///
     /// Increments the playback generation counter to ensure any in-flight
     /// completion callbacks from the previous session are ignored.
+    /// Also deactivates the audio session to allow other apps to resume audio.
     private func stopPlayAll() {
         // Increment generation to invalidate all pending tasks
         playbackGeneration += 1
         isPlayingAll = false
         playingStep = 0
         speechService.stop()
+        speechService.deactivateAudioSession()
         clearNowPlayingInfo()
     }
 
@@ -214,9 +227,9 @@ struct SentenceListView: View {
         let sentence = allSentences[playingIndex]
         switch playingStep {
         case 0, 2:
-            speechService.speak(sentence.english, voiceGender: settings.voiceGender)
+            speechService.speak(sentence.english, voiceGender: settings.voiceGender, isContinuousPlayback: true)
         case 1, 3:
-            speechService.speak(sentence.japanese, language: "ja-JP", voiceGender: settings.voiceGender)
+            speechService.speak(sentence.japanese, language: "ja-JP", voiceGender: settings.voiceGender, isContinuousPlayback: true)
         default:
             break
         }
@@ -265,8 +278,7 @@ struct SentenceListView: View {
         // Play command
         playCommandToken = commandCenter.playCommand.addTarget { _ in
             if !self.isPlayingAll {
-                // Invalidate any previous playback tasks and start fresh
-                self.playbackGeneration += 1
+                // startPlayAll() will increment playbackGeneration internally
                 self.startPlayAll()
                 return .success
             }
