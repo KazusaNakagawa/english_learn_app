@@ -126,11 +126,13 @@ struct SentenceListView: View {
 
             // Add a delay before advancing to the next step for better pacing
             let capturedGeneration = playbackGeneration
-            Task { @MainActor in
+            Task {
                 try? await Task.sleep(nanoseconds: 800_000_000)  // 0.8 second delay
-                // Verify generation hasn't changed during the delay
-                guard capturedGeneration == playbackGeneration else { return }
-                advancePlayback()
+                await MainActor.run {
+                    // Verify generation hasn't changed during the delay
+                    guard capturedGeneration == playbackGeneration else { return }
+                    advancePlayback()
+                }
             }
         }
         .onAppear {

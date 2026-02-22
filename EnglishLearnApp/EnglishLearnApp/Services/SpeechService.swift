@@ -5,8 +5,9 @@ extension Notification.Name {
     static let speechServiceDidStartNewPlayback = Notification.Name("speechServiceDidStartNewPlayback")
 }
 
+@MainActor
 class SpeechService: NSObject, ObservableObject {
-    nonisolated(unsafe) private let synthesizer = AVSpeechSynthesizer()
+    private let synthesizer = AVSpeechSynthesizer()
     private var audioPlayer: AVAudioPlayer?
     private var currentUtterance: AVSpeechUtterance?
 
@@ -95,10 +96,8 @@ class SpeechService: NSObject, ObservableObject {
 
         if voiceGender == .zundamon {
             isSpeaking = true
-            Task { @MainActor [weak self] in
-                // Activate audio session before VOICEVOX playback
-                _ = self?.activateAudioSession()
-                await self?.speakWithVoicevox(text)
+            Task { [weak self] in
+                await self?.performVoicevoxPlayback(text)
             }
             return
         }
@@ -117,6 +116,17 @@ class SpeechService: NSObject, ObservableObject {
         synthesizer.speak(utterance)
     }
 
+    /// Wrapper for VOICEVOX playback that activates audio session before synthesis.
+    ///
+    /// - Parameter text: The Japanese text to be spoken
+    private func performVoicevoxPlayback(_ text: String) async {
+        await MainActor.run {
+            // Activate audio session before VOICEVOX playback
+            _ = activateAudioSession()
+        }
+        await speakWithVoicevox(text)
+    }
+
     /// Synthesizes speech using the VOICEVOX API and plays it via AVAudioPlayer.
     ///
     /// This method makes two HTTP requests to the VOICEVOX server:
@@ -124,13 +134,14 @@ class SpeechService: NSObject, ObservableObject {
     /// 2. POST /synthesis to synthesize audio from the query
     ///
     /// - Parameter text: The Japanese text to be spoken
-    @MainActor
     private func speakWithVoicevox(_ text: String) async {
-        let settings = SettingsManager.shared
+        let settings = await MainActor.run { SettingsManager.shared }
         let baseURL = AppConfig.voicevoxBaseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         guard !baseURL.isEmpty else {
-            isSpeaking = false
-            speechFinishedPublisher.send()  // Notify failure to allow playback to continue or stop gracefully
+            await MainActor.run {
+                isSpeaking = false
+                speechFinishedPublisher.send()  // Notify failure to allow playback to continue or stop gracefully
+            }
             return
         }
 
@@ -139,8 +150,10 @@ class SpeechService: NSObject, ObservableObject {
         guard let encodedText = text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
               let queryURL = URL(string: "\(baseURL)/audio_query?text=\(encodedText)&speaker=\(speakerID)"),
               let synthURL = URL(string: "\(baseURL)/synthesis?speaker=\(speakerID)") else {
-            isSpeaking = false
-            speechFinishedPublisher.send()  // Notify failure to allow playback to continue or stop gracefully
+            await MainActor.run {
+                isSpeaking = false
+                speechFinishedPublisher.send()  // Notify failure to allow playback to continue or stop gracefully
+            }
             return
         }
 
@@ -150,8 +163,10 @@ class SpeechService: NSObject, ObservableObject {
             let (queryData, queryResponse) = try await URLSession.shared.data(for: queryRequest)
             guard let queryHTTP = queryResponse as? HTTPURLResponse, (200...299).contains(queryHTTP.statusCode) else {
                 print("VOICEVOX audio_query failed: \((queryResponse as? HTTPURLResponse)?.statusCode ?? -1)")
-                isSpeaking = false
-                speechFinishedPublisher.send()  // Notify failure to allow playback to continue or stop gracefully
+                await MainActor.run {
+                    isSpeaking = false
+                    speechFinishedPublisher.send()  // Notify failure to allow playback to continue or stop gracefully
+                }
                 return
             }
 
@@ -162,20 +177,42 @@ class SpeechService: NSObject, ObservableObject {
             let (audioData, synthResponse) = try await URLSession.shared.data(for: synthRequest)
             guard let synthHTTP = synthResponse as? HTTPURLResponse, (200...299).contains(synthHTTP.statusCode) else {
                 print("VOICEVOX synthesis failed: \((synthResponse as? HTTPURLResponse)?.statusCode ?? -1)")
-                isSpeaking = false
-                speechFinishedPublisher.send()  // Notify failure to allow playback to continue or stop gracefully
+                await MainActor.run {
+                    isSpeaking = false
+                    speechFinishedPublisher.send()  // Notify failure to allow playback to continue or stop gracefully
+                }
                 return
             }
 
-            audioPlayer = try AVAudioPlayer(data: audioData)
-            audioPlayer?.delegate = self
-            // Ensure audio session is active before playing synthesized audio
-            _ = activateAudioSession()
-            audioPlayer?.play()
+            // Validate audio data before creating AVAudioPlayer to avoid buffer warnings
+            guard !audioData.isEmpty else {
+                print("VOICEVOX returned empty audio data")
+                await MainActor.run {
+                    isSpeaking = false
+                    speechFinishedPublisher.send()
+                }
+                return
+            }
+
+            await MainActor.run {
+                do {
+                    audioPlayer = try AVAudioPlayer(data: audioData)
+                    audioPlayer?.delegate = self
+                    // Ensure audio session is active before playing synthesized audio
+                    _ = activateAudioSession()
+                    audioPlayer?.play()
+                } catch {
+                    print("AVAudioPlayer error: \(error.localizedDescription)")
+                    isSpeaking = false
+                    speechFinishedPublisher.send()
+                }
+            }
         } catch {
             print("VOICEVOX error: \(error.localizedDescription)")
-            isSpeaking = false
-            speechFinishedPublisher.send()  // Notify failure to allow playback to continue or stop gracefully
+            await MainActor.run {
+                isSpeaking = false
+                speechFinishedPublisher.send()  // Notify failure to allow playback to continue or stop gracefully
+            }
         }
     }
 
@@ -238,8 +275,9 @@ class SpeechService: NSObject, ObservableObject {
 }
 
 extension SpeechService: AVSpeechSynthesizerDelegate {
-    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
-        DispatchQueue.main.async {
+    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
             // Only process if this utterance is the current one (not an old cancelled one)
             guard utterance === self.currentUtterance, self.isSpeaking else { return }
             self.isSpeaking = false
@@ -247,8 +285,9 @@ extension SpeechService: AVSpeechSynthesizerDelegate {
         }
     }
 
-    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
-        DispatchQueue.main.async {
+    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
             // Only process if this utterance is still the current one
             // If a new speech started, currentUtterance will be different
             guard utterance === self.currentUtterance else { return }
@@ -258,8 +297,9 @@ extension SpeechService: AVSpeechSynthesizerDelegate {
 }
 
 extension SpeechService: AVAudioPlayerDelegate {
-    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
-        DispatchQueue.main.async {
+    nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
             // Only process if this player is still the current one (not an old cancelled one)
             guard self.audioPlayer === player, self.isSpeaking else { return }
             self.isSpeaking = false
