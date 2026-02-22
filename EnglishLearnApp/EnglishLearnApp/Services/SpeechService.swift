@@ -14,6 +14,18 @@ extension Notification.Name {
 /// These warnings do not impact user experience or app stability.
 @MainActor
 class SpeechService: NSObject, ObservableObject {
+    // MARK: - Constants
+
+    private enum Constants {
+        static let speechRate: Float = AVSpeechUtteranceDefaultSpeechRate * 0.8
+        static let pitchMultiplier: Float = 1.0
+        static let volume: Float = 1.0
+        static let utteranceDelay: TimeInterval = 0.0
+        static let voiceGenderKey = "voiceGender"
+    }
+
+    // MARK: - Properties
+
     private let synthesizer = AVSpeechSynthesizer()
     private var audioPlayer: AVAudioPlayer?
     private var currentUtterance: AVSpeechUtterance?
@@ -72,11 +84,9 @@ class SpeechService: NSObject, ObservableObject {
     }
 
     @objc private func updateVoiceGender() {
-        if let saved = UserDefaults.standard.string(forKey: "voiceGender"),
+        if let saved = UserDefaults.standard.string(forKey: Constants.voiceGenderKey),
            let gender = SettingsManager.VoiceGender(rawValue: saved) {
-            DispatchQueue.main.async {
-                self.voiceGender = gender
-            }
+            voiceGender = gender
         }
     }
 
@@ -110,15 +120,7 @@ class SpeechService: NSObject, ObservableObject {
             return
         }
 
-        let utterance = AVSpeechUtterance(string: text)
-        utterance.voice = getVoiceForGender(voiceGender, language: language)
-        utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.8
-        utterance.pitchMultiplier = 1.0
-        utterance.volume = 1.0
-
-        // Pre-warm the utterance to avoid buffer warnings (iOS 17 workaround)
-        utterance.preUtteranceDelay = 0.0
-        utterance.postUtteranceDelay = 0.0
+        let utterance = createUtterance(text: text, voiceGender: voiceGender, language: language)
 
         currentUtterance = utterance
         isSpeaking = true
@@ -152,21 +154,15 @@ class SpeechService: NSObject, ObservableObject {
         }
 
         do {
-            var queryRequest = URLRequest(url: queryURL)
-            queryRequest.httpMethod = "POST"
-            let (queryData, queryResponse) = try await URLSession.shared.data(for: queryRequest)
-            guard let queryHTTP = queryResponse as? HTTPURLResponse, (200...299).contains(queryHTTP.statusCode) else {
+            let (queryData, queryResponse) = try await performPOSTRequest(to: queryURL)
+            guard isSuccessfulResponse(queryResponse) else {
                 print("VOICEVOX audio_query failed: \((queryResponse as? HTTPURLResponse)?.statusCode ?? -1)")
                 handleVoicevoxFailure()
                 return
             }
 
-            var synthRequest = URLRequest(url: synthURL)
-            synthRequest.httpMethod = "POST"
-            synthRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            synthRequest.httpBody = queryData
-            let (audioData, synthResponse) = try await URLSession.shared.data(for: synthRequest)
-            guard let synthHTTP = synthResponse as? HTTPURLResponse, (200...299).contains(synthHTTP.statusCode) else {
+            let (audioData, synthResponse) = try await performPOSTRequest(to: synthURL, body: queryData, contentType: "application/json")
+            guard isSuccessfulResponse(synthResponse) else {
                 print("VOICEVOX synthesis failed: \((synthResponse as? HTTPURLResponse)?.statusCode ?? -1)")
                 handleVoicevoxFailure()
                 return
@@ -202,6 +198,38 @@ class SpeechService: NSObject, ObservableObject {
             self?.isSpeaking = false
             self?.speechFinishedPublisher.send()
         }
+    }
+
+    // MARK: - Helper Methods
+
+    /// Creates and configures an AVSpeechUtterance with standard settings.
+    private func createUtterance(text: String, voiceGender: SettingsManager.VoiceGender, language: String) -> AVSpeechUtterance {
+        let utterance = AVSpeechUtterance(string: text)
+        utterance.voice = getVoiceForGender(voiceGender, language: language)
+        utterance.rate = Constants.speechRate
+        utterance.pitchMultiplier = Constants.pitchMultiplier
+        utterance.volume = Constants.volume
+        // Pre-warm the utterance to avoid buffer warnings (iOS 17 workaround)
+        utterance.preUtteranceDelay = Constants.utteranceDelay
+        utterance.postUtteranceDelay = Constants.utteranceDelay
+        return utterance
+    }
+
+    /// Validates an HTTP response for successful status code.
+    private func isSuccessfulResponse(_ response: URLResponse?) -> Bool {
+        guard let httpResponse = response as? HTTPURLResponse else { return false }
+        return (200...299).contains(httpResponse.statusCode)
+    }
+
+    /// Performs a POST request to the specified URL.
+    private func performPOSTRequest(to url: URL, body: Data? = nil, contentType: String? = nil) async throws -> (Data, URLResponse) {
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        if let contentType {
+            request.setValue(contentType, forHTTPHeaderField: "Content-Type")
+        }
+        request.httpBody = body
+        return try await URLSession.shared.data(for: request)
     }
 
     /// Returns an appropriate AVSpeechSynthesisVoice for the specified gender and language.

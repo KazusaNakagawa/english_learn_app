@@ -9,7 +9,7 @@
 /* Begin PBXBuildFile section */
 		850E49D02F4952F8000F46C6 /* ActionBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 850E49CE2F4952F8000F46C6 /* ActionBar.swift */; };
 		850E49D12F4952F8000F46C6 /* SelectableListRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 850E49CF2F4952F8000F46C6 /* SelectableListRow.swift */; };
-		85F683372F4AA69C00389866 /* WordImportErrorHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85F683362F4AA69C00389866 /* WordImportErrorHandler.swift */; };
+		85F683392F4AA78700389866 /* WordImportErrorHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85F683382F4AA78700389866 /* WordImportErrorHandler.swift */; };
 		A1000001238D1234567890AB /* EnglishLearnAppApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000011238D1234567890AB /* EnglishLearnAppApp.swift */; };
 		A1000002238D1234567890AB /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000012238D1234567890AB /* ContentView.swift */; };
 		A1000003238D1234567890AB /* Word.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000013238D1234567890AB /* Word.swift */; };
@@ -46,7 +46,7 @@
 /* Begin PBXFileReference section */
 		850E49CE2F4952F8000F46C6 /* ActionBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionBar.swift; sourceTree = "<group>"; };
 		850E49CF2F4952F8000F46C6 /* SelectableListRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectableListRow.swift; sourceTree = "<group>"; };
-		85F683362F4AA69C00389866 /* WordImportErrorHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WordImportErrorHandler.swift; sourceTree = "<group>"; };
+		85F683382F4AA78700389866 /* WordImportErrorHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WordImportErrorHandler.swift; sourceTree = "<group>"; };
 		A1000011238D1234567890AB /* EnglishLearnAppApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnglishLearnAppApp.swift; sourceTree = "<group>"; };
 		A1000012238D1234567890AB /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		A1000013238D1234567890AB /* Word.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Word.swift; sourceTree = "<group>"; };
@@ -128,7 +128,7 @@
 		A1000033238D1234567890AB /* Models */ = {
 			isa = PBXGroup;
 			children = (
-				85F683362F4AA69C00389866 /* WordImportErrorHandler.swift */,
+				85F683382F4AA78700389866 /* WordImportErrorHandler.swift */,
 				A1000013238D1234567890AB /* Word.swift */,
 				A100007A238D1234567890AB /* PromptPreset.swift */,
 			);
@@ -293,9 +293,9 @@
 				A1000027238D1234567890AB /* AppConfig.swift in Sources */,
 				A100007B238D1234567890AB /* PromptPreset.swift in Sources */,
 				A100007D238D1234567890AB /* PromptPresetsView.swift in Sources */,
-				85F683372F4AA69C00389866 /* WordImportErrorHandler.swift in Sources */,
 				A1000081238D1234567890AB /* ActivityPresenter.swift in Sources */,
 				A1000083238D1234567890AB /* SelectionState.swift in Sources */,
+				85F683392F4AA78700389866 /* WordImportErrorHandler.swift in Sources */,
 				A1000085238D1234567890AB /* EmptyListView.swift in Sources */,
 				A1000087238D1234567890AB /* PronunciationResultView.swift in Sources */,
 				A1000089238D1234567890AB /* RecognitionResultView.swift in Sources */,
