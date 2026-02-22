@@ -10,6 +10,7 @@
 		850E49D02F4952F8000F46C6 /* ActionBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 850E49CE2F4952F8000F46C6 /* ActionBar.swift */; };
 		850E49D12F4952F8000F46C6 /* SelectableListRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 850E49CF2F4952F8000F46C6 /* SelectableListRow.swift */; };
 		85F6832F2F4A98C600389866 /* WordImportErrorHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85F6832E2F4A98C600389866 /* WordImportErrorHandler.swift */; };
+		85F683332F4AA38100389866 /* WordImportErrorHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85F683322F4AA38100389866 /* WordImportErrorHandler.swift */; };
 		A1000001238D1234567890AB /* EnglishLearnAppApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000011238D1234567890AB /* EnglishLearnAppApp.swift */; };
 		A1000002238D1234567890AB /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000012238D1234567890AB /* ContentView.swift */; };
 		A1000003238D1234567890AB /* Word.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000013238D1234567890AB /* Word.swift */; };
@@ -47,6 +48,7 @@
 		850E49CE2F4952F8000F46C6 /* ActionBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionBar.swift; sourceTree = "<group>"; };
 		850E49CF2F4952F8000F46C6 /* SelectableListRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectableListRow.swift; sourceTree = "<group>"; };
 		85F6832E2F4A98C600389866 /* WordImportErrorHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WordImportErrorHandler.swift; sourceTree = "<group>"; };
+		85F683322F4AA38100389866 /* WordImportErrorHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WordImportErrorHandler.swift; sourceTree = "<group>"; };
 		A1000011238D1234567890AB /* EnglishLearnAppApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnglishLearnAppApp.swift; sourceTree = "<group>"; };
 		A1000012238D1234567890AB /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		A1000013238D1234567890AB /* Word.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Word.swift; sourceTree = "<group>"; };
@@ -130,6 +132,7 @@
 			children = (
 				A1000013238D1234567890AB /* Word.swift */,
 				85F6832E2F4A98C600389866 /* WordImportErrorHandler.swift */,
+				85F683322F4AA38100389866 /* WordImportErrorHandler.swift */,
 				A100007A238D1234567890AB /* PromptPreset.swift */,
 			);
 			path = Models;
@@ -293,6 +296,7 @@
 				A1000027238D1234567890AB /* AppConfig.swift in Sources */,
 				A100007B238D1234567890AB /* PromptPreset.swift in Sources */,
 				A100007D238D1234567890AB /* PromptPresetsView.swift in Sources */,
+				85F683332F4AA38100389866 /* WordImportErrorHandler.swift in Sources */,
 				A1000081238D1234567890AB /* ActivityPresenter.swift in Sources */,
 				A1000083238D1234567890AB /* SelectionState.swift in Sources */,
 				85F6832F2F4A98C600389866 /* WordImportErrorHandler.swift in Sources */,
@@ -440,7 +444,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"EnglishLearnApp/Preview Content\"";
-				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
+				DEVELOPMENT_TEAM = 92Z8G96R6X;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = EnglishLearnApp/Info.plist;
@@ -474,7 +478,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"EnglishLearnApp/Preview Content\"";
-				DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
+				DEVELOPMENT_TEAM = 92Z8G96R6X;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = EnglishLearnApp/Info.plist;

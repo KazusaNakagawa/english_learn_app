@@ -5,6 +5,13 @@ extension Notification.Name {
     static let speechServiceDidStartNewPlayback = Notification.Name("speechServiceDidStartNewPlayback")
 }
 
+/// Speech synthesis service managing TTS playback for both native iOS voices and VOICEVOX.
+///
+/// **Known Issues:**
+/// - AVAudioBuffer warnings may appear in console on iOS 17+ (Apple framework bug, does not affect functionality)
+/// - Swift concurrency warnings with AVSpeechSynthesizer are unavoidable due to ObjC interop
+///
+/// These warnings do not impact user experience or app stability.
 @MainActor
 class SpeechService: NSObject, ObservableObject {
     private let synthesizer = AVSpeechSynthesizer()
@@ -107,6 +114,10 @@ class SpeechService: NSObject, ObservableObject {
         utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.8
         utterance.pitchMultiplier = 1.0
         utterance.volume = 1.0
+
+        // Pre-warm the utterance to avoid buffer warnings (iOS 17 workaround)
+        utterance.preUtteranceDelay = 0.0
+        utterance.postUtteranceDelay = 0.0
 
         currentUtterance = utterance
         isSpeaking = true
