@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 # Setup git hooks for this repository
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"

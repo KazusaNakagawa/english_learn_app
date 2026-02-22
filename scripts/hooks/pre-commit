@@ -4,10 +4,11 @@
 
 PROJECT_FILE="EnglishLearnApp/EnglishLearnApp.xcodeproj/project.pbxproj"
 
-# Check if project.pbxproj is being committed
-if git diff --cached --name-only | grep -q "$PROJECT_FILE"; then
+# Check if project.pbxproj is being committed (use -F for literal string matching)
+if git diff --cached --name-only | grep -qF "$PROJECT_FILE"; then
   # Check for hardcoded DEVELOPMENT_TEAM (not using variable reference)
-  if git diff --cached "$PROJECT_FILE" | grep -E '^\+.*DEVELOPMENT_TEAM = [^"$]' > /dev/null; then
+  # Match any added line with DEVELOPMENT_TEAM = <value>, then exclude lines with $(DEVELOPMENT_TEAM)
+  if git diff --cached "$PROJECT_FILE" | grep -E '^\+.*DEVELOPMENT_TEAM\s*=' | grep -v '\$(DEVELOPMENT_TEAM)' > /dev/null; then
     echo "❌ Error: DEVELOPMENT_TEAM must use variable reference"
     echo ""
     echo "Found hardcoded DEVELOPMENT_TEAM in $PROJECT_FILE"
