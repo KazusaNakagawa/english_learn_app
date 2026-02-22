@@ -103,27 +103,9 @@ The Lambda runs a Docker image (`voicevox/voicevox_engine:cpu-ubuntu22.04-0.25.1
 Two files must be created locally before building the iOS app:
 
 - `EnglishLearnApp/EnglishLearnApp/AppConfig.swift` — contains `voicevoxBaseURL` and `voicevoxApiKey`. Copy from `AppConfig.swift.example`.
-- `EnglishLearnApp/Config.xcconfig` — Xcode build configuration (includes `VOICEVOX_API_KEY`). Copy from `Config.xcconfig.example`.
+- `EnglishLearnApp/Config.xcconfig` — Xcode build configuration. Copy from `Config.xcconfig.example`.
 
-### Setting up VOICEVOX API key
-
-1. Generate an API key (64-character hex string):
-   ```bash
-   export VOICEVOX_API_KEY_POC="$(openssl rand -hex 32)"
-   echo $VOICEVOX_API_KEY_POC  # Save this value
-   ```
-
-2. Deploy the CDK stack with the API key:
-   ```bash
-   cd aws
-   npm run deploy:poc
-   ```
-
-3. Copy the API key from the deployment output (`VoicevoxApiKey`) and add it to:
-   - `EnglishLearnApp/Config.xcconfig` (for Xcode build)
-   - `EnglishLearnApp/EnglishLearnApp/AppConfig.swift` (hardcoded fallback)
-
-**Important:** The API key must match between the deployed Lambda Authorizer and the iOS app.
+For API key setup, see [docs/02.voicevox_api_authentication.md](docs/02.voicevox_api_authentication.md).
 
 ## Development Workflow
 
@@ -143,10 +125,4 @@ DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 
 ## Security
 
-The VOICEVOX API Gateway is protected by:
-
-- **Lambda Authorizer:** All routes (`/audio_query`, `/synthesis`, `/speakers`) require a valid `x-api-key` header. Unauthorized requests return `403 Forbidden`.
-- **CORS:** Disabled (native iOS app does not require CORS). `/version` (health check) remains public.
-- **Throttling:** Per-environment rate limits (see table above) prevent abuse and cap costs.
-
-The API key is set via environment variable `VOICEVOX_API_KEY_{ENV}` before CDK deployment and is stored in the Lambda Authorizer. Issue #12 (multi-env deploy) tracks additional hardening for production.
+The VOICEVOX API requires `x-api-key` header authentication. See [docs/02.voicevox_api_authentication.md](docs/02.voicevox_api_authentication.md) for details.
