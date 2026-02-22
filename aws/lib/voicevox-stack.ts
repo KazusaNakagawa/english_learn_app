@@ -239,13 +239,9 @@ export class VoicevoxStack extends cdk.Stack {
       description: 'VOICEVOX Lambda function ARN',
     });
 
-    // Only output API key in non-production environments for security
-    if (stackEnv !== 'pro') {
-      new cdk.CfnOutput(this, 'VoicevoxApiKey', {
-        value: apiKeyValue,
-        description: 'API key for VOICEVOX API (add to Config.xcconfig as VOICEVOX_API_KEY)',
-        // Note: exportName removed to prevent cross-stack access to secrets
-      });
-    }
+    // API key output removed for security:
+    // - CloudFormation Outputs are visible in AWS Console and CLI
+    // - API key is already known from the environment variable used during deployment
+    // - Use the value of VOICEVOX_API_KEY_{ENV} instead
   }
 }
