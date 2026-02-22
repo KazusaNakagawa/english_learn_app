@@ -41,7 +41,7 @@ struct WordListView: View {
 
     // MARK: - Continuous playback for all words
     @State private var isPlayingAllWords = false
-    @State private var playingFlatIndex: Int = 0  // Index into allWordSentences
+    @State private var playingFlatIndex: Int = 0  // Index into playAllWordSentences
     @State private var playingStep: Int = 0       // 0=EN, 1=JA, 2=EN (bilingual) or 0=EN, 1=EN (English-only)
     @State private var playbackGeneration = 0      // Invalidate old async tasks
     @State private var expectedGeneration = 0
@@ -49,6 +49,7 @@ struct WordListView: View {
     @State private var pauseCommandToken: Any? = nil
     @State private var nextCommandToken: Any? = nil
     @State private var previousCommandToken: Any? = nil
+    @State private var playAllWordSentences: [(Word, Sentence)] = []  // Cached snapshot for playback
 
     private var sortOption: WordSortOption {
         WordSortOption(rawValue: sortOptionRaw) ?? .alphabeticalAZ
@@ -210,9 +211,21 @@ struct WordListView: View {
         }
         // Intentionally only clears selectedIDs; isSelecting stays true so the
         // user can continue selecting from the newly filtered results.
-        .onChange(of: searchText) { _, _ in selection.selectedIDs = [] }
-        .onChange(of: selectedLetter) { _, _ in selection.selectedIDs = [] }
-        .onChange(of: selectedCategory) { _, _ in selection.selectedIDs = [] }
+        .onChange(of: searchText) { _, _ in
+            selection.selectedIDs = []
+            if isPlayingAllWords { stopPlayAllWords() }
+        }
+        .onChange(of: selectedLetter) { _, _ in
+            selection.selectedIDs = []
+            if isPlayingAllWords { stopPlayAllWords() }
+        }
+        .onChange(of: selectedCategory) { _, _ in
+            selection.selectedIDs = []
+            if isPlayingAllWords { stopPlayAllWords() }
+        }
+        .onChange(of: sortOptionRaw) { _, _ in
+            if isPlayingAllWords { stopPlayAllWords() }
+        }
         // Continuous playback event handlers
         .onReceive(speechService.speechFinishedPublisher) { _ in
             guard isPlayingAllWords else { return }
@@ -377,7 +390,9 @@ struct WordListView: View {
 
     /// Starts continuous playback across all words and their sentences.
     private func startPlayAllWords() {
-        guard !allWordSentences.isEmpty else { return }
+        // Snapshot the current filtered word/sentence list
+        let snapshot = allWordSentences
+        guard !snapshot.isEmpty else { return }
 
         // Increment generation to invalidate pending tasks
         playbackGeneration += 1
@@ -391,6 +406,7 @@ struct WordListView: View {
         Task { @MainActor in
             guard currentGen == playbackGeneration else { return }
 
+            playAllWordSentences = snapshot
             playingFlatIndex = 0
             isPlayingAllWords = true
             playingStep = 0
@@ -403,6 +419,7 @@ struct WordListView: View {
         playbackGeneration += 1
         isPlayingAllWords = false
         playingStep = 0
+        playAllWordSentences = []
         speechService.stop()
         speechService.deactivateAudioSession()
         clearNowPlayingInfo()
@@ -410,14 +427,14 @@ struct WordListView: View {
 
     /// Speaks the text for the current sentence and playback step.
     private func speakCurrentStepAllWords() {
-        guard playingFlatIndex < allWordSentences.count else {
+        guard playingFlatIndex < playAllWordSentences.count else {
             stopPlayAllWords()
             return
         }
 
         expectedGeneration = playbackGeneration
 
-        let (word, sentence) = allWordSentences[playingFlatIndex]
+        let (word, sentence) = playAllWordSentences[playingFlatIndex]
 
         switch settings.playbackMode {
         case .bilingual:
@@ -446,67 +463,80 @@ struct WordListView: View {
             speakCurrentStepAllWords()
         } else {
             let nextIdx = playingFlatIndex + 1
-            if nextIdx < allWordSentences.count {
+            if nextIdx < playAllWordSentences.count {
                 playingFlatIndex = nextIdx
                 playingStep = 0
                 speakCurrentStepAllWords()
             } else {
-                // All done
+                // All done - clean up audio session
                 isPlayingAllWords = false
                 playingStep = 0
+                playAllWordSentences = []
+                speechService.deactivateAudioSession()
                 clearNowPlayingInfo()
             }
         }
     }
 
     /// Sets up remote command center for lock screen controls.
+    /// Idempotent: removes existing handlers before adding new ones.
     private func setupRemoteCommandCenter() {
         let commandCenter = MPRemoteCommandCenter.shared()
 
+        // Remove existing handlers to prevent duplicates
+        if let t = playCommandToken { commandCenter.playCommand.removeTarget(t) }
+        if let t = pauseCommandToken { commandCenter.pauseCommand.removeTarget(t) }
+        if let t = nextCommandToken { commandCenter.nextTrackCommand.removeTarget(t) }
+        if let t = previousCommandToken { commandCenter.previousTrackCommand.removeTarget(t) }
+
         playCommandToken = commandCenter.playCommand.addTarget { _ in
-            if !self.isPlayingAllWords {
-                self.startPlayAllWords()
-                return .success
+            DispatchQueue.main.async {
+                if !self.isPlayingAllWords {
+                    self.startPlayAllWords()
+                }
             }
-            return .commandFailed
+            return .success
         }
 
         pauseCommandToken = commandCenter.pauseCommand.addTarget { _ in
-            if self.isPlayingAllWords {
-                self.stopPlayAllWords()
-                return .success
+            DispatchQueue.main.async {
+                if self.isPlayingAllWords {
+                    self.stopPlayAllWords()
+                }
             }
-            return .commandFailed
+            return .success
         }
 
         nextCommandToken = commandCenter.nextTrackCommand.addTarget { _ in
-            if self.isPlayingAllWords && self.playingFlatIndex + 1 < self.allWordSentences.count {
-                self.playbackGeneration += 1
-                self.playingFlatIndex += 1
-                self.playingStep = 0
-                self.speakCurrentStepAllWords()
-                return .success
+            DispatchQueue.main.async {
+                if self.isPlayingAllWords && self.playingFlatIndex + 1 < self.playAllWordSentences.count {
+                    self.playbackGeneration += 1
+                    self.playingFlatIndex += 1
+                    self.playingStep = 0
+                    self.speakCurrentStepAllWords()
+                }
             }
-            return .commandFailed
+            return .success
         }
 
         previousCommandToken = commandCenter.previousTrackCommand.addTarget { _ in
-            if self.isPlayingAllWords && self.playingFlatIndex > 0 {
-                self.playbackGeneration += 1
-                self.playingFlatIndex -= 1
-                self.playingStep = 0
-                self.speakCurrentStepAllWords()
-                return .success
+            DispatchQueue.main.async {
+                if self.isPlayingAllWords && self.playingFlatIndex > 0 {
+                    self.playbackGeneration += 1
+                    self.playingFlatIndex -= 1
+                    self.playingStep = 0
+                    self.speakCurrentStepAllWords()
+                }
             }
-            return .commandFailed
+            return .success
         }
     }
 
     /// Updates Now Playing info for lock screen/Control Center.
     private func updateNowPlayingInfoAllWords() {
-        guard playingFlatIndex < allWordSentences.count else { return }
+        guard playingFlatIndex < playAllWordSentences.count else { return }
 
-        let (word, sentence) = allWordSentences[playingFlatIndex]
+        let (word, sentence) = playAllWordSentences[playingFlatIndex]
         let maxSteps = settings.playbackMode == .bilingual ? 3 : 2
         let clampedStep = min(max(playingStep, 0), maxSteps - 1)
 
