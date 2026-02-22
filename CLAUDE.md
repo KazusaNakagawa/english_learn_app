@@ -109,6 +109,18 @@ For API key setup, see [docs/02.voicevox_api_authentication.md](docs/02.voicevox
 
 ## Development Workflow
 
+### Initial Setup
+
+Install git hooks to prevent common commit mistakes:
+
+```bash
+./scripts/setup-hooks.sh
+```
+
+This installs a pre-commit hook that blocks commits with hardcoded `DEVELOPMENT_TEAM` values.
+
+### Workflow
+
 1. **Create an Issue** — file a GitHub Issue for the task before starting.
 2. **Cut a working branch** — pull the latest `develop` branch, then create a feature branch from it.
 3. **Implement** — make the code changes.
