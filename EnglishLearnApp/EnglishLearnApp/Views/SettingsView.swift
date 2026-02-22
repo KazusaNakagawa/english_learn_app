@@ -237,11 +237,12 @@ struct SettingsView: View {
                     pendingImportWords = try WordDataManager.shared.importFromJSON(url: url)
                     showingImportConfirm = true
                 } catch {
-                    importErrorMessage = "ファイルの読み込みに失敗しました。\n正しいエクスポートファイルか確認してください。"
+                    // Use detailed error message from WordImportError
+                    importErrorMessage = error.localizedDescription
                     showingImportError = true
                 }
             case .failure(let error):
-                importErrorMessage = error.localizedDescription
+                importErrorMessage = "ファイル選択エラー\n\n\(error.localizedDescription)"
                 showingImportError = true
             }
         }

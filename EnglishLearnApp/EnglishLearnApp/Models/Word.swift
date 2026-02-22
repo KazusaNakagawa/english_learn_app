@@ -1,5 +1,30 @@
 import Foundation
 
+// MARK: - Import Errors
+
+enum WordImportError: LocalizedError {
+    case fileNotReadable(String)
+    case invalidJSONFormat(String)
+    case missingRequiredFields(String)
+    case emptyWordList
+    case unknown(Error)
+
+    var errorDescription: String? {
+        switch self {
+        case .fileNotReadable(let detail):
+            return "ファイルの読み込みエラー\n\n\(detail)"
+        case .invalidJSONFormat(let detail):
+            return "JSON形式のエラー\n\n\(detail)\n\n正しいエクスポートファイルか確認してください。"
+        case .missingRequiredFields(let detail):
+            return "データ形式のエラー\n\n\(detail)\n\n必須フィールドが不足しています。"
+        case .emptyWordList:
+            return "インポートエラー\n\nファイルに単語データが含まれていません。"
+        case .unknown(let error):
+            return "予期しないエラー\n\n\(error.localizedDescription)"
+        }
+    }
+}
+
 // MARK: - Word Models
 
 struct Sentence: Codable, Identifiable {
@@ -223,9 +248,42 @@ class WordDataManager: ObservableObject {
 
     /// Decodes words from a JSON file URL. Throws on parse failure.
     func importFromJSON(url: URL) throws -> [Word] {
-        let data = try Data(contentsOf: url)
+        // Read file
+        let data: Data
+        do {
+            data = try Data(contentsOf: url)
+        } catch {
+            if (error as NSError).code == NSFileReadNoSuchFileError {
+                throw WordImportError.fileNotReadable("ファイルが見つかりません。")
+            } else if (error as NSError).code == NSFileReadNoPermissionError {
+                throw WordImportError.fileNotReadable("ファイルへのアクセス権限がありません。")
+            } else {
+                throw WordImportError.fileNotReadable(error.localizedDescription)
+            }
+        }
+
+        // Decode JSON
         let decoder = JSONDecoder()
-        let wordList = try decoder.decode(WordList.self, from: data)
+        let wordList: WordList
+        do {
+            wordList = try decoder.decode(WordList.self, from: data)
+        } catch let DecodingError.dataCorrupted(context) {
+            throw WordImportError.invalidJSONFormat("JSONファイルが破損しています。\n\(context.debugDescription)")
+        } catch let DecodingError.keyNotFound(key, context) {
+            throw WordImportError.missingRequiredFields("必須キー '\(key.stringValue)' が見つかりません。\nパス: \(context.codingPath.map { $0.stringValue }.joined(separator: " → "))")
+        } catch let DecodingError.typeMismatch(type, context) {
+            throw WordImportError.invalidJSONFormat("型が一致しません。'\(type)' が期待されています。\nパス: \(context.codingPath.map { $0.stringValue }.joined(separator: " → "))")
+        } catch let DecodingError.valueNotFound(type, context) {
+            throw WordImportError.missingRequiredFields("値が見つかりません。'\(type)' が期待されています。\nパス: \(context.codingPath.map { $0.stringValue }.joined(separator: " → "))")
+        } catch {
+            throw WordImportError.unknown(error)
+        }
+
+        // Validate data
+        guard !wordList.words.isEmpty else {
+            throw WordImportError.emptyWordList
+        }
+
         return wordList.words
     }
 
