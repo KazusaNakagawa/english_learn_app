@@ -138,16 +138,16 @@ class SpeechService: NSObject, ObservableObject {
     private func speakWithVoicevox(_ text: String) async {
         let baseURL = AppConfig.voicevoxBaseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         guard !baseURL.isEmpty else {
-            await handleVoicevoxFailure()
+            handleVoicevoxFailure()
             return
         }
 
-        let speakerID = await SettingsManager.shared.voicevoxStyle.rawValue
+        let speakerID = SettingsManager.shared.voicevoxStyle.rawValue
 
         guard let encodedText = text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
               let queryURL = URL(string: "\(baseURL)/audio_query?text=\(encodedText)&speaker=\(speakerID)"),
               let synthURL = URL(string: "\(baseURL)/synthesis?speaker=\(speakerID)") else {
-            await handleVoicevoxFailure()
+            handleVoicevoxFailure()
             return
         }
 
@@ -157,7 +157,7 @@ class SpeechService: NSObject, ObservableObject {
             let (queryData, queryResponse) = try await URLSession.shared.data(for: queryRequest)
             guard let queryHTTP = queryResponse as? HTTPURLResponse, (200...299).contains(queryHTTP.statusCode) else {
                 print("VOICEVOX audio_query failed: \((queryResponse as? HTTPURLResponse)?.statusCode ?? -1)")
-                await handleVoicevoxFailure()
+                handleVoicevoxFailure()
                 return
             }
 
@@ -168,14 +168,14 @@ class SpeechService: NSObject, ObservableObject {
             let (audioData, synthResponse) = try await URLSession.shared.data(for: synthRequest)
             guard let synthHTTP = synthResponse as? HTTPURLResponse, (200...299).contains(synthHTTP.statusCode) else {
                 print("VOICEVOX synthesis failed: \((synthResponse as? HTTPURLResponse)?.statusCode ?? -1)")
-                await handleVoicevoxFailure()
+                handleVoicevoxFailure()
                 return
             }
 
             // Validate audio data before creating AVAudioPlayer to avoid buffer warnings
             guard !audioData.isEmpty else {
                 print("VOICEVOX returned empty audio data")
-                await handleVoicevoxFailure()
+                handleVoicevoxFailure()
                 return
             }
 
@@ -192,15 +192,16 @@ class SpeechService: NSObject, ObservableObject {
             }
         } catch {
             print("VOICEVOX error: \(error.localizedDescription)")
-            await handleVoicevoxFailure()
+            handleVoicevoxFailure()
         }
     }
 
     /// Handles VOICEVOX playback failure by resetting state and notifying listeners.
-    @MainActor
-    private func handleVoicevoxFailure() {
-        isSpeaking = false
-        speechFinishedPublisher.send()
+    private nonisolated func handleVoicevoxFailure() {
+        Task { @MainActor [weak self] in
+            self?.isSpeaking = false
+            self?.speechFinishedPublisher.send()
+        }
     }
 
     /// Returns an appropriate AVSpeechSynthesisVoice for the specified gender and language.
