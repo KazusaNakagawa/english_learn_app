@@ -1,13 +1,29 @@
 /// Application-level configuration constants.
 ///
-/// Set voicevoxBaseURL to your deployed API Gateway endpoint.
-/// This file is listed in .gitignore and should not be committed with real values.
+/// ⚠️ SECURITY WARNING:
+/// - This file is gitignored and should NEVER be committed with real values
+/// - API keys will be embedded in the compiled binary (acceptable for personal/development use)
+/// - For production apps distributed via App Store, consider using:
+///   - Remote configuration (e.g., Firebase Remote Config)
+///   - Secure backend API that doesn't expose keys to clients
+///   - iOS Keychain for runtime storage (requires initial secure provisioning)
 ///
 /// Setup:
-///   1. Copy AppConfig.swift.example to AppConfig.swift (if not already done)
-///   2. Replace the placeholder URL with your actual API Gateway endpoint
+///   1. Copy AppConfig.swift.example to AppConfig.swift
+///   2. Deploy the CDK stack: cd aws && npm run deploy:poc
+///   3. Get API endpoint from deployment output (VoicevoxApiEndpoint)
+///   4. Get API key from environment variable: echo $VOICEVOX_API_KEY_POC
+///   5. Replace placeholder values below with actual values
+///
+/// Note: This approach is suitable for personal/internal apps not distributed publicly.
 enum AppConfig {
     /// Base URL for the VOICEVOX engine API (no trailing slash).
-    /// Replace with your actual API Gateway endpoint after deploying the CDK stack.
+    /// Example: https://abc123xyz.execute-api.ap-northeast-1.amazonaws.com
     static let voicevoxBaseURL = "https://xxxxxxxxxx.execute-api.ap-northeast-1.amazonaws.com"
+
+    /// API key for authenticating with the VOICEVOX backend.
+    /// ⚠️ WARNING: This key will be embedded in the app binary.
+    /// Only use this approach for personal/development apps.
+    /// Value should match VOICEVOX_API_KEY_{ENV} used during CDK deployment.
+    static let voicevoxApiKey = "your-api-key-here-64-character-hex-string"
 }

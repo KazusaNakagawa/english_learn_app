@@ -102,10 +102,24 @@ The Lambda runs a Docker image (`voicevox/voicevox_engine:cpu-ubuntu22.04-0.25.1
 
 Two files must be created locally before building the iOS app:
 
-- `EnglishLearnApp/EnglishLearnApp/AppConfig.swift` — contains `voicevoxBaseURL`. Copy from `AppConfig.swift.example`.
+- `EnglishLearnApp/EnglishLearnApp/AppConfig.swift` — contains `voicevoxBaseURL` and `voicevoxApiKey`. Copy from `AppConfig.swift.example`.
 - `EnglishLearnApp/Config.xcconfig` — Xcode build configuration. Copy from `Config.xcconfig.example`.
 
+For API key setup, see [docs/02.voicevox_api_authentication.md](docs/02.voicevox_api_authentication.md).
+
 ## Development Workflow
+
+### Initial Setup
+
+Install git hooks to prevent common commit mistakes:
+
+```bash
+./scripts/setup-hooks.sh
+```
+
+This installs a pre-commit hook that blocks commits with hardcoded `DEVELOPMENT_TEAM` values.
+
+### Workflow
 
 1. **Create an Issue** — file a GitHub Issue for the task before starting.
 2. **Cut a working branch** — pull the latest `develop` branch, then create a feature branch from it.
@@ -121,6 +135,6 @@ Two files must be created locally before building the iOS app:
 DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 ```
 
-## Current Security Posture
+## Security
 
-The VOICEVOX API Gateway has **no authentication** (PoC state): CORS is `allowOrigins: ['*']`, no API keys, throttling is the only guard. Issues #11 (access control) and #12 (multi-env deploy) track the planned hardening for release.
+The VOICEVOX API requires `x-api-key` header authentication. See [docs/02.voicevox_api_authentication.md](docs/02.voicevox_api_authentication.md) for details.

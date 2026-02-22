@@ -224,13 +224,15 @@ class SpeechService: NSObject, ObservableObject {
         return (200...299).contains(httpResponse.statusCode)
     }
 
-    /// Performs a POST request to the specified URL.
+    /// Performs a POST request to the specified URL with API key authentication.
     private func performPOSTRequest(to url: URL, body: Data? = nil, contentType: String? = nil) async throws -> (Data, URLResponse) {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         if let contentType {
             request.setValue(contentType, forHTTPHeaderField: "Content-Type")
         }
+        // Add API key for backend authentication
+        request.setValue(AppConfig.voicevoxApiKey, forHTTPHeaderField: "x-api-key")
         request.httpBody = body
         return try await URLSession.shared.data(for: request)
     }
