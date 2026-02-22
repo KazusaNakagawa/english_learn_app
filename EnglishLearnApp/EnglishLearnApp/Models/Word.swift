@@ -221,12 +221,40 @@ class WordDataManager: ObservableObject {
         }
     }
 
+    // MARK: - Import Helpers
+
     /// Decodes words from a JSON file URL. Throws on parse failure.
     func importFromJSON(url: URL) throws -> [Word] {
-        let data = try Data(contentsOf: url)
-        let decoder = JSONDecoder()
-        let wordList = try decoder.decode(WordList.self, from: data)
+        let data = try readJSONFile(from: url)
+        let wordList = try decodeWordList(from: data)
+        try validateWordList(wordList)
         return wordList.words
+    }
+
+    /// Reads JSON data from a file URL with specific error handling.
+    private func readJSONFile(from url: URL) throws -> Data {
+        do {
+            return try Data(contentsOf: url)
+        } catch {
+            throw ImportErrorHandler.handleFileReadError(error)
+        }
+    }
+
+    /// Decodes WordList from JSON data with detailed error handling.
+    private func decodeWordList(from data: Data) throws -> WordList {
+        let decoder = JSONDecoder()
+        do {
+            return try decoder.decode(WordList.self, from: data)
+        } catch {
+            throw ImportErrorHandler.handleDecodingError(error, data: data)
+        }
+    }
+
+    /// Validates that the word list is not empty.
+    private func validateWordList(_ wordList: WordList) throws {
+        guard !wordList.words.isEmpty else {
+            throw WordImportError.emptyWordList
+        }
     }
 
     /// Adds imported words that don't already exist (deduplicates by ID).
