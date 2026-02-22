@@ -1,4 +1,5 @@
 import SwiftUI
+import MediaPlayer
 
 // MARK: - Sort Option
 
@@ -37,6 +38,18 @@ struct WordListView: View {
     @EnvironmentObject private var settings: SettingsManager
 
     @State private var selection = SelectionState()
+
+    // MARK: - Continuous playback for all words
+    @State private var isPlayingAllWords = false
+    @State private var playingFlatIndex: Int = 0  // Index into playAllWordSentences
+    @State private var playingStep: Int = 0       // 0=EN, 1=JA, 2=EN (bilingual) or 0=EN, 1=EN (English-only)
+    @State private var playbackGeneration = 0      // Invalidate old async tasks
+    @State private var expectedGeneration = 0
+    @State private var playCommandToken: Any? = nil
+    @State private var pauseCommandToken: Any? = nil
+    @State private var nextCommandToken: Any? = nil
+    @State private var previousCommandToken: Any? = nil
+    @State private var playAllWordSentences: [(Word, Sentence)] = []  // Cached snapshot for playback
 
     private var sortOption: WordSortOption {
         WordSortOption(rawValue: sortOptionRaw) ?? .alphabeticalAZ
@@ -93,6 +106,20 @@ struct WordListView: View {
         }
 
         return result
+    }
+
+    /// Flattens all words and their sentences into a single array for continuous playback.
+    ///
+    /// Each element is a tuple of (Word, Sentence) representing one playback unit.
+    /// Only includes words that have at least one sentence.
+    ///
+    /// - Returns: Array of (Word, Sentence) tuples in display order
+    private var allWordSentences: [(Word, Sentence)] {
+        filteredWords.flatMap { word in
+            word.sentences.map { sentence in
+                (word, sentence)
+            }
+        }
     }
 
     var body: some View {
@@ -156,6 +183,19 @@ struct WordListView: View {
                     }
                 } else {
                     HStack {
+                        // Play all words button
+                        if !allWordSentences.isEmpty {
+                            Button {
+                                if isPlayingAllWords {
+                                    stopPlayAllWords()
+                                } else {
+                                    startPlayAllWords()
+                                }
+                            } label: {
+                                Image(systemName: isPlayingAllWords ? "stop.fill" : "play.fill")
+                                    .foregroundColor(isPlayingAllWords ? .red : .blue)
+                            }
+                        }
                         sortMenu
                         if !filteredWords.isEmpty {
                             Button("選択") { selection.isSelecting = true }
@@ -171,9 +211,50 @@ struct WordListView: View {
         }
         // Intentionally only clears selectedIDs; isSelecting stays true so the
         // user can continue selecting from the newly filtered results.
-        .onChange(of: searchText) { _, _ in selection.selectedIDs = [] }
-        .onChange(of: selectedLetter) { _, _ in selection.selectedIDs = [] }
-        .onChange(of: selectedCategory) { _, _ in selection.selectedIDs = [] }
+        .onChange(of: searchText) { _, _ in
+            selection.selectedIDs = []
+            if isPlayingAllWords { stopPlayAllWords() }
+        }
+        .onChange(of: selectedLetter) { _, _ in
+            selection.selectedIDs = []
+            if isPlayingAllWords { stopPlayAllWords() }
+        }
+        .onChange(of: selectedCategory) { _, _ in
+            selection.selectedIDs = []
+            if isPlayingAllWords { stopPlayAllWords() }
+        }
+        .onChange(of: sortOptionRaw) { _, _ in
+            if isPlayingAllWords { stopPlayAllWords() }
+        }
+        // Continuous playback event handlers
+        .onReceive(speechService.speechFinishedPublisher) { _ in
+            guard isPlayingAllWords else { return }
+            guard expectedGeneration == playbackGeneration else { return }
+
+            scheduleDelayedAdvance(generation: playbackGeneration)
+        }
+        .onAppear {
+            setupRemoteCommandCenter()
+        }
+        .onChange(of: settings.playbackMode) { _, _ in
+            if isPlayingAllWords {
+                playbackGeneration += 1
+                playingStep = 0
+                speakCurrentStepAllWords()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .speechServiceDidStartNewPlayback)) { _ in
+            if isPlayingAllWords {
+                playbackGeneration += 1
+                isPlayingAllWords = false
+                playingStep = 0
+                clearNowPlayingInfo()
+            }
+        }
+        .onDisappear {
+            stopPlayAllWords()
+            removeRemoteCommandHandlers()
+        }
     }
 
     /// Bottom action bar shown during selection mode with Archive and Trash actions.
@@ -287,6 +368,231 @@ struct WordListView: View {
             WordPracticeView(word: word)
         } else {
             SentenceListView(word: word)
+        }
+    }
+
+    // MARK: - Continuous Playback Logic
+
+    /// Starts continuous playback across all words and their sentences.
+    private func startPlayAllWords() {
+        // Snapshot the current filtered word/sentence list
+        let snapshot = allWordSentences
+        guard !snapshot.isEmpty else { return }
+
+        // Increment generation to invalidate pending tasks
+        playbackGeneration += 1
+        let currentGen = playbackGeneration
+
+        // Stop current playback
+        isPlayingAllWords = false
+        playingStep = 0
+        speechService.stop()
+
+        Task { @MainActor in
+            guard currentGen == playbackGeneration else { return }
+
+            playAllWordSentences = snapshot
+            playingFlatIndex = 0
+            isPlayingAllWords = true
+            playingStep = 0
+            speakCurrentStepAllWords()
+        }
+    }
+
+    /// Stops continuous playback of all words.
+    private func stopPlayAllWords() {
+        playbackGeneration += 1
+        isPlayingAllWords = false
+        playingStep = 0
+        playAllWordSentences = []
+        speechService.stop()
+        speechService.deactivateAudioSession()
+        clearNowPlayingInfo()
+    }
+
+    /// Speaks the text for the current sentence and playback step.
+    private func speakCurrentStepAllWords() {
+        guard playingFlatIndex < playAllWordSentences.count else {
+            stopPlayAllWords()
+            return
+        }
+
+        expectedGeneration = playbackGeneration
+
+        let (word, sentence) = playAllWordSentences[playingFlatIndex]
+
+        switch settings.playbackMode {
+        case .bilingual:
+            switch playingStep {
+            case 0, 2:
+                speechService.speak(sentence.english, voiceGender: settings.voiceGender, isContinuousPlayback: true)
+            case 1:
+                speechService.speak(sentence.japanese, language: "ja-JP", voiceGender: settings.voiceGender, isContinuousPlayback: true)
+            default:
+                break
+            }
+        case .englishOnly:
+            speechService.speak(sentence.english, voiceGender: settings.voiceGender, isContinuousPlayback: true)
+        }
+
+        updateNowPlayingInfoAllWords()
+    }
+
+    /// Advances to the next playback step or sentence.
+    private func advancePlaybackAllWords() {
+        let maxSteps = settings.playbackMode == .bilingual ? 3 : 2
+        let nextStep = playingStep + 1
+
+        if nextStep < maxSteps {
+            playingStep = nextStep
+            speakCurrentStepAllWords()
+        } else {
+            let nextIdx = playingFlatIndex + 1
+            if nextIdx < playAllWordSentences.count {
+                playingFlatIndex = nextIdx
+                playingStep = 0
+                speakCurrentStepAllWords()
+            } else {
+                // All done - clean up audio session
+                isPlayingAllWords = false
+                playingStep = 0
+                playAllWordSentences = []
+                speechService.deactivateAudioSession()
+                clearNowPlayingInfo()
+            }
+        }
+    }
+
+    /// Sets up remote command center for lock screen controls.
+    /// Idempotent: removes existing handlers before adding new ones.
+    private func setupRemoteCommandCenter() {
+        let commandCenter = MPRemoteCommandCenter.shared()
+
+        // Remove existing handlers to prevent duplicates
+        removeRemoteCommandHandlers()
+
+        playCommandToken = commandCenter.playCommand.addTarget { _ in
+            DispatchQueue.main.async {
+                if !self.isPlayingAllWords {
+                    self.startPlayAllWords()
+                }
+            }
+            return .success
+        }
+
+        pauseCommandToken = commandCenter.pauseCommand.addTarget { _ in
+            DispatchQueue.main.async {
+                if self.isPlayingAllWords {
+                    self.stopPlayAllWords()
+                }
+            }
+            return .success
+        }
+
+        nextCommandToken = commandCenter.nextTrackCommand.addTarget { _ in
+            DispatchQueue.main.async {
+                if self.isPlayingAllWords && self.playingFlatIndex + 1 < self.playAllWordSentences.count {
+                    self.playbackGeneration += 1
+                    self.playingFlatIndex += 1
+                    self.playingStep = 0
+                    self.speakCurrentStepAllWords()
+                }
+            }
+            return .success
+        }
+
+        previousCommandToken = commandCenter.previousTrackCommand.addTarget { _ in
+            DispatchQueue.main.async {
+                if self.isPlayingAllWords && self.playingFlatIndex > 0 {
+                    self.playbackGeneration += 1
+                    self.playingFlatIndex -= 1
+                    self.playingStep = 0
+                    self.speakCurrentStepAllWords()
+                }
+            }
+            return .success
+        }
+    }
+
+    /// Updates Now Playing info for lock screen/Control Center.
+    /// Thread-safe: validates index before accessing array to prevent race conditions.
+    private func updateNowPlayingInfoAllWords() {
+        // Thread-safe snapshot to prevent race condition between check and access
+        let snapshot = playAllWordSentences
+        guard playingFlatIndex >= 0 && playingFlatIndex < snapshot.count else {
+            assertionFailure("playingFlatIndex out of bounds: \(playingFlatIndex), count: \(snapshot.count)")
+            return
+        }
+
+        let (word, sentence) = snapshot[playingFlatIndex]
+
+        // Calculate step label
+        let stepLabel = getStepLabel(for: playingStep, mode: settings.playbackMode)
+
+        var nowPlayingInfo = [String: Any]()
+        nowPlayingInfo[MPMediaItemPropertyTitle] = sentence.english
+        nowPlayingInfo[MPMediaItemPropertyArtist] = "\(word.word) - \(stepLabel)"
+        nowPlayingInfo[MPMediaItemPropertyAlbumTitle] = word.meaning
+        nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] = isPlayingAllWords ? 1.0 : 0.0
+        nowPlayingInfo[MPNowPlayingInfoPropertyMediaType] = MPNowPlayingInfoMediaType.audio.rawValue
+
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
+    }
+
+    /// Returns the step label for the given playback step and mode.
+    private func getStepLabel(for step: Int, mode: SettingsManager.PlaybackMode) -> String {
+        let maxSteps = mode == .bilingual ? 3 : 2
+        let clampedStep = min(max(step, 0), maxSteps - 1)
+
+        if mode == .bilingual {
+            return ["English (1st)", "Japanese", "English (2nd)"][clampedStep]
+        } else {
+            return ["English (1st)", "English (2nd)"][clampedStep]
+        }
+    }
+
+    /// Clears Now Playing info.
+    private func clearNowPlayingInfo() {
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+    }
+
+    /// Schedules a delayed task with generation-based cancellation.
+    /// Returns early if the generation changes during the delay (playback stopped/restarted).
+    private func scheduleDelayedAdvance(generation: Int, delay: UInt64 = 800_000_000) {
+        Task {
+            do {
+                try await Task.sleep(nanoseconds: delay)
+                await MainActor.run {
+                    guard generation == playbackGeneration else { return }
+                    advancePlaybackAllWords()
+                }
+            } catch {
+                // Task cancellation is expected when view disappears or playback stops
+                // No action needed
+            }
+        }
+    }
+
+    /// Removes all remote command handlers and clears tokens.
+    /// Safe to call multiple times.
+    private func removeRemoteCommandHandlers() {
+        let commandCenter = MPRemoteCommandCenter.shared()
+
+        if let token = playCommandToken {
+            commandCenter.playCommand.removeTarget(token)
+            playCommandToken = nil
+        }
+        if let token = pauseCommandToken {
+            commandCenter.pauseCommand.removeTarget(token)
+            pauseCommandToken = nil
+        }
+        if let token = nextCommandToken {
+            commandCenter.nextTrackCommand.removeTarget(token)
+            nextCommandToken = nil
+        }
+        if let token = previousCommandToken {
+            commandCenter.previousTrackCommand.removeTarget(token)
+            previousCommandToken = nil
         }
     }
 }
