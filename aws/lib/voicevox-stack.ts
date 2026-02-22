@@ -5,6 +5,7 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigatewayv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import * as apigatewayv2Integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
+import * as apigatewayv2Authorizers from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import * as ecrDeploy from 'cdk-ecr-deployment';
 import { Construct } from 'constructs';
 import * as path from 'path';
@@ -114,20 +115,49 @@ export class VoicevoxStack extends cdk.Stack {
     voicevoxFn.node.addDependency(deployHashTag);
 
     // ----------------------------------------------------------------
-    // API Gateway: HTTP API
+    // Lambda Authorizer: API Key validation
+    // ----------------------------------------------------------------
+    // Read API key from environment variable (set before deployment)
+    // Example: export VOICEVOX_API_KEY_POC="your-secret-key-here"
+    const apiKeyEnvVar = `VOICEVOX_API_KEY_${stackEnv.toUpperCase()}`;
+    const apiKeyValue = process.env[apiKeyEnvVar];
+
+    if (!apiKeyValue) {
+      throw new Error(
+        `API key not found. Set environment variable: ${apiKeyEnvVar}\n` +
+        `Example: export ${apiKeyEnvVar}="$(openssl rand -hex 32)"`
+      );
+    }
+
+    const authorizerFn = new lambda.Function(this, 'ApiKeyAuthorizer', {
+      functionName: `voicevox-authorizer-${stackEnv}`,
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: 'index.handler',
+      code: lambda.Code.fromInline(`
+        exports.handler = async (event) => {
+          const apiKey = event.headers['x-api-key'];
+          const expectedKey = process.env.API_KEY;
+
+          const isAuthorized = apiKey === expectedKey;
+
+          return {
+            isAuthorized: isAuthorized,
+          };
+        };
+      `),
+      environment: {
+        API_KEY: apiKeyValue,
+      },
+      description: `API key authorizer for VOICEVOX (${stackEnv})`,
+    });
+
+    // ----------------------------------------------------------------
+    // API Gateway: HTTP API (CORS disabled for native iOS app)
     // ----------------------------------------------------------------
     const httpApi = new apigatewayv2.HttpApi(this, 'VoicevoxHttpApi', {
       apiName: `voicevox-api-${stackEnv}`,
       description: `VOICEVOX TTS API (${stackEnv})`,
-      corsPreflight: {
-        allowOrigins: ['*'],
-        allowMethods: [
-          apigatewayv2.CorsHttpMethod.GET,
-          apigatewayv2.CorsHttpMethod.POST,
-          apigatewayv2.CorsHttpMethod.OPTIONS,
-        ],
-        allowHeaders: ['Content-Type', 'Accept'],
-      },
+      // CORS removed: native iOS app does not require CORS
     });
 
     // Apply per-environment throttling to the $default stage
@@ -144,6 +174,18 @@ export class VoicevoxStack extends cdk.Stack {
       voicevoxFn
     );
 
+    // Create Lambda authorizer for API key validation
+    const authorizer = new apigatewayv2Authorizers.HttpLambdaAuthorizer(
+      'VoicevoxApiKeyAuthorizer',
+      authorizerFn,
+      {
+        authorizerName: `voicevox-authorizer-${stackEnv}`,
+        responseTypes: [apigatewayv2Authorizers.HttpLambdaResponseType.SIMPLE],
+        identitySource: ['$request.header.x-api-key'],
+        resultsCacheTtl: cdk.Duration.minutes(5),
+      }
+    );
+
     // ----------------------------------------------------------------
     // Routes: expose VOICEVOX engine API endpoints
     //
@@ -152,28 +194,31 @@ export class VoicevoxStack extends cdk.Stack {
     //   2. POST /synthesis?speaker=3  body=queryJSON -> get WAV binary
     // ----------------------------------------------------------------
 
-    // (1) Text -> audio query generation
+    // (1) Text -> audio query generation (requires API key)
     httpApi.addRoutes({
       path: '/audio_query',
       methods: [apigatewayv2.HttpMethod.POST],
       integration: lambdaIntegration,
+      authorizer: authorizer,
     });
 
-    // (2) Query -> speech synthesis (WAV binary)
+    // (2) Query -> speech synthesis (WAV binary) (requires API key)
     httpApi.addRoutes({
       path: '/synthesis',
       methods: [apigatewayv2.HttpMethod.POST],
       integration: lambdaIntegration,
+      authorizer: authorizer,
     });
 
-    // List available speakers
+    // List available speakers (requires API key)
     httpApi.addRoutes({
       path: '/speakers',
       methods: [apigatewayv2.HttpMethod.GET],
       integration: lambdaIntegration,
+      authorizer: authorizer,
     });
 
-    // Health check / version
+    // Health check / version (public, no authentication)
     httpApi.addRoutes({
       path: '/version',
       methods: [apigatewayv2.HttpMethod.GET],
@@ -192,6 +237,12 @@ export class VoicevoxStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'VoicevoxFunctionArn', {
       value: voicevoxFn.functionArn,
       description: 'VOICEVOX Lambda function ARN',
+    });
+
+    new cdk.CfnOutput(this, 'VoicevoxApiKey', {
+      value: apiKeyValue,
+      description: 'API key for VOICEVOX API (add to Config.xcconfig as VOICEVOX_API_KEY)',
+      exportName: `VoicevoxApiKey-${stackEnv}`,
     });
   }
 }
