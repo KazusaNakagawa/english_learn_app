@@ -231,14 +231,7 @@ struct WordListView: View {
             guard isPlayingAllWords else { return }
             guard expectedGeneration == playbackGeneration else { return }
 
-            let capturedGeneration = playbackGeneration
-            Task {
-                try? await Task.sleep(nanoseconds: 800_000_000)  // 0.8s delay
-                await MainActor.run {
-                    guard capturedGeneration == playbackGeneration else { return }
-                    advancePlaybackAllWords()
-                }
-            }
+            scheduleDelayedAdvance(generation: playbackGeneration)
         }
         .onAppear {
             setupRemoteCommandCenter()
@@ -260,15 +253,7 @@ struct WordListView: View {
         }
         .onDisappear {
             stopPlayAllWords()
-            let commandCenter = MPRemoteCommandCenter.shared()
-            if let t = playCommandToken { commandCenter.playCommand.removeTarget(t) }
-            if let t = pauseCommandToken { commandCenter.pauseCommand.removeTarget(t) }
-            if let t = nextCommandToken { commandCenter.nextTrackCommand.removeTarget(t) }
-            if let t = previousCommandToken { commandCenter.previousTrackCommand.removeTarget(t) }
-            playCommandToken = nil
-            pauseCommandToken = nil
-            nextCommandToken = nil
-            previousCommandToken = nil
+            removeRemoteCommandHandlers()
         }
     }
 
@@ -484,10 +469,7 @@ struct WordListView: View {
         let commandCenter = MPRemoteCommandCenter.shared()
 
         // Remove existing handlers to prevent duplicates
-        if let t = playCommandToken { commandCenter.playCommand.removeTarget(t) }
-        if let t = pauseCommandToken { commandCenter.pauseCommand.removeTarget(t) }
-        if let t = nextCommandToken { commandCenter.nextTrackCommand.removeTarget(t) }
-        if let t = previousCommandToken { commandCenter.previousTrackCommand.removeTarget(t) }
+        removeRemoteCommandHandlers()
 
         playCommandToken = commandCenter.playCommand.addTarget { _ in
             DispatchQueue.main.async {
@@ -533,19 +515,19 @@ struct WordListView: View {
     }
 
     /// Updates Now Playing info for lock screen/Control Center.
+    /// Thread-safe: validates index before accessing array to prevent race conditions.
     private func updateNowPlayingInfoAllWords() {
-        guard playingFlatIndex < playAllWordSentences.count else { return }
-
-        let (word, sentence) = playAllWordSentences[playingFlatIndex]
-        let maxSteps = settings.playbackMode == .bilingual ? 3 : 2
-        let clampedStep = min(max(playingStep, 0), maxSteps - 1)
-
-        let stepLabel: String
-        if settings.playbackMode == .bilingual {
-            stepLabel = ["English (1st)", "Japanese", "English (2nd)"][clampedStep]
-        } else {
-            stepLabel = ["English (1st)", "English (2nd)"][clampedStep]
+        // Thread-safe snapshot to prevent race condition between check and access
+        let snapshot = playAllWordSentences
+        guard playingFlatIndex >= 0 && playingFlatIndex < snapshot.count else {
+            assertionFailure("playingFlatIndex out of bounds: \(playingFlatIndex), count: \(snapshot.count)")
+            return
         }
+
+        let (word, sentence) = snapshot[playingFlatIndex]
+
+        // Calculate step label
+        let stepLabel = getStepLabel(for: playingStep, mode: settings.playbackMode)
 
         var nowPlayingInfo = [String: Any]()
         nowPlayingInfo[MPMediaItemPropertyTitle] = sentence.english
@@ -557,9 +539,61 @@ struct WordListView: View {
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
     }
 
+    /// Returns the step label for the given playback step and mode.
+    private func getStepLabel(for step: Int, mode: SettingsManager.PlaybackMode) -> String {
+        let maxSteps = mode == .bilingual ? 3 : 2
+        let clampedStep = min(max(step, 0), maxSteps - 1)
+
+        if mode == .bilingual {
+            return ["English (1st)", "Japanese", "English (2nd)"][clampedStep]
+        } else {
+            return ["English (1st)", "English (2nd)"][clampedStep]
+        }
+    }
+
     /// Clears Now Playing info.
     private func clearNowPlayingInfo() {
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+    }
+
+    /// Schedules a delayed task with generation-based cancellation.
+    /// Returns early if the generation changes during the delay (playback stopped/restarted).
+    private func scheduleDelayedAdvance(generation: Int, delay: UInt64 = 800_000_000) {
+        Task {
+            do {
+                try await Task.sleep(nanoseconds: delay)
+                await MainActor.run {
+                    guard generation == playbackGeneration else { return }
+                    advancePlaybackAllWords()
+                }
+            } catch {
+                // Task cancellation is expected when view disappears or playback stops
+                // No action needed
+            }
+        }
+    }
+
+    /// Removes all remote command handlers and clears tokens.
+    /// Safe to call multiple times.
+    private func removeRemoteCommandHandlers() {
+        let commandCenter = MPRemoteCommandCenter.shared()
+
+        if let token = playCommandToken {
+            commandCenter.playCommand.removeTarget(token)
+            playCommandToken = nil
+        }
+        if let token = pauseCommandToken {
+            commandCenter.pauseCommand.removeTarget(token)
+            pauseCommandToken = nil
+        }
+        if let token = nextCommandToken {
+            commandCenter.nextTrackCommand.removeTarget(token)
+            nextCommandToken = nil
+        }
+        if let token = previousCommandToken {
+            commandCenter.previousTrackCommand.removeTarget(token)
+            previousCommandToken = nil
+        }
     }
 }
 
