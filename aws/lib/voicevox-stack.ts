@@ -239,10 +239,13 @@ export class VoicevoxStack extends cdk.Stack {
       description: 'VOICEVOX Lambda function ARN',
     });
 
-    new cdk.CfnOutput(this, 'VoicevoxApiKey', {
-      value: apiKeyValue,
-      description: 'API key for VOICEVOX API (add to Config.xcconfig as VOICEVOX_API_KEY)',
-      exportName: `VoicevoxApiKey-${stackEnv}`,
-    });
+    // Only output API key in non-production environments for security
+    if (stackEnv !== 'pro') {
+      new cdk.CfnOutput(this, 'VoicevoxApiKey', {
+        value: apiKeyValue,
+        description: 'API key for VOICEVOX API (add to Config.xcconfig as VOICEVOX_API_KEY)',
+        // Note: exportName removed to prevent cross-stack access to secrets
+      });
+    }
   }
 }
