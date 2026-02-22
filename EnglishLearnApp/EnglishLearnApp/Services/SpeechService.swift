@@ -103,8 +103,9 @@ class SpeechService: NSObject, ObservableObject {
 
         if voiceGender == .zundamon {
             isSpeaking = true
+            _ = activateAudioSession()
             Task { [weak self] in
-                await self?.performVoicevoxPlayback(text)
+                await self?.speakWithVoicevox(text)
             }
             return
         }
@@ -127,17 +128,6 @@ class SpeechService: NSObject, ObservableObject {
         synthesizer.speak(utterance)
     }
 
-    /// Wrapper for VOICEVOX playback that activates audio session before synthesis.
-    ///
-    /// - Parameter text: The Japanese text to be spoken
-    private func performVoicevoxPlayback(_ text: String) async {
-        await MainActor.run {
-            // Activate audio session before VOICEVOX playback
-            _ = activateAudioSession()
-        }
-        await speakWithVoicevox(text)
-    }
-
     /// Synthesizes speech using the VOICEVOX API and plays it via AVAudioPlayer.
     ///
     /// This method makes two HTTP requests to the VOICEVOX server:
@@ -146,25 +136,18 @@ class SpeechService: NSObject, ObservableObject {
     ///
     /// - Parameter text: The Japanese text to be spoken
     private func speakWithVoicevox(_ text: String) async {
-        let settings = await MainActor.run { SettingsManager.shared }
         let baseURL = AppConfig.voicevoxBaseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         guard !baseURL.isEmpty else {
-            await MainActor.run {
-                isSpeaking = false
-                speechFinishedPublisher.send()  // Notify failure to allow playback to continue or stop gracefully
-            }
+            await handleVoicevoxFailure()
             return
         }
 
-        let speakerID = settings.voicevoxStyle.rawValue
+        let speakerID = await SettingsManager.shared.voicevoxStyle.rawValue
 
         guard let encodedText = text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
               let queryURL = URL(string: "\(baseURL)/audio_query?text=\(encodedText)&speaker=\(speakerID)"),
               let synthURL = URL(string: "\(baseURL)/synthesis?speaker=\(speakerID)") else {
-            await MainActor.run {
-                isSpeaking = false
-                speechFinishedPublisher.send()  // Notify failure to allow playback to continue or stop gracefully
-            }
+            await handleVoicevoxFailure()
             return
         }
 
@@ -174,10 +157,7 @@ class SpeechService: NSObject, ObservableObject {
             let (queryData, queryResponse) = try await URLSession.shared.data(for: queryRequest)
             guard let queryHTTP = queryResponse as? HTTPURLResponse, (200...299).contains(queryHTTP.statusCode) else {
                 print("VOICEVOX audio_query failed: \((queryResponse as? HTTPURLResponse)?.statusCode ?? -1)")
-                await MainActor.run {
-                    isSpeaking = false
-                    speechFinishedPublisher.send()  // Notify failure to allow playback to continue or stop gracefully
-                }
+                await handleVoicevoxFailure()
                 return
             }
 
@@ -188,20 +168,14 @@ class SpeechService: NSObject, ObservableObject {
             let (audioData, synthResponse) = try await URLSession.shared.data(for: synthRequest)
             guard let synthHTTP = synthResponse as? HTTPURLResponse, (200...299).contains(synthHTTP.statusCode) else {
                 print("VOICEVOX synthesis failed: \((synthResponse as? HTTPURLResponse)?.statusCode ?? -1)")
-                await MainActor.run {
-                    isSpeaking = false
-                    speechFinishedPublisher.send()  // Notify failure to allow playback to continue or stop gracefully
-                }
+                await handleVoicevoxFailure()
                 return
             }
 
             // Validate audio data before creating AVAudioPlayer to avoid buffer warnings
             guard !audioData.isEmpty else {
                 print("VOICEVOX returned empty audio data")
-                await MainActor.run {
-                    isSpeaking = false
-                    speechFinishedPublisher.send()
-                }
+                await handleVoicevoxFailure()
                 return
             }
 
@@ -209,8 +183,6 @@ class SpeechService: NSObject, ObservableObject {
                 do {
                     audioPlayer = try AVAudioPlayer(data: audioData)
                     audioPlayer?.delegate = self
-                    // Ensure audio session is active before playing synthesized audio
-                    _ = activateAudioSession()
                     audioPlayer?.play()
                 } catch {
                     print("AVAudioPlayer error: \(error.localizedDescription)")
@@ -220,11 +192,15 @@ class SpeechService: NSObject, ObservableObject {
             }
         } catch {
             print("VOICEVOX error: \(error.localizedDescription)")
-            await MainActor.run {
-                isSpeaking = false
-                speechFinishedPublisher.send()  // Notify failure to allow playback to continue or stop gracefully
-            }
+            await handleVoicevoxFailure()
         }
+    }
+
+    /// Handles VOICEVOX playback failure by resetting state and notifying listeners.
+    @MainActor
+    private func handleVoicevoxFailure() {
+        isSpeaking = false
+        speechFinishedPublisher.send()
     }
 
     /// Returns an appropriate AVSpeechSynthesisVoice for the specified gender and language.
