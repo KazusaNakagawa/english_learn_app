@@ -131,28 +131,16 @@ export class VoicevoxStack extends cdk.Stack {
 
     const authorizerFn = new lambda.Function(this, 'ApiKeyAuthorizer', {
       functionName: `voicevox-authorizer-${stackEnv}`,
-      runtime: lambda.Runtime.NODEJS_22_X,
+      runtime: lambda.Runtime.NODEJS_20_X,
       handler: 'index.handler',
       code: lambda.Code.fromInline(`
-        const crypto = require('crypto');
-
         exports.handler = async (event) => {
           // Safely access headers with optional chaining to prevent TypeError
-          const apiKey = event.headers?.['x-api-key'] ?? '';
-          const expectedKey = process.env.API_KEY ?? '';
+          const apiKey = event.headers?.['x-api-key'];
+          const expectedKey = process.env.API_KEY;
 
-          // Use timing-safe comparison to prevent timing attacks
-          let isAuthorized = false;
-          if (apiKey && expectedKey && apiKey.length === expectedKey.length) {
-            try {
-              isAuthorized = crypto.timingSafeEqual(
-                Buffer.from(apiKey),
-                Buffer.from(expectedKey)
-              );
-            } catch (err) {
-              isAuthorized = false;
-            }
-          }
+          // Only authorize if both keys exist and match
+          const isAuthorized = Boolean(apiKey && expectedKey && apiKey === expectedKey);
 
           return {
             isAuthorized: isAuthorized,
