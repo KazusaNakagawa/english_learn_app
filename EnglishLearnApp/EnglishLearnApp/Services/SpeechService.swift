@@ -84,9 +84,12 @@ class SpeechService: NSObject, ObservableObject {
     }
 
     @objc private func updateVoiceGender() {
-        if let saved = UserDefaults.standard.string(forKey: Constants.voiceGenderKey),
-           let gender = SettingsManager.VoiceGender(rawValue: saved) {
-            voiceGender = gender
+        guard let saved = UserDefaults.standard.string(forKey: Constants.voiceGenderKey),
+              let gender = SettingsManager.VoiceGender(rawValue: saved) else { return }
+
+        // Defer update to avoid "Publishing changes from within view updates" warning
+        Task { @MainActor in
+            self.voiceGender = gender
         }
     }
 
