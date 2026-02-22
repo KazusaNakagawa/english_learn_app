@@ -60,6 +60,7 @@ playground.xcworkspace
 *.dSYM
 
 # Secrets
+*.env
 *.pem
 *.p12
 *.key
