@@ -135,10 +135,12 @@ export class VoicevoxStack extends cdk.Stack {
       handler: 'index.handler',
       code: lambda.Code.fromInline(`
         exports.handler = async (event) => {
-          const apiKey = event.headers['x-api-key'];
+          // Safely access headers with optional chaining to prevent TypeError
+          const apiKey = event.headers?.['x-api-key'];
           const expectedKey = process.env.API_KEY;
 
-          const isAuthorized = apiKey === expectedKey;
+          // Only authorize if both keys exist and match
+          const isAuthorized = Boolean(apiKey && expectedKey && apiKey === expectedKey);
 
           return {
             isAuthorized: isAuthorized,
