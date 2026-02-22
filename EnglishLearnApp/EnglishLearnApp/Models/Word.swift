@@ -6,6 +6,7 @@ enum WordImportError: LocalizedError {
     case fileNotReadable(String)
     case invalidJSONFormat(String)
     case missingRequiredFields(String)
+    case invalidUUID(String, path: String)
     case emptyWordList
     case unknown(Error)
 
@@ -17,6 +18,8 @@ enum WordImportError: LocalizedError {
             return "JSON形式のエラー\n\n\(detail)\n\n正しいエクスポートファイルか確認してください。"
         case .missingRequiredFields(let detail):
             return "データ形式のエラー\n\n\(detail)\n\n必須フィールドが不足しています。"
+        case .invalidUUID(let uuidString, let path):
+            return "UUID形式のエラー\n\n無効なUUID: \"\(uuidString)\"\n場所: \(path)\n\nUUIDは「XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX」の形式で、0-9とA-Fのみを含む必要があります。\n\n修正方法:\n• 無効な文字（G-Z、記号など）を削除\n• または新しいUUIDを生成（uuidgenコマンド）"
         case .emptyWordList:
             return "インポートエラー\n\nファイルに単語データが含まれていません。"
         case .unknown(let error):
@@ -246,6 +249,23 @@ class WordDataManager: ObservableObject {
         }
     }
 
+    /// Helper function to extract a value from a JSON object using a coding path.
+    private func extractValue(from json: Any, path: [CodingKey]) -> Any? {
+        var current: Any = json
+        for key in path {
+            if let dict = current as? [String: Any] {
+                guard let next = dict[key.stringValue] else { return nil }
+                current = next
+            } else if let array = current as? [Any], let index = key.intValue {
+                guard index < array.count else { return nil }
+                current = array[index]
+            } else {
+                return nil
+            }
+        }
+        return current
+    }
+
     /// Decodes words from a JSON file URL. Throws on parse failure.
     func importFromJSON(url: URL) throws -> [Word] {
         // Read file
@@ -268,11 +288,32 @@ class WordDataManager: ObservableObject {
         do {
             wordList = try decoder.decode(WordList.self, from: data)
         } catch let DecodingError.dataCorrupted(context) {
-            throw WordImportError.invalidJSONFormat("JSONファイルが破損しています。\n\(context.debugDescription)")
+            // Check if this is a UUID decoding error
+            let description = context.debugDescription
+            if description.contains("UUID") {
+                let path = context.codingPath.map { $0.stringValue }.joined(separator: " → ")
+                // Try to extract the invalid UUID string from the underlying data
+                if let lastKey = context.codingPath.last,
+                   let jsonObject = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let invalidUUID = extractValue(from: jsonObject, path: context.codingPath) as? String {
+                    throw WordImportError.invalidUUID(invalidUUID, path: path.isEmpty ? "id" : path)
+                }
+                throw WordImportError.invalidUUID("(取得できませんでした)", path: path.isEmpty ? "id" : path)
+            }
+            throw WordImportError.invalidJSONFormat("JSONファイルが破損しています。\n\(description)")
         } catch let DecodingError.keyNotFound(key, context) {
             throw WordImportError.missingRequiredFields("必須キー '\(key.stringValue)' が見つかりません。\nパス: \(context.codingPath.map { $0.stringValue }.joined(separator: " → "))")
         } catch let DecodingError.typeMismatch(type, context) {
-            throw WordImportError.invalidJSONFormat("型が一致しません。'\(type)' が期待されています。\nパス: \(context.codingPath.map { $0.stringValue }.joined(separator: " → "))")
+            let path = context.codingPath.map { $0.stringValue }.joined(separator: " → ")
+            // Check if this is a UUID type mismatch
+            if type == UUID.self {
+                if let jsonObject = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let invalidValue = extractValue(from: jsonObject, path: context.codingPath) {
+                    throw WordImportError.invalidUUID("\(invalidValue)", path: path)
+                }
+                throw WordImportError.invalidUUID("(型が不正です)", path: path)
+            }
+            throw WordImportError.invalidJSONFormat("型が一致しません。'\(type)' が期待されています。\nパス: \(path)")
         } catch let DecodingError.valueNotFound(type, context) {
             throw WordImportError.missingRequiredFields("値が見つかりません。'\(type)' が期待されています。\nパス: \(context.codingPath.map { $0.stringValue }.joined(separator: " → "))")
         } catch {
