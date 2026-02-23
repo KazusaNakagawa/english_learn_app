@@ -113,10 +113,7 @@ struct SentenceListView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onReceive(speechService.speechFinishedPublisher) { _ in
             // Called only when speech finishes naturally (not cancelled)
-            guard let manager = playbackManager else { return }
-
-            // Check if this completion is for the current playback session
-            guard manager.isValidCompletion(generation: manager.expectedGeneration) else { return }
+            guard let manager = playbackManager, manager.isPlaying else { return }
 
             // Add a delay before advancing to the next step for better pacing
             let capturedGeneration = manager.playbackGeneration
@@ -132,29 +129,21 @@ struct SentenceListView: View {
         .onAppear {
             setupPlaybackManager()
 
-            // Setup remote command center
+            // Setup remote command center (callbacks already dispatched to main queue)
             remoteCommandManager.setup(
                 onPlay: {
-                    Task { @MainActor in
-                        if let manager = self.playbackManager, !manager.isPlaying {
-                            self.startPlayAll()
-                        }
+                    if let manager = self.playbackManager, !manager.isPlaying {
+                        self.startPlayAll()
                     }
                 },
                 onPause: {
-                    Task { @MainActor in
-                        self.stopPlayAll()
-                    }
+                    self.stopPlayAll()
                 },
                 onNext: {
-                    Task { @MainActor in
-                        self.playbackManager?.next()
-                    }
+                    self.playbackManager?.next()
                 },
                 onPrevious: {
-                    Task { @MainActor in
-                        self.playbackManager?.previous()
-                    }
+                    self.playbackManager?.previous()
                 }
             )
         }

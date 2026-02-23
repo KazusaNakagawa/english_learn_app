@@ -8,7 +8,8 @@ import Observation
 /// - Playback state (playing/stopped, current index, current step)
 /// - Generation-based cancellation to prevent race conditions
 /// - Playback advancement through steps and items
-/// - Thread-safe state updates
+///
+/// **Thread Safety:** All methods must be called from the main thread.
 ///
 /// Generic parameter T represents the item type being played (e.g., Sentence or (Word, Sentence)).
 @Observable

@@ -221,37 +221,28 @@ struct WordListView: View {
         }
         // Continuous playback event handlers
         .onReceive(speechService.speechFinishedPublisher) { _ in
-            guard let manager = playbackManager else { return }
-            guard manager.isValidCompletion(generation: manager.expectedGeneration) else { return }
+            guard let manager = playbackManager, manager.isPlaying else { return }
 
             scheduleDelayedAdvance(generation: manager.playbackGeneration)
         }
         .onAppear {
             setupPlaybackManager()
 
-            // Setup remote command center
+            // Setup remote command center (callbacks already dispatched to main queue)
             remoteCommandManager.setup(
                 onPlay: {
-                    Task { @MainActor in
-                        if let manager = self.playbackManager, !manager.isPlaying {
-                            self.startPlayAllWords()
-                        }
+                    if let manager = self.playbackManager, !manager.isPlaying {
+                        self.startPlayAllWords()
                     }
                 },
                 onPause: {
-                    Task { @MainActor in
-                        self.stopPlayAllWords()
-                    }
+                    self.stopPlayAllWords()
                 },
                 onNext: {
-                    Task { @MainActor in
-                        self.playbackManager?.next()
-                    }
+                    self.playbackManager?.next()
                 },
                 onPrevious: {
-                    Task { @MainActor in
-                        self.playbackManager?.previous()
-                    }
+                    self.playbackManager?.previous()
                 }
             )
         }
