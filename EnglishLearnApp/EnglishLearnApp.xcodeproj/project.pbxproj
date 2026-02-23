@@ -9,12 +9,17 @@
 /* Begin PBXBuildFile section */
 		850E49D02F4952F8000F46C6 /* ActionBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 850E49CE2F4952F8000F46C6 /* ActionBar.swift */; };
 		850E49D12F4952F8000F46C6 /* SelectableListRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 850E49CF2F4952F8000F46C6 /* SelectableListRow.swift */; };
-		85F6833D2F4AA9AC00389866 /* WordImportErrorHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85F6833C2F4AA9AC00389866 /* WordImportErrorHandler.swift */; };
+		8577C1722F4BE3D20061F175 /* WordImportErrorHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8577C1712F4BE3D20061F175 /* WordImportErrorHandler.swift */; };
+		8577C1982F4BE5AC0061F175 /* SettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8577C1942F4BE5AC0061F175 /* SettingsManager.swift */; };
+		8577C1992F4BE5AC0061F175 /* NowPlayingInfoManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8577C18D2F4BE5AC0061F175 /* NowPlayingInfoManager.swift */; };
+		8577C19A2F4BE5AC0061F175 /* ContinuousPlaybackManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8577C18C2F4BE5AC0061F175 /* ContinuousPlaybackManager.swift */; };
+		8577C19B2F4BE5AC0061F175 /* SpeechService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8577C1962F4BE5AC0061F175 /* SpeechService.swift */; };
+		8577C19C2F4BE5AC0061F175 /* OpenAIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8577C1922F4BE5AC0061F175 /* OpenAIService.swift */; };
+		8577C19D2F4BE5AC0061F175 /* RemoteCommandCenterManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8577C18E2F4BE5AC0061F175 /* RemoteCommandCenterManager.swift */; };
+		8577C19F2F4BE5AC0061F175 /* SpeechRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8577C1952F4BE5AC0061F175 /* SpeechRecognizer.swift */; };
 		A1000001238D1234567890AB /* EnglishLearnAppApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000011238D1234567890AB /* EnglishLearnAppApp.swift */; };
 		A1000002238D1234567890AB /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000012238D1234567890AB /* ContentView.swift */; };
 		A1000003238D1234567890AB /* Word.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000013238D1234567890AB /* Word.swift */; };
-		A1000004238D1234567890AB /* SpeechService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000014238D1234567890AB /* SpeechService.swift */; };
-		A1000005238D1234567890AB /* SpeechRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000015238D1234567890AB /* SpeechRecognizer.swift */; };
 		A1000006238D1234567890AB /* WordListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000016238D1234567890AB /* WordListView.swift */; };
 		A1000007238D1234567890AB /* WordPracticeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000017238D1234567890AB /* WordPracticeView.swift */; };
 		A1000008238D1234567890AB /* words.json in Resources */ = {isa = PBXBuildFile; fileRef = A1000018238D1234567890AB /* words.json */; };
@@ -23,8 +28,6 @@
 		A100000B238D1234567890AB /* SentenceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100001C238D1234567890AB /* SentenceListView.swift */; };
 		A100000C238D1234567890AB /* SentencePracticeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100001D238D1234567890AB /* SentencePracticeView.swift */; };
 		A100000D238D1234567890AB /* AddWordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100001E238D1234567890AB /* AddWordView.swift */; };
-		A100000E238D1234567890AB /* OpenAIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100001F238D1234567890AB /* OpenAIService.swift */; };
-		A100000F238D1234567890AB /* SettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000020238D1234567890AB /* SettingsManager.swift */; };
 		A1000010238D1234567890AB /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000022238D1234567890AB /* SettingsView.swift */; };
 		A1000025238D1234567890AB /* TrashView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000023238D1234567890AB /* TrashView.swift */; };
 		A1000026238D1234567890AB /* EditWordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000024238D1234567890AB /* EditWordView.swift */; };
@@ -46,12 +49,17 @@
 /* Begin PBXFileReference section */
 		850E49CE2F4952F8000F46C6 /* ActionBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionBar.swift; sourceTree = "<group>"; };
 		850E49CF2F4952F8000F46C6 /* SelectableListRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectableListRow.swift; sourceTree = "<group>"; };
-		85F6833C2F4AA9AC00389866 /* WordImportErrorHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WordImportErrorHandler.swift; sourceTree = "<group>"; };
+		8577C1712F4BE3D20061F175 /* WordImportErrorHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WordImportErrorHandler.swift; sourceTree = "<group>"; };
+		8577C18C2F4BE5AC0061F175 /* ContinuousPlaybackManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContinuousPlaybackManager.swift; sourceTree = "<group>"; };
+		8577C18D2F4BE5AC0061F175 /* NowPlayingInfoManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingInfoManager.swift; sourceTree = "<group>"; };
+		8577C18E2F4BE5AC0061F175 /* RemoteCommandCenterManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteCommandCenterManager.swift; sourceTree = "<group>"; };
+		8577C1922F4BE5AC0061F175 /* OpenAIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIService.swift; sourceTree = "<group>"; };
+		8577C1942F4BE5AC0061F175 /* SettingsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsManager.swift; sourceTree = "<group>"; };
+		8577C1952F4BE5AC0061F175 /* SpeechRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechRecognizer.swift; sourceTree = "<group>"; };
+		8577C1962F4BE5AC0061F175 /* SpeechService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechService.swift; sourceTree = "<group>"; };
 		A1000011238D1234567890AB /* EnglishLearnAppApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnglishLearnAppApp.swift; sourceTree = "<group>"; };
 		A1000012238D1234567890AB /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		A1000013238D1234567890AB /* Word.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Word.swift; sourceTree = "<group>"; };
-		A1000014238D1234567890AB /* SpeechService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechService.swift; sourceTree = "<group>"; };
-		A1000015238D1234567890AB /* SpeechRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechRecognizer.swift; sourceTree = "<group>"; };
 		A1000016238D1234567890AB /* WordListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WordListView.swift; sourceTree = "<group>"; };
 		A1000017238D1234567890AB /* WordPracticeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WordPracticeView.swift; sourceTree = "<group>"; };
 		A1000018238D1234567890AB /* words.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = words.json; sourceTree = "<group>"; };
@@ -61,8 +69,6 @@
 		A100001C238D1234567890AB /* SentenceListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SentenceListView.swift; sourceTree = "<group>"; };
 		A100001D238D1234567890AB /* SentencePracticeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SentencePracticeView.swift; sourceTree = "<group>"; };
 		A100001E238D1234567890AB /* AddWordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddWordView.swift; sourceTree = "<group>"; };
-		A100001F238D1234567890AB /* OpenAIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIService.swift; sourceTree = "<group>"; };
-		A1000020238D1234567890AB /* SettingsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsManager.swift; sourceTree = "<group>"; };
 		A1000021238D1234567890AB /* EnglishLearnApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = EnglishLearnApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1000022238D1234567890AB /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		A1000023238D1234567890AB /* TrashView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrashView.swift; sourceTree = "<group>"; };
@@ -93,6 +99,28 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		8577C18F2F4BE5AC0061F175 /* Playback */ = {
+			isa = PBXGroup;
+			children = (
+				8577C18C2F4BE5AC0061F175 /* ContinuousPlaybackManager.swift */,
+				8577C18D2F4BE5AC0061F175 /* NowPlayingInfoManager.swift */,
+				8577C18E2F4BE5AC0061F175 /* RemoteCommandCenterManager.swift */,
+			);
+			path = Playback;
+			sourceTree = "<group>";
+		};
+		8577C1972F4BE5AC0061F175 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				8577C18F2F4BE5AC0061F175 /* Playback */,
+				8577C1922F4BE5AC0061F175 /* OpenAIService.swift */,
+				8577C1942F4BE5AC0061F175 /* SettingsManager.swift */,
+				8577C1952F4BE5AC0061F175 /* SpeechRecognizer.swift */,
+				8577C1962F4BE5AC0061F175 /* SpeechService.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
 		A1000030238D1234567890AB = {
 			isa = PBXGroup;
 			children = (
@@ -104,10 +132,10 @@
 		A1000031238D1234567890AB /* EnglishLearnApp */ = {
 			isa = PBXGroup;
 			children = (
+				8577C1972F4BE5AC0061F175 /* Services */,
 				A1000011238D1234567890AB /* EnglishLearnAppApp.swift */,
 				A1000028238D1234567890AB /* AppConfig.swift */,
 				A1000033238D1234567890AB /* Models */,
-				A1000034238D1234567890AB /* Services */,
 				A1000035238D1234567890AB /* Views */,
 				A1000036238D1234567890AB /* Resources */,
 				A1000019238D1234567890AB /* Assets.xcassets */,
@@ -128,22 +156,11 @@
 		A1000033238D1234567890AB /* Models */ = {
 			isa = PBXGroup;
 			children = (
-				85F6833C2F4AA9AC00389866 /* WordImportErrorHandler.swift */,
+				8577C1712F4BE3D20061F175 /* WordImportErrorHandler.swift */,
 				A1000013238D1234567890AB /* Word.swift */,
 				A100007A238D1234567890AB /* PromptPreset.swift */,
 			);
 			path = Models;
-			sourceTree = "<group>";
-		};
-		A1000034238D1234567890AB /* Services */ = {
-			isa = PBXGroup;
-			children = (
-				A1000014238D1234567890AB /* SpeechService.swift */,
-				A1000015238D1234567890AB /* SpeechRecognizer.swift */,
-				A100001F238D1234567890AB /* OpenAIService.swift */,
-				A1000020238D1234567890AB /* SettingsManager.swift */,
-			);
-			path = Services;
 			sourceTree = "<group>";
 		};
 		A1000035238D1234567890AB /* Views */ = {
@@ -274,15 +291,18 @@
 				A1000001238D1234567890AB /* EnglishLearnAppApp.swift in Sources */,
 				A1000002238D1234567890AB /* ContentView.swift in Sources */,
 				A1000003238D1234567890AB /* Word.swift in Sources */,
-				A1000004238D1234567890AB /* SpeechService.swift in Sources */,
-				A1000005238D1234567890AB /* SpeechRecognizer.swift in Sources */,
 				A1000006238D1234567890AB /* WordListView.swift in Sources */,
 				A1000007238D1234567890AB /* WordPracticeView.swift in Sources */,
 				A100000B238D1234567890AB /* SentenceListView.swift in Sources */,
 				A100000C238D1234567890AB /* SentencePracticeView.swift in Sources */,
+				8577C1982F4BE5AC0061F175 /* SettingsManager.swift in Sources */,
+				8577C1992F4BE5AC0061F175 /* NowPlayingInfoManager.swift in Sources */,
+				8577C19A2F4BE5AC0061F175 /* ContinuousPlaybackManager.swift in Sources */,
+				8577C19B2F4BE5AC0061F175 /* SpeechService.swift in Sources */,
+				8577C19C2F4BE5AC0061F175 /* OpenAIService.swift in Sources */,
+				8577C19D2F4BE5AC0061F175 /* RemoteCommandCenterManager.swift in Sources */,
+				8577C19F2F4BE5AC0061F175 /* SpeechRecognizer.swift in Sources */,
 				A100000D238D1234567890AB /* AddWordView.swift in Sources */,
-				A100000E238D1234567890AB /* OpenAIService.swift in Sources */,
-				A100000F238D1234567890AB /* SettingsManager.swift in Sources */,
 				A1000010238D1234567890AB /* SettingsView.swift in Sources */,
 				A1000025238D1234567890AB /* TrashView.swift in Sources */,
 				A1000026238D1234567890AB /* EditWordView.swift in Sources */,
@@ -292,10 +312,10 @@
 				A100007F238D1234567890AB /* OnboardingView.swift in Sources */,
 				A1000027238D1234567890AB /* AppConfig.swift in Sources */,
 				A100007B238D1234567890AB /* PromptPreset.swift in Sources */,
+				8577C1722F4BE3D20061F175 /* WordImportErrorHandler.swift in Sources */,
 				A100007D238D1234567890AB /* PromptPresetsView.swift in Sources */,
 				A1000081238D1234567890AB /* ActivityPresenter.swift in Sources */,
 				A1000083238D1234567890AB /* SelectionState.swift in Sources */,
-				85F6833D2F4AA9AC00389866 /* WordImportErrorHandler.swift in Sources */,
 				A1000085238D1234567890AB /* EmptyListView.swift in Sources */,
 				A1000087238D1234567890AB /* PronunciationResultView.swift in Sources */,
 				A1000089238D1234567890AB /* RecognitionResultView.swift in Sources */,

@@ -171,6 +171,29 @@ class SettingsManager: ObservableObject {
                 return "英語のみ (EN→EN)"
             }
         }
+
+        /// Number of steps per item for this mode.
+        var stepsPerItem: Int {
+            switch self {
+            case .bilingual: return 3
+            case .englishOnly: return 2
+            }
+        }
+
+        /// Returns the step label for display purposes.
+        ///
+        /// - Parameter step: The step index (0-based)
+        /// - Returns: Localized step label
+        func stepLabel(for step: Int) -> String {
+            let clampedStep = min(max(step, 0), stepsPerItem - 1)
+
+            switch self {
+            case .bilingual:
+                return ["English (1st)", "Japanese", "English (2nd)"][clampedStep]
+            case .englishOnly:
+                return ["English (1st)", "English (2nd)"][clampedStep]
+            }
+        }
     }
 
     /// OpenAI model options for sentence generation.

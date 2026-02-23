@@ -6,17 +6,9 @@ struct SentenceListView: View {
     @StateObject private var speechService = SpeechService()
     @EnvironmentObject private var settings: SettingsManager
 
-    // MARK: Continuous playback
-    @State private var isPlayingAll = false
-    @State private var playingIndex: Int = 0  // flat index into allSentences
-    @State private var playingStep: Int = 0   // 0=EN, 1=JA, 2=EN, 3=JA
-    @State private var playbackGeneration = 0  // Increment to invalidate old async tasks
-    @State private var expectedGeneration = 0  // Set when starting speech, checked on completion
-    // Tokens returned by MPRemoteCommand.addTarget(handler:) so we can remove them
-    @State private var playCommandToken: Any? = nil
-    @State private var pauseCommandToken: Any? = nil
-    @State private var nextCommandToken: Any? = nil
-    @State private var previousCommandToken: Any? = nil
+    // MARK: - Continuous playback managers
+    @State private var playbackManager: ContinuousPlaybackManager<Sentence>?
+    @State private var remoteCommandManager = RemoteCommandCenterManager()
 
     init(word: Word) {
         self.word = word
@@ -44,8 +36,10 @@ struct SentenceListView: View {
     ///
     /// - Returns: The sentence ID if playback is active and index is valid, otherwise nil
     private var playingSentenceID: UUID? {
-        guard isPlayingAll, playingIndex < allSentences.count else { return nil }
-        return allSentences[playingIndex].id
+        guard let manager = playbackManager,
+              manager.isPlaying,
+              manager.currentIndex < allSentences.count else { return nil }
+        return allSentences[manager.currentIndex].id
     }
 
     var body: some View {
@@ -119,267 +113,137 @@ struct SentenceListView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onReceive(speechService.speechFinishedPublisher) { _ in
             // Called only when speech finishes naturally (not cancelled)
-            guard isPlayingAll else { return }
-
-            // Check if this completion is for the current playback session
-            guard expectedGeneration == playbackGeneration else { return }
+            guard let manager = playbackManager, manager.isPlaying else { return }
 
             // Add a delay before advancing to the next step for better pacing
-            let capturedGeneration = playbackGeneration
+            let capturedGeneration = manager.playbackGeneration
             Task {
                 try? await Task.sleep(nanoseconds: 800_000_000)  // 0.8 second delay
                 await MainActor.run {
                     // Verify generation hasn't changed during the delay
-                    guard capturedGeneration == playbackGeneration else { return }
-                    advancePlayback()
+                    guard manager.isValidCompletion(generation: capturedGeneration) else { return }
+                    manager.advance()
                 }
             }
         }
         .onAppear {
-            setupRemoteCommandCenter()
+            setupPlaybackManager()
+
+            // Setup remote command center (callbacks already dispatched to main queue)
+            remoteCommandManager.setup(
+                onPlay: {
+                    if let manager = self.playbackManager, !manager.isPlaying {
+                        self.startPlayAll()
+                    }
+                },
+                onPause: {
+                    self.stopPlayAll()
+                },
+                onNext: {
+                    self.playbackManager?.next()
+                },
+                onPrevious: {
+                    self.playbackManager?.previous()
+                }
+            )
         }
-        .onChange(of: settings.playbackMode) { _, _ in
+        .onChange(of: settings.playbackMode) { _, newMode in
             // If playback is active, restart current sentence from step 0 when mode changes
-            if isPlayingAll {
-                playbackGeneration += 1
-                playingStep = 0
-                speakCurrentStep()
-            }
+            playbackManager?.updatePlaybackMode(newMode)
         }
         .onReceive(NotificationCenter.default.publisher(for: .speechServiceDidStartNewPlayback)) { _ in
             // When individual playback starts (e.g., user taps "英語を聞く" button),
             // stop continuous playback cleanly to avoid state confusion.
             // The audio session remains active to allow seamless transition.
-            if isPlayingAll {
-                playbackGeneration += 1
-                isPlayingAll = false
-                playingStep = 0
-                clearNowPlayingInfo()
+            if let manager = playbackManager, manager.isPlaying {
+                manager.stop()
+                NowPlayingInfoManager.clear()
             }
         }
         .onDisappear {
             // Always stop to invalidate any pending async tasks via generation increment
-            stopPlayAll()
+            playbackManager?.stop()
+            speechService.deactivateAudioSession()
+            NowPlayingInfoManager.clear()
             // Remove remote command handlers to avoid leaked handlers after view disappears
-            let commandCenter = MPRemoteCommandCenter.shared()
-            if let t = playCommandToken { commandCenter.playCommand.removeTarget(t) }
-            if let t = pauseCommandToken { commandCenter.pauseCommand.removeTarget(t) }
-            if let t = nextCommandToken { commandCenter.nextTrackCommand.removeTarget(t) }
-            if let t = previousCommandToken { commandCenter.previousTrackCommand.removeTarget(t) }
-            playCommandToken = nil
-            pauseCommandToken = nil
-            nextCommandToken = nil
-            previousCommandToken = nil
+            remoteCommandManager.cleanup()
         }
     }
 
     // MARK: - Playback control
 
-    /// Starts continuous playback with proper race condition handling.
-    ///
-    /// This method uses a generation counter to invalidate any pending async tasks
-    /// from previous playback sessions, preventing race conditions when rapidly
-    /// switching between sentences during playback.
+    /// Initializes the playback manager on first use.
+    private func setupPlaybackManager() {
+        guard playbackManager == nil else { return }
+
+        playbackManager = ContinuousPlaybackManager(
+            playbackMode: settings.playbackMode,
+            speechHandler: { [weak speechService, settings, word] (sentence: Sentence, step: Int) in
+                guard let speechService else { return }
+
+                switch settings.playbackMode {
+                case .bilingual:
+                    switch step {
+                    case 0, 2:
+                        speechService.speak(sentence.english, voiceGender: settings.voiceGender, isContinuousPlayback: true)
+                    case 1:
+                        speechService.speak(sentence.japanese, language: "ja-JP", voiceGender: settings.voiceGender, isContinuousPlayback: true)
+                    default:
+                        break
+                    }
+                case .englishOnly:
+                    speechService.speak(sentence.english, voiceGender: settings.voiceGender, isContinuousPlayback: true)
+                }
+
+                // Update Now Playing info
+                let stepLabel = settings.playbackMode.stepLabel(for: step)
+                NowPlayingInfoManager.update(
+                    title: sentence.english,
+                    artist: "\(word.word) - \(stepLabel)",
+                    album: word.meaning,
+                    playbackRate: 1.0
+                )
+            },
+            completionHandler: { [weak speechService] in
+                speechService?.deactivateAudioSession()
+                NowPlayingInfoManager.clear()
+            }
+        )
+    }
+
+    /// Starts continuous playback from a specific sentence or the beginning.
     ///
     /// - Parameter sentence: The sentence to start from, or nil to start from the first sentence
     private func startPlayAll(from sentence: Sentence? = nil) {
         guard !allSentences.isEmpty else { return }
 
-        // Increment generation to invalidate all pending async tasks
-        playbackGeneration += 1
-        let currentGen = playbackGeneration
+        setupPlaybackManager()
 
-        // Immediately stop everything
-        isPlayingAll = false
-        playingStep = 0
+        // Stop current playback first
         speechService.stop()
+
+        // Determine start index
+        let startIndex: Int
+        if let sentence,
+           let idx = allSentences.firstIndex(where: { $0.id == sentence.id }) {
+            startIndex = idx
+        } else {
+            startIndex = 0
+        }
 
         Task { @MainActor in
-            // Check if this task is still valid (no new startPlayAll was called)
-            guard currentGen == playbackGeneration else { return }
-
-            // Set up new playback position
-            if let sentence,
-               let idx = allSentences.firstIndex(where: { $0.id == sentence.id }) {
-                playingIndex = idx
-            } else {
-                playingIndex = 0
-            }
-            isPlayingAll = true
-            playingStep = 0
-            speakCurrentStep()
+            playbackManager?.start(items: allSentences, startIndex: startIndex)
         }
     }
 
-    /// Stops all continuous playback and invalidates pending async tasks.
-    ///
-    /// Increments the playback generation counter to ensure any in-flight
-    /// completion callbacks from the previous session are ignored.
-    /// Also deactivates the audio session to allow other apps to resume audio.
+    /// Stops all continuous playback.
     private func stopPlayAll() {
-        // Increment generation to invalidate all pending tasks
-        playbackGeneration += 1
-        isPlayingAll = false
-        playingStep = 0
+        playbackManager?.stop()
         speechService.stop()
         speechService.deactivateAudioSession()
-        clearNowPlayingInfo()
+        NowPlayingInfoManager.clear()
     }
 
-    /// Speaks the text for the current sentence and playback step.
-    ///
-    /// Records the current playback generation before starting speech to enable
-    /// validation in the completion callback. This prevents stale completion events
-    /// from affecting new playback sessions.
-    ///
-    /// Playback steps (bilingual): 0=EN, 1=JA, 2=EN (3 steps per sentence)
-    /// Playback steps (English-only): 0=EN, 1=EN (2 steps per sentence)
-    private func speakCurrentStep() {
-        guard playingIndex < allSentences.count else {
-            stopPlayAll()
-            return
-        }
-        // Record the current generation before starting speech
-        expectedGeneration = playbackGeneration
-
-        let sentence = allSentences[playingIndex]
-
-        switch settings.playbackMode {
-        case .bilingual:
-            switch playingStep {
-            case 0, 2:
-                speechService.speak(sentence.english, voiceGender: settings.voiceGender, isContinuousPlayback: true)
-            case 1:
-                speechService.speak(sentence.japanese, language: "ja-JP", voiceGender: settings.voiceGender, isContinuousPlayback: true)
-            default:
-                break
-            }
-        case .englishOnly:
-            // Both steps 0 and 1 play English
-            speechService.speak(sentence.english, voiceGender: settings.voiceGender, isContinuousPlayback: true)
-        }
-
-        // Update Now Playing info for lock screen/Control Center
-        updateNowPlayingInfo()
-    }
-
-    /// Advances to the next playback step or sentence after natural speech completion.
-    ///
-    /// This method is called only when speech finishes naturally (not on cancellation)
-    /// via the speechFinishedPublisher. It progresses through the playback cycle
-    /// (bilingual: EN→JA→EN, English-only: EN→EN) and moves to the next sentence when all steps complete.
-    private func advancePlayback() {
-        let maxSteps = settings.playbackMode == .bilingual ? 3 : 2
-        let nextStep = playingStep + 1
-
-        if nextStep < maxSteps {
-            // More steps remain within the current sentence
-            playingStep = nextStep
-            speakCurrentStep()
-        } else {
-            // Move to the next sentence
-            let nextIdx = playingIndex + 1
-            if nextIdx < allSentences.count {
-                playingIndex = nextIdx
-                playingStep = 0
-                speakCurrentStep()
-            } else {
-                // All sentences done
-                isPlayingAll = false
-                playingStep = 0
-                clearNowPlayingInfo()
-            }
-        }
-    }
-
-    // MARK: - Media Controls
-
-    /// Sets up remote command center handlers for lock screen/Control Center controls.
-    ///
-    /// Registers handlers for play, pause, next track, and previous track commands.
-    /// These allow users to control playback from the lock screen, Control Center,
-    /// and external devices like AirPods.
-    private func setupRemoteCommandCenter() {
-        let commandCenter = MPRemoteCommandCenter.shared()
-
-        // Play command
-        playCommandToken = commandCenter.playCommand.addTarget { _ in
-            if !self.isPlayingAll {
-                // startPlayAll() will increment playbackGeneration internally
-                self.startPlayAll()
-                return .success
-            }
-            return .commandFailed
-        }
-
-        // Pause command
-        pauseCommandToken = commandCenter.pauseCommand.addTarget { _ in
-            if self.isPlayingAll {
-                self.stopPlayAll()
-                return .success
-            }
-            return .commandFailed
-        }
-
-        // Next track command (skip to next sentence)
-        nextCommandToken = commandCenter.nextTrackCommand.addTarget { _ in
-            if self.isPlayingAll && self.playingIndex + 1 < self.allSentences.count {
-                // Invalidate any previous completion handlers to avoid races
-                self.playbackGeneration += 1
-                self.playingIndex += 1
-                self.playingStep = 0
-                self.speakCurrentStep()
-                return .success
-            }
-            return .commandFailed
-        }
-
-        // Previous track command (go back to previous sentence)
-        previousCommandToken = commandCenter.previousTrackCommand.addTarget { _ in
-            if self.isPlayingAll && self.playingIndex > 0 {
-                // Invalidate any previous completion handlers to avoid races
-                self.playbackGeneration += 1
-                self.playingIndex -= 1
-                self.playingStep = 0
-                self.speakCurrentStep()
-                return .success
-            }
-            return .commandFailed
-        }
-    }
-
-    /// Updates the Now Playing info displayed on lock screen and Control Center.
-    ///
-    /// Shows the current sentence being played along with metadata like word,
-    /// meaning, and playback position.
-    private func updateNowPlayingInfo() {
-        guard playingIndex < allSentences.count else { return }
-
-        let sentence = allSentences[playingIndex]
-        let maxSteps = settings.playbackMode == .bilingual ? 3 : 2
-        let clampedStep = min(max(playingStep, 0), maxSteps - 1)
-
-        let stepLabel: String
-        if settings.playbackMode == .bilingual {
-            stepLabel = ["English (1st)", "Japanese", "English (2nd)"][clampedStep]
-        } else {
-            stepLabel = ["English (1st)", "English (2nd)"][clampedStep]
-        }
-
-        var nowPlayingInfo = [String: Any]()
-        nowPlayingInfo[MPMediaItemPropertyTitle] = sentence.english
-        nowPlayingInfo[MPMediaItemPropertyArtist] = "\(word.word) - \(stepLabel)"
-        nowPlayingInfo[MPMediaItemPropertyAlbumTitle] = word.meaning
-        nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] = isPlayingAll ? 1.0 : 0.0
-        nowPlayingInfo[MPNowPlayingInfoPropertyMediaType] = MPNowPlayingInfoMediaType.audio.rawValue
-
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
-    }
-
-    /// Clears the Now Playing info when playback stops.
-    private func clearNowPlayingInfo() {
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
-    }
 }
 
 struct SentenceRowView: View {
