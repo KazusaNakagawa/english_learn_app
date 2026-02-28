@@ -1,29 +1,29 @@
 /// Application-level configuration constants.
 ///
-/// ⚠️ SECURITY WARNING:
-/// - This file is gitignored and should NEVER be committed with real values
-/// - API keys will be embedded in the compiled binary (acceptable for personal/development use)
-/// - For production apps distributed via App Store, consider using:
-///   - Remote configuration (e.g., Firebase Remote Config)
-///   - Secure backend API that doesn't expose keys to clients
-///   - iOS Keychain for runtime storage (requires initial secure provisioning)
+/// ## Security Note
+/// This file is gitignored and should NEVER be committed with real values.
 ///
-/// Setup:
+/// ## API Key Configuration
+/// - **OpenAI API Key**: Configured via Settings screen, stored in iOS Keychain
+/// - **VOICEVOX API Key**: Set in this file (developer-managed, not user-configurable)
+///
+/// ## Setup:
 ///   1. Copy AppConfig.swift.example to AppConfig.swift
 ///   2. Deploy the CDK stack: cd aws && npm run deploy:poc
 ///   3. Get API endpoint from deployment output (VoicevoxApiEndpoint)
-///   4. Get API key from environment variable: echo $VOICEVOX_API_KEY_POC
-///   5. Replace placeholder values below with actual values
-///
-/// Note: This approach is suitable for personal/internal apps not distributed publicly.
+///   4. Set voicevoxBaseURL below
+///   5. Set voicevoxApiKey (from CDK deployment output or environment variable)
 enum AppConfig {
     /// Base URL for the VOICEVOX engine API (no trailing slash).
     /// Example: https://abc123xyz.execute-api.ap-northeast-1.amazonaws.com
     static let voicevoxBaseURL = "https://xxxxxxxxxx.execute-api.ap-northeast-1.amazonaws.com"
 
     /// API key for authenticating with the VOICEVOX backend.
+    ///
+    /// This key is managed by the developer (not user-configurable).
+    /// Get the value from CDK deployment output or environment variable:
+    ///   echo $VOICEVOX_API_KEY_POC
+    ///
     /// ⚠️ WARNING: This key will be embedded in the app binary.
-    /// Only use this approach for personal/development apps.
-    /// Value should match VOICEVOX_API_KEY_{ENV} used during CDK deployment.
-    static let voicevoxApiKey = "your-api-key-here-64-character-hex-string"
+    static let voicevoxApiKey = ""
 }

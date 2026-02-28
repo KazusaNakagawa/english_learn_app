@@ -17,6 +17,7 @@
 		8577C19C2F4BE5AC0061F175 /* OpenAIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8577C1922F4BE5AC0061F175 /* OpenAIService.swift */; };
 		8577C19D2F4BE5AC0061F175 /* RemoteCommandCenterManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8577C18E2F4BE5AC0061F175 /* RemoteCommandCenterManager.swift */; };
 		8577C19F2F4BE5AC0061F175 /* SpeechRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8577C1952F4BE5AC0061F175 /* SpeechRecognizer.swift */; };
+		85DE1EC12F52867000A4CA59 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85DE1EC02F52867000A4CA59 /* KeychainService.swift */; };
 		A1000001238D1234567890AB /* EnglishLearnAppApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000011238D1234567890AB /* EnglishLearnAppApp.swift */; };
 		A1000002238D1234567890AB /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000012238D1234567890AB /* ContentView.swift */; };
 		A1000003238D1234567890AB /* Word.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000013238D1234567890AB /* Word.swift */; };
@@ -57,6 +58,7 @@
 		8577C1942F4BE5AC0061F175 /* SettingsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsManager.swift; sourceTree = "<group>"; };
 		8577C1952F4BE5AC0061F175 /* SpeechRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechRecognizer.swift; sourceTree = "<group>"; };
 		8577C1962F4BE5AC0061F175 /* SpeechService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechService.swift; sourceTree = "<group>"; };
+		85DE1EC02F52867000A4CA59 /* KeychainService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainService.swift; sourceTree = "<group>"; };
 		A1000011238D1234567890AB /* EnglishLearnAppApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnglishLearnAppApp.swift; sourceTree = "<group>"; };
 		A1000012238D1234567890AB /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		A1000013238D1234567890AB /* Word.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Word.swift; sourceTree = "<group>"; };
@@ -112,6 +114,7 @@
 		8577C1972F4BE5AC0061F175 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				85DE1EC02F52867000A4CA59 /* KeychainService.swift */,
 				8577C18F2F4BE5AC0061F175 /* Playback */,
 				8577C1922F4BE5AC0061F175 /* OpenAIService.swift */,
 				8577C1942F4BE5AC0061F175 /* SettingsManager.swift */,
@@ -306,6 +309,7 @@
 				A1000010238D1234567890AB /* SettingsView.swift in Sources */,
 				A1000025238D1234567890AB /* TrashView.swift in Sources */,
 				A1000026238D1234567890AB /* EditWordView.swift in Sources */,
+				85DE1EC12F52867000A4CA59 /* KeychainService.swift in Sources */,
 				A1000075238D1234567890AB /* ArchiveView.swift in Sources */,
 				A1000077238D1234567890AB /* PrivacyPolicyView.swift in Sources */,
 				A1000079238D1234567890AB /* TermsOfServiceView.swift in Sources */,

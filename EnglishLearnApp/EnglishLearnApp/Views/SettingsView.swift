@@ -17,7 +17,7 @@ struct SettingsView: View {
     /// The speech service for playing sample audio.
     @StateObject private var speechService = SpeechService()
 
-    /// Local state for the API key input field.
+    /// Local state for the OpenAI API key input field.
     @State private var apiKeyInput: String = ""
 
     // MARK: - Export / Import state
@@ -209,6 +209,14 @@ struct SettingsView: View {
                         Text("AIモデルは精度やコストに応じて選択できます。GPT-4o miniは高速で低コスト、GPT-4oは高性能です。")
                             .font(.body)
                         Text("例文生成の条件は「プリセット管理」から選択・編集できます。組み込みプリセットはデフォルトに戻すことができます。")
+                            .font(.body)
+                            .foregroundColor(.secondary)
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("APIキーはiOS Keychainに安全に保存されます。")
+                            .font(.body)
+                        Text("Keychainはデバイスのセキュリティ機能により暗号化され、他のアプリからアクセスできません。")
                             .font(.body)
                             .foregroundColor(.secondary)
                     }
