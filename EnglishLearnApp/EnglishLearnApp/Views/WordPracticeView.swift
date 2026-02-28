@@ -30,20 +30,37 @@ struct WordPracticeView: View {
             Spacer()
 
             // 音声読み上げボタン
-            Button(action: {
-                speechService.speak(word.word, voiceGender: settings.voiceGender)
-            }) {
-                VStack {
-                    Image(systemName: speechService.isSpeaking ? "speaker.wave.3.fill" : "speaker.wave.2.fill")
-                        .font(.system(size: 40))
-                    Text("お手本を聞く")
-                        .font(.subheadline)
+            HStack(spacing: 16) {
+                Button(action: {
+                    speechService.speak(word.word, voiceGender: settings.voiceGender)
+                }) {
+                    VStack {
+                        Image(systemName: (speechService.isSpeaking && speechService.speakingLanguage != "ja-JP") ? "speaker.wave.3.fill" : "speaker.wave.2.fill")
+                            .font(.system(size: 40))
+                        Text("英語を聞く")
+                            .font(.subheadline)
+                    }
+                    .frame(width: 120, height: 80)
+                    .background(Color.blue.opacity(0.1))
+                    .cornerRadius(16)
                 }
-                .frame(width: 120, height: 80)
-                .background(Color.blue.opacity(0.1))
-                .cornerRadius(16)
+                .foregroundColor(.blue)
+
+                Button(action: {
+                    speechService.speak(word.meaning, language: "ja-JP", voiceGender: settings.voiceGender)
+                }) {
+                    VStack {
+                        Image(systemName: (speechService.isSpeaking && speechService.speakingLanguage == "ja-JP") ? "speaker.wave.3.fill" : "speaker.wave.2.fill")
+                            .font(.system(size: 40))
+                        Text("日本語を聞く")
+                            .font(.subheadline)
+                    }
+                    .frame(width: 120, height: 80)
+                    .background(Color.orange.opacity(0.1))
+                    .cornerRadius(16)
+                }
+                .foregroundColor(.orange)
             }
-            .foregroundColor(.blue)
 
             // 発音チェックボタン
             Button(action: {
@@ -71,28 +88,12 @@ struct WordPracticeView: View {
 
             // 認識結果表示
             if !speechRecognizer.recognizedText.isEmpty {
-                VStack(spacing: 8) {
-                    Text("認識結果:")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Text(speechRecognizer.recognizedText)
-                        .font(.title3)
-                        .fontWeight(.medium)
-                }
-                .padding()
-                .background(Color.gray.opacity(0.1))
-                .cornerRadius(12)
+                RecognitionResultView(recognizedText: speechRecognizer.recognizedText)
             }
 
             // 判定結果表示
             if showResult, let result = pronunciationResult {
-                Text(result.message)
-                    .font(.title2)
-                    .fontWeight(.semibold)
-                    .foregroundColor(resultColor(for: result))
-                    .padding()
-                    .background(resultColor(for: result).opacity(0.1))
-                    .cornerRadius(12)
+                PronunciationResultView(result: result, font: .title2)
             }
 
             // エラーメッセージ
@@ -124,16 +125,6 @@ struct WordPracticeView: View {
         showResult = true
     }
 
-    private func resultColor(for result: PronunciationResult) -> Color {
-        switch result {
-        case .correct:
-            return .green
-        case .close:
-            return .orange
-        case .incorrect, .noInput:
-            return .red
-        }
-    }
 }
 
 #Preview {

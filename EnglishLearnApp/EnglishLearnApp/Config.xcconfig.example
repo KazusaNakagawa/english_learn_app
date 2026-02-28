@@ -1,0 +1,16 @@
+// Copy this file to Config.xcconfig and fill in your values.
+// Config.xcconfig is listed in .gitignore and should NOT be committed.
+//
+// How to link in Xcode:
+//   Project > Info > Configurations > Debug / Release
+//   → Set "Based on Configuration File" to Config.xcconfig
+
+// VOICEVOX API Gateway endpoint (no trailing slash)
+VOICEVOX_BASE_URL = https://xxxxxxxxxx.execute-api.ap-northeast-1.amazonaws.com
+
+// Signing — set to your Apple Developer Team ID (10-char alphanumeric).
+// Find it at https://developer.apple.com/account → Membership → Team ID.
+DEVELOPMENT_TEAM = XXXXXXXXXX
+
+// Code sign identity. Use "Apple Development" for debug/device builds.
+CODE_SIGN_IDENTITY = Apple Development

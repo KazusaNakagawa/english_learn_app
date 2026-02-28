@@ -1,0 +1,54 @@
+name: iOS Build
+
+on:
+  push:
+    branches: [] # TODO: Setting is still
+    paths:
+      - 'EnglishLearnApp/**'
+      - '.github/workflows/ios-build.yml'
+  pull_request:
+    branches: [] # TODO: Setting is still
+    paths:
+      - 'EnglishLearnApp/**'
+      - '.github/workflows/ios-build.yml'
+
+jobs:
+  build:
+    name: Build iOS App
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -switch /Applications/Xcode_16.app/Contents/Developer
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Create stub AppConfig
+        run: |
+          cat > EnglishLearnApp/EnglishLearnApp/AppConfig.swift << 'EOF'
+          // Stub for CI
+          import Foundation
+          enum AppConfig {
+              static let apiBaseURL = "https://example.com"
+              static let openAIAPIKey = ""
+          }
+          EOF
+
+      - name: Build (no signing)
+        run: |
+          xcodebuild build \
+            -project EnglishLearnApp/EnglishLearnApp.xcodeproj \
+            -scheme EnglishLearnApp \
+            -destination "generic/platform=iOS Simulator" \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcpretty || xcodebuild build \
+              -project EnglishLearnApp/EnglishLearnApp.xcodeproj \
+              -scheme EnglishLearnApp \
+              -destination "generic/platform=iOS Simulator" \
+              -configuration Debug \
+              CODE_SIGNING_ALLOWED=NO

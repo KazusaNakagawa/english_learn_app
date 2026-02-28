@@ -1,0 +1,34 @@
+{
+  "name": "voicevox-lambda-infra",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "cdk": "cdk",
+    "deploy:poc": "cdk deploy -c env=poc",
+    "deploy:dev": "cdk deploy -c env=dev",
+    "deploy:pro": "cdk deploy -c env=pro",
+    "diff:poc": "cdk diff -c env=poc",
+    "diff:dev": "cdk diff -c env=dev",
+    "diff:pro": "cdk diff -c env=pro",
+    "synth:poc": "cdk synth -c env=poc",
+    "synth:dev": "cdk synth -c env=dev",
+    "synth:pro": "cdk synth -c env=pro",
+    "destroy:poc": "cdk destroy -c env=poc",
+    "destroy:dev": "cdk destroy -c env=dev",
+    "destroy:pro": "cdk destroy -c env=pro"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.120.0",
+    "cdk-ecr-deployment": "^4.1.0",
+    "constructs": "^10.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "aws-cdk": "^2.120.0",
+    "dotenv": "^17.3.1",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.3.0"
+  }
+}

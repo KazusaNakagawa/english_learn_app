@@ -1,0 +1,29 @@
+/// Application-level configuration constants.
+///
+/// ## Security Note
+/// This file is gitignored and should NEVER be committed with real values.
+///
+/// ## API Key Configuration
+/// - **OpenAI API Key**: Configured via Settings screen, stored in iOS Keychain
+/// - **VOICEVOX API Key**: Set in this file (developer-managed, not user-configurable)
+///
+/// ## Setup:
+///   1. Copy AppConfig.swift.example to AppConfig.swift
+///   2. Deploy the CDK stack: cd aws && npm run deploy:poc
+///   3. Get API endpoint from deployment output (VoicevoxApiEndpoint)
+///   4. Set voicevoxBaseURL below
+///   5. Set voicevoxApiKey (from CDK deployment output or environment variable)
+enum AppConfig {
+    /// Base URL for the VOICEVOX engine API (no trailing slash).
+    /// Example: https://abc123xyz.execute-api.ap-northeast-1.amazonaws.com
+    static let voicevoxBaseURL = "https://xxxxxxxxxx.execute-api.ap-northeast-1.amazonaws.com"
+
+    /// API key for authenticating with the VOICEVOX backend.
+    ///
+    /// This key is managed by the developer (not user-configurable).
+    /// Get the value from CDK deployment output or environment variable:
+    ///   echo $VOICEVOX_API_KEY_POC
+    ///
+    /// ⚠️ WARNING: This key will be embedded in the app binary.
+    static let voicevoxApiKey = ""
+}

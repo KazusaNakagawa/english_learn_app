@@ -1,5 +1,6 @@
 import Speech
 import AVFoundation
+import SwiftUI
 
 @MainActor
 class SpeechRecognizer: ObservableObject {
@@ -101,7 +102,9 @@ class SpeechRecognizer: ObservableObject {
         recognitionTask = nil
         isRecording = false
 
-        try? AVAudioSession.sharedInstance().setActive(false)
+        let session = AVAudioSession.sharedInstance()
+        try? session.setActive(false, options: .notifyOthersOnDeactivation)
+        try? session.setCategory(.playback)
     }
 
     func checkPronunciation(expected: String) -> PronunciationResult {
@@ -143,14 +146,11 @@ enum PronunciationResult {
         }
     }
 
-    var color: String {
+    var color: Color {
         switch self {
-        case .correct:
-            return "green"
-        case .close:
-            return "orange"
-        case .incorrect, .noInput:
-            return "red"
+        case .correct:   return .green
+        case .close:     return .orange
+        case .incorrect, .noInput: return .red
         }
     }
 }
