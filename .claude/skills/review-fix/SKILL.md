@@ -22,9 +22,10 @@ Review PR feedback from reviewers or bots, apply fixes, and push updates.
 ```bash
 gh pr view $ARGUMENTS --comments
 gh api repos/{owner}/{repo}/pulls/$ARGUMENTS/comments
+gh api repos/{owner}/{repo}/pulls/$ARGUMENTS/reviews
 ```
 
-**完了条件:** 全てのレビューコメントを取得できた
+**完了条件:** 全てのレビューコメントとレビュー状態を取得できた
 
 ### Phase 2: Classify & Prioritize
 
