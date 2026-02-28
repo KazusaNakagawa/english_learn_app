@@ -20,7 +20,7 @@ import Security
 /// }
 ///
 /// // Delete an API key
-/// KeychainService.shared.delete(for: .voicevox)
+/// KeychainService.shared.delete(for: .openAI)
 /// ```
 final class KeychainService {
     /// The shared singleton instance.

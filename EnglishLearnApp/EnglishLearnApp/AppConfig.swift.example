@@ -3,34 +3,27 @@
 /// ## Security Note
 /// This file is gitignored and should NEVER be committed with real values.
 ///
-/// ## API Key Configuration (Recommended)
-/// API keys should be configured via the app's Settings screen, where they are
-/// securely stored in the iOS Keychain. This approach:
-/// - Encrypts keys at rest using device security
-/// - Prevents keys from being embedded in the binary
-/// - Allows keys to be updated without rebuilding the app
-///
-/// ## Fallback Configuration (Development Only)
-/// For development convenience, you can optionally set a fallback API key here.
-/// This is NOT recommended for production use as keys will be embedded in the binary.
+/// ## API Key Configuration
+/// - **OpenAI API Key**: Configured via Settings screen, stored in iOS Keychain
+/// - **VOICEVOX API Key**: Set in this file (developer-managed, not user-configurable)
 ///
 /// ## Setup:
 ///   1. Copy AppConfig.swift.example to AppConfig.swift
 ///   2. Deploy the CDK stack: cd aws && npm run deploy:poc
 ///   3. Get API endpoint from deployment output (VoicevoxApiEndpoint)
 ///   4. Set voicevoxBaseURL below
-///   5. Configure API key via Settings screen (preferred) OR set voicevoxApiKey here (dev only)
+///   5. Set voicevoxApiKey (from CDK deployment output or environment variable)
 enum AppConfig {
     /// Base URL for the VOICEVOX engine API (no trailing slash).
     /// Example: https://abc123xyz.execute-api.ap-northeast-1.amazonaws.com
     static let voicevoxBaseURL = "https://xxxxxxxxxx.execute-api.ap-northeast-1.amazonaws.com"
 
-    /// Fallback API key for authenticating with the VOICEVOX backend.
+    /// API key for authenticating with the VOICEVOX backend.
     ///
-    /// ⚠️ RECOMMENDED: Leave this empty and configure via Settings > VOICEVOX設定
-    /// The Settings screen stores the key securely in iOS Keychain.
+    /// This key is managed by the developer (not user-configurable).
+    /// Get the value from CDK deployment output or environment variable:
+    ///   echo $VOICEVOX_API_KEY_POC
     ///
-    /// This fallback is only used when no key is configured in Settings.
-    /// If you must set a value here for development, it will be embedded in the binary.
+    /// ⚠️ WARNING: This key will be embedded in the app binary.
     static let voicevoxApiKey = ""
 }
