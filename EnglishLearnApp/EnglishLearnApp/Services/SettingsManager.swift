@@ -29,7 +29,7 @@ class SettingsManager: ObservableObject {
     /// The OpenAI API key for sentence generation.
     ///
     /// Set this value before using `OpenAIService`.
-    /// Changes are automatically persisted to UserDefaults.
+    /// Changes are automatically persisted to the iOS Keychain.
     @Published var openAIAPIKey: String? {
         didSet {
             saveOpenAIAPIKey()
@@ -217,8 +217,11 @@ class SettingsManager: ObservableObject {
         }
     }
 
-    /// The UserDefaults key for the OpenAI API key.
+    /// The UserDefaults key for the OpenAI API key (legacy, used for migration).
     private let openAIAPIKeyKey = "openAIAPIKey"
+
+    /// Flag to track if Keychain migration has been completed.
+    private let keychainMigrationKey = "keychainMigrationCompleted"
 
     // MARK: - Initializer
 
@@ -231,7 +234,8 @@ class SettingsManager: ObservableObject {
             self.voiceGender = .default_
         }
 
-        self.openAIAPIKey = UserDefaults.standard.string(forKey: openAIAPIKeyKey)
+        // Load API key from Keychain
+        self.openAIAPIKey = KeychainService.shared.retrieve(for: .openAI)
 
         if let saved = UserDefaults.standard.string(forKey: "openAIModel"),
            let model = OpenAIModel(rawValue: saved) {
@@ -294,6 +298,10 @@ class SettingsManager: ObservableObject {
             }
             UserDefaults.standard.removeObject(forKey: legacyKey)
         }
+
+        // Migrate OpenAI key from UserDefaults to Keychain (one-time)
+        // This must be called after all stored properties are initialized
+        migrateOpenAIKeyToKeychain()
     }
 
     // MARK: - Preset Management
@@ -378,14 +386,42 @@ class SettingsManager: ObservableObject {
         }
     }
 
-    /// Persists the OpenAI API key to UserDefaults.
+    /// Persists the OpenAI API key to the Keychain.
     ///
-    /// If the key is nil, removes the stored value.
+    /// If the key is nil or empty, removes the stored value.
     private func saveOpenAIAPIKey() {
-        if let key = openAIAPIKey {
-            UserDefaults.standard.set(key, forKey: openAIAPIKeyKey)
+        if let key = openAIAPIKey, !key.isEmpty {
+            KeychainService.shared.save(key: key, for: .openAI)
         } else {
+            KeychainService.shared.delete(for: .openAI)
+        }
+    }
+
+    /// Migrates the OpenAI API key from UserDefaults to Keychain.
+    ///
+    /// This method runs once on app upgrade. It:
+    /// 1. Checks if migration has already been completed
+    /// 2. Reads the key from UserDefaults (if present)
+    /// 3. Saves it to Keychain
+    /// 4. Removes the key from UserDefaults
+    /// 5. Marks migration as complete
+    private func migrateOpenAIKeyToKeychain() {
+        // Skip if already migrated
+        guard !UserDefaults.standard.bool(forKey: keychainMigrationKey) else { return }
+
+        // Check if there's a key in UserDefaults to migrate
+        if let legacyKey = UserDefaults.standard.string(forKey: openAIAPIKeyKey),
+           !legacyKey.isEmpty {
+            // Only migrate if we don't already have a key in Keychain
+            if openAIAPIKey == nil {
+                KeychainService.shared.save(key: legacyKey, for: .openAI)
+                self.openAIAPIKey = legacyKey
+            }
+            // Remove from UserDefaults regardless (don't leave plaintext key lying around)
             UserDefaults.standard.removeObject(forKey: openAIAPIKeyKey)
         }
+
+        // Mark migration as complete
+        UserDefaults.standard.set(true, forKey: keychainMigrationKey)
     }
 }

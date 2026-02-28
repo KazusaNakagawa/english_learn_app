@@ -1,29 +1,36 @@
 /// Application-level configuration constants.
 ///
-/// ⚠️ SECURITY WARNING:
-/// - This file is gitignored and should NEVER be committed with real values
-/// - API keys will be embedded in the compiled binary (acceptable for personal/development use)
-/// - For production apps distributed via App Store, consider using:
-///   - Remote configuration (e.g., Firebase Remote Config)
-///   - Secure backend API that doesn't expose keys to clients
-///   - iOS Keychain for runtime storage (requires initial secure provisioning)
+/// ## Security Note
+/// This file is gitignored and should NEVER be committed with real values.
 ///
-/// Setup:
+/// ## API Key Configuration (Recommended)
+/// API keys should be configured via the app's Settings screen, where they are
+/// securely stored in the iOS Keychain. This approach:
+/// - Encrypts keys at rest using device security
+/// - Prevents keys from being embedded in the binary
+/// - Allows keys to be updated without rebuilding the app
+///
+/// ## Fallback Configuration (Development Only)
+/// For development convenience, you can optionally set a fallback API key here.
+/// This is NOT recommended for production use as keys will be embedded in the binary.
+///
+/// ## Setup:
 ///   1. Copy AppConfig.swift.example to AppConfig.swift
 ///   2. Deploy the CDK stack: cd aws && npm run deploy:poc
 ///   3. Get API endpoint from deployment output (VoicevoxApiEndpoint)
-///   4. Get API key from environment variable: echo $VOICEVOX_API_KEY_POC
-///   5. Replace placeholder values below with actual values
-///
-/// Note: This approach is suitable for personal/internal apps not distributed publicly.
+///   4. Set voicevoxBaseURL below
+///   5. Configure API key via Settings screen (preferred) OR set voicevoxApiKey here (dev only)
 enum AppConfig {
     /// Base URL for the VOICEVOX engine API (no trailing slash).
     /// Example: https://abc123xyz.execute-api.ap-northeast-1.amazonaws.com
     static let voicevoxBaseURL = "https://xxxxxxxxxx.execute-api.ap-northeast-1.amazonaws.com"
 
-    /// API key for authenticating with the VOICEVOX backend.
-    /// ⚠️ WARNING: This key will be embedded in the app binary.
-    /// Only use this approach for personal/development apps.
-    /// Value should match VOICEVOX_API_KEY_{ENV} used during CDK deployment.
-    static let voicevoxApiKey = "your-api-key-here-64-character-hex-string"
+    /// Fallback API key for authenticating with the VOICEVOX backend.
+    ///
+    /// ⚠️ RECOMMENDED: Leave this empty and configure via Settings > VOICEVOX設定
+    /// The Settings screen stores the key securely in iOS Keychain.
+    ///
+    /// This fallback is only used when no key is configured in Settings.
+    /// If you must set a value here for development, it will be embedded in the binary.
+    static let voicevoxApiKey = ""
 }

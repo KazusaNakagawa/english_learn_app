@@ -147,6 +147,14 @@ class SpeechService: NSObject, ObservableObject {
             return
         }
 
+        // Ensure API key is configured
+        let apiKey = AppConfig.voicevoxApiKey
+        guard !apiKey.isEmpty else {
+            print("VOICEVOX API key not configured in AppConfig")
+            handleVoicevoxFailure()
+            return
+        }
+
         let speakerID = SettingsManager.shared.voicevoxStyle.rawValue
 
         guard let encodedText = text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
