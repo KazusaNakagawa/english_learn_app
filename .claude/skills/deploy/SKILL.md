@@ -12,7 +12,7 @@ VOICEVOX TTS バックエンドを指定環境にデプロイします。
 
 ## 使い方
 
-```
+```bash
 /deploy poc   # PoC 環境
 /deploy dev   # 開発環境
 /deploy pro   # 本番環境

@@ -11,7 +11,7 @@ Start development workflow from a GitHub Issue number.
 
 ## Usage
 
-```
+```bash
 /start 123   # Start working on Issue #123
 ```
 
