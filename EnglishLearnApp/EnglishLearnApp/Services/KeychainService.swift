@@ -47,9 +47,6 @@ final class KeychainService {
     func save(key: String, for keyType: KeyType) -> Bool {
         guard let data = key.data(using: .utf8) else { return false }
 
-        // First, try to delete any existing item
-        delete(for: keyType)
-
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: keyType.rawValue,
@@ -57,7 +54,22 @@ final class KeychainService {
             kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
         ]
 
-        let status = SecItemAdd(query as CFDictionary, nil)
+        // Try to add the item first
+        var status = SecItemAdd(query as CFDictionary, nil)
+
+        // If item already exists, update it instead
+        if status == errSecDuplicateItem {
+            let searchQuery: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrAccount as String: keyType.rawValue
+            ]
+            let attributesToUpdate: [String: Any] = [
+                kSecValueData as String: data,
+                kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+            ]
+            status = SecItemUpdate(searchQuery as CFDictionary, attributesToUpdate as CFDictionary)
+        }
+
         return status == errSecSuccess
     }
 
