@@ -45,23 +45,13 @@ struct SettingsView: View {
                     }
                     .pickerStyle(.segmented)
 
-                    Button(action: {
-                        speechService.speak("This is a test sentence.", language: "en-US")
-                    }) {
-                        HStack {
-                            Image(systemName: (speechService.isSpeaking && speechService.speakingLanguage != "ja-JP") ? "speaker.wave.3.fill" : "speaker.wave.2.fill")
-                                .font(.title2)
-                            Text("英語サンプルを再生")
-                                .font(.headline)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 50)
-                        .foregroundColor(.white)
-                        .background(Color.blue)
-                        .cornerRadius(10)
-                    }
-                    .listRowInsets(EdgeInsets())
-                    .listRowSeparator(.hidden)
+                    VoiceSampleButton(
+                        text: "This is a test sentence.",
+                        language: "en-US",
+                        label: "英語サンプルを再生",
+                        color: .blue,
+                        speechService: speechService
+                    )
                 }
 
                 Section(header: Text("日本語の音声設定")) {
@@ -71,23 +61,13 @@ struct SettingsView: View {
                     }
                     .pickerStyle(.segmented)
 
-                    Button(action: {
-                        speechService.speak("これはテスト文です。", language: "ja-JP")
-                    }) {
-                        HStack {
-                            Image(systemName: (speechService.isSpeaking && speechService.speakingLanguage == "ja-JP") ? "speaker.wave.3.fill" : "speaker.wave.2.fill")
-                                .font(.title2)
-                            Text("日本語サンプルを再生")
-                                .font(.headline)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 50)
-                        .foregroundColor(.white)
-                        .background(Color.green)
-                        .cornerRadius(10)
-                    }
-                    .listRowInsets(EdgeInsets())
-                    .listRowSeparator(.hidden)
+                    VoiceSampleButton(
+                        text: "これはテスト文です。",
+                        language: "ja-JP",
+                        label: "日本語サンプルを再生",
+                        color: .green,
+                        speechService: speechService
+                    )
                 }
 
                 Section(header: Text("連続再生設定")) {
@@ -319,6 +299,42 @@ struct SettingsView: View {
         }
     }
 
+}
+
+/// A reusable button for playing voice sample in settings.
+private struct VoiceSampleButton: View {
+    let text: String
+    let language: String
+    let label: String
+    let color: Color
+    @ObservedObject var speechService: SpeechService
+
+    private var isActive: Bool {
+        speechService.isSpeaking &&
+        (language == "ja-JP"
+            ? speechService.speakingLanguage == "ja-JP"
+            : speechService.speakingLanguage != "ja-JP")
+    }
+
+    var body: some View {
+        Button(action: {
+            speechService.speak(text, language: language)
+        }) {
+            HStack {
+                Image(systemName: isActive ? "speaker.wave.3.fill" : "speaker.wave.2.fill")
+                    .font(.title2)
+                Text(label)
+                    .font(.headline)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 50)
+            .foregroundColor(.white)
+            .background(color)
+            .cornerRadius(10)
+        }
+        .listRowInsets(EdgeInsets())
+        .listRowSeparator(.hidden)
+    }
 }
 
 #Preview {
