@@ -37,21 +37,21 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section(header: Text("音声設定")) {
-                    Picker("音声の性別", selection: $settings.voiceGender) {
-                        ForEach(SettingsManager.VoiceGender.allCases, id: \.self) { gender in
+                Section(header: Text("英語の音声設定")) {
+                    Picker("音声の性別", selection: $settings.englishVoiceGender) {
+                        ForEach(SettingsManager.EnglishVoiceGender.allCases, id: \.self) { gender in
                             Text(gender.label).tag(gender)
                         }
                     }
                     .pickerStyle(.segmented)
 
                     Button(action: {
-                        speechService.speak("This is a test sentence.", voiceGender: settings.voiceGender)
+                        speechService.speak("This is a test sentence.", language: "en-US")
                     }) {
                         HStack {
-                            Image(systemName: speechService.isSpeaking ? "speaker.wave.3.fill" : "speaker.wave.2.fill")
+                            Image(systemName: (speechService.isSpeaking && speechService.speakingLanguage != "ja-JP") ? "speaker.wave.3.fill" : "speaker.wave.2.fill")
                                 .font(.title2)
-                            Text("サンプルを再生")
+                            Text("英語サンプルを再生")
                                 .font(.headline)
                         }
                         .frame(maxWidth: .infinity)
@@ -62,6 +62,41 @@ struct SettingsView: View {
                     }
                     .listRowInsets(EdgeInsets())
                     .listRowSeparator(.hidden)
+                }
+
+                Section(header: Text("日本語の音声設定")) {
+                    Picker("スタイル", selection: $settings.voicevoxStyle) {
+                        ForEach(SettingsManager.VoicevoxStyle.allCases, id: \.self) { style in
+                            Text(style.label).tag(style)
+                        }
+                    }
+
+                    Button(action: {
+                        speechService.speak("これはテスト文です。", language: "ja-JP")
+                    }) {
+                        HStack {
+                            Image(systemName: (speechService.isSpeaking && speechService.speakingLanguage == "ja-JP") ? "speaker.wave.3.fill" : "speaker.wave.2.fill")
+                                .font(.title2)
+                            Text("日本語サンプルを再生")
+                                .font(.headline)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
+                        .foregroundColor(.white)
+                        .background(Color.green)
+                        .cornerRadius(10)
+                    }
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
+
+                    HStack(spacing: 4) {
+                        Image(systemName: "c.circle")
+                            .foregroundColor(.secondary)
+                            .font(.caption)
+                        Text("VOICEVOX:ずんだもん")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
                 }
 
                 Section(header: Text("連続再生設定")) {
@@ -100,25 +135,6 @@ struct SettingsView: View {
                             Image(systemName: "checkmark.circle.fill")
                                 .foregroundColor(.green)
                             Text("APIキーが設定されています")
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                }
-
-                if settings.voiceGender == .zundamon {
-                    Section(header: Text("VOICEVOX設定")) {
-                        Picker("スタイル", selection: $settings.voicevoxStyle) {
-                            ForEach(SettingsManager.VoicevoxStyle.allCases, id: \.self) { style in
-                                Text(style.label).tag(style)
-                            }
-                        }
-
-                        HStack(spacing: 4) {
-                            Image(systemName: "c.circle")
-                                .foregroundColor(.secondary)
-                                .font(.caption)
-                            Text("VOICEVOX:ずんだもん")
-                                .font(.caption)
                                 .foregroundColor(.secondary)
                         }
                     }
@@ -190,9 +206,9 @@ struct SettingsView: View {
 
                 Section(header: Text("説明")) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("英語の学習コンテンツの音声として、女性または男性の音声を選択できます。")
+                        Text("英語の音声は、女性・男性・デフォルトから選択できます。")
                             .font(.body)
-                        Text("デフォルトを選択すると、システムの設定に従います。")
+                        Text("日本語の音声は常にVOICEVOX(ずんだもん)を使用します。スタイルを選択して声のトーンを変更できます。")
                             .font(.body)
                             .foregroundColor(.secondary)
                     }

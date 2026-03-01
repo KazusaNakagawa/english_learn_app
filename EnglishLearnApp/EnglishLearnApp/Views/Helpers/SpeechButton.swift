@@ -20,7 +20,6 @@ struct SpeechButton: View {
     var style: Style = .fullWidth
 
     @ObservedObject var speechService: SpeechService
-    let voiceGender: SettingsManager.VoiceGender
 
     private var isActive: Bool {
         speechService.isSpeaking &&
@@ -31,9 +30,9 @@ struct SpeechButton: View {
     var body: some View {
         Button {
             if isJapanese {
-                speechService.speak(text, language: "ja-JP", voiceGender: voiceGender)
+                speechService.speak(text, language: "ja-JP")
             } else {
-                speechService.speak(text, voiceGender: voiceGender)
+                speechService.speak(text, language: "en-US")
             }
         } label: {
             HStack {
