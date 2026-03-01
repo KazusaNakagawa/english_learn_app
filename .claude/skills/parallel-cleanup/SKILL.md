@@ -120,16 +120,19 @@ Skips other worktrees to avoid accidental deletion.
 
 ### Force Remove
 
-Uses `--force` flag to handle:
-- Uncommitted changes (warns user first)
+Uses `--force` flag in `git worktree remove` to handle:
+- Uncommitted changes
 - Branches not yet merged
 - Dirty worktrees
 
+**Important:** User confirmation is requested during step 2 (via AskUserQuestion) to check the status of worktrees. After confirmation, `git worktree remove --force` will delete the worktree regardless of its dirty state. There is no additional automatic warning after the initial confirmation.
+
 ### Confirmation
 
-Always asks for confirmation before:
-- Killing tmux sessions
-- Removing worktrees with uncommitted changes
+Always asks for confirmation (step 2) before proceeding:
+- Which tmux session to kill
+- Which worktrees to remove (shows status including uncommitted changes)
+- User acknowledges that `--force` will be used for removal
 
 ## Common Scenarios
 

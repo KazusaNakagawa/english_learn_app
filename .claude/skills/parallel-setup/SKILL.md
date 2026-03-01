@@ -145,8 +145,13 @@ echo "✓ Claude Code launched in all panes"
 After Claude Code sessions are ready, rename them for easier identification:
 
 ```bash
-# Wait for Claude sessions to be fully initialized (10 seconds)
-sleep 10
+# Configurable startup delay (default: 10 seconds)
+# Adjust CLAUDE_STARTUP_DELAY if Claude takes longer/shorter to initialize on your system
+CLAUDE_STARTUP_DELAY=${CLAUDE_STARTUP_DELAY:-10}
+
+# Wait for Claude sessions to be fully initialized
+echo "Waiting ${CLAUDE_STARTUP_DELAY}s for Claude sessions to initialize..."
+sleep $CLAUDE_STARTUP_DELAY
 
 # Rename each Claude session in its pane
 # Example with 2 workers handling issues #79 and #80:
@@ -159,13 +164,23 @@ tmux send-keys -t parallel-dev:workers.1 '/rename worker2-issue80' Enter
 echo "✓ Claude sessions renamed"
 ```
 
+**Note:** If Claude doesn't start in time, increase `CLAUDE_STARTUP_DELAY`:
+```bash
+CLAUDE_STARTUP_DELAY=15 /parallel-setup 2
+```
+
 ### 7. Auto-start Development
 
 After renaming, send `/start` command to begin development:
 
 ```bash
-# Wait for rename to complete (3 seconds)
-sleep 3
+# Configurable post-rename delay (default: 3 seconds)
+# Adjust POST_RENAME_DELAY if /rename takes longer to process
+POST_RENAME_DELAY=${POST_RENAME_DELAY:-3}
+
+# Wait for rename to complete
+echo "Waiting ${POST_RENAME_DELAY}s for rename to complete..."
+sleep $POST_RENAME_DELAY
 
 # Send /start command to each worker pane with their issue numbers
 tmux send-keys -t parallel-dev:workers.0 '/start 79' Enter
@@ -176,6 +191,8 @@ tmux send-keys -t parallel-dev:workers.1 '/start 80' Enter
 
 echo "✓ Development started in all workers"
 ```
+
+**Note:** Timing adjustments may be needed based on system performance. The delays ensure commands are sent after Claude is ready to receive them.
 
 ### 8. Display Instructions for User
 

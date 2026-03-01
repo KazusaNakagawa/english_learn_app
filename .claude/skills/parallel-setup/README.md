@@ -91,19 +91,21 @@ tmux attach -t parallel-dev
 
 ### 4. 各ワーカーでの作業
 
-各tmuxウィンドウでClaude Codeが動作しています：
+ペイン分割モードでは、1つのtmuxウィンドウ内の各ペインでClaude Codeが動作しています：
 
 ```bash
-# Worker 1（Issue #100）
+# Worker 1（左ペイン、Issue #100）
 # 既に /start 100 が実行済み
 # あとは通常通り開発
 
-# Worker 2（Issue #101）
+# Worker 2（右ペイン、Issue #101）
 # 既に /start 101 が実行済み
 
-# Worker 3（Issue #102）
+# Worker 3（別のペイン、Issue #102）
 # 既に /start 102 が実行済み
 ```
+
+※ 別ウィンドウモードを使用する場合は、各tmuxウィンドウ（window 0, 1, 2）でClaude Codeが動作します。
 
 ### 5. クリーンアップ
 
@@ -307,4 +309,4 @@ Ctrl+b {番号} でウィンドウを切り替えます。
 
 - [SKILL.md](./SKILL.md) - `/parallel-setup` スキルの詳細仕様
 - [../parallel-cleanup/SKILL.md](../parallel-cleanup/SKILL.md) - `/parallel-cleanup` スキルの詳細仕様
-- [/docs/CLAUDE.md](../../CLAUDE.md) - プロジェクト全体のClaude Code設定
+- [CLAUDE.md](../../../CLAUDE.md) - プロジェクト全体のClaude Code設定
