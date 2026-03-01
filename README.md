@@ -130,3 +130,11 @@ open EnglishLearnApp/EnglishLearnApp.xcodeproj
 - AVFoundation（音声読み上げ）
 - Speech Framework（音声認識）
 - iOS 17.0+
+
+## 開発ワークフロー
+
+### 並行開発のサポート
+
+このプロジェクトは git worktree を使った並行開発をサポートしています。複数の Issue を同時に異なるワークツリーで作業できます。
+
+**並行開発のテスト済み** - Issue #80 で検証済み。異なる worktree 間で変更が適切に分離されることを確認しました。
