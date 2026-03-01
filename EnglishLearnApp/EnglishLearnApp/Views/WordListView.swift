@@ -392,14 +392,14 @@ struct WordListView: View {
                 case .bilingual:
                     switch step {
                     case 0, 2:
-                        speechService.speak(sentence.english, voiceGender: settings.voiceGender, isContinuousPlayback: true)
+                        speechService.speak(sentence.english, language: "en-US", isContinuousPlayback: true)
                     case 1:
-                        speechService.speak(sentence.japanese, language: "ja-JP", voiceGender: settings.voiceGender, isContinuousPlayback: true)
+                        speechService.speak(sentence.japanese, language: "ja-JP", isContinuousPlayback: true)
                     default:
                         break
                     }
                 case .englishOnly:
-                    speechService.speak(sentence.english, voiceGender: settings.voiceGender, isContinuousPlayback: true)
+                    speechService.speak(sentence.english, language: "en-US", isContinuousPlayback: true)
                 }
 
                 // Update Now Playing info
@@ -496,7 +496,7 @@ struct WordRowView: View {
 
             HStack(spacing: 12) {
                 Button(action: {
-                    speechService.speak(word.word, voiceGender: speechService.voiceGender)
+                    speechService.speak(word.word, language: "en-US")
                 }) {
                     Image(systemName: (speechService.isSpeaking && speechService.speakingLanguage != "ja-JP") ? "speaker.wave.3.fill" : "speaker.wave.2.fill")
                         .font(.title2)
@@ -505,7 +505,7 @@ struct WordRowView: View {
                 .buttonStyle(.borderless)
 
                 Button(action: {
-                    speechService.speak(word.meaning, language: "ja-JP", voiceGender: speechService.voiceGender)
+                    speechService.speak(word.meaning, language: "ja-JP")
                 }) {
                     Image(systemName: (speechService.isSpeaking && speechService.speakingLanguage == "ja-JP") ? "speaker.wave.3.fill" : "speaker.wave.2.fill")
                         .font(.title2)

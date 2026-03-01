@@ -21,7 +21,6 @@ class SpeechService: NSObject, ObservableObject {
         static let pitchMultiplier: Float = 1.0
         static let volume: Float = 1.0
         static let utteranceDelay: TimeInterval = 0.0
-        static let voiceGenderKey = "voiceGender"
     }
 
     // MARK: - Properties
@@ -32,7 +31,6 @@ class SpeechService: NSObject, ObservableObject {
 
     @Published var isSpeaking = false
     @Published var speakingLanguage: String? = nil
-    @Published var voiceGender: SettingsManager.VoiceGender = .default_
 
     /// Publisher that emits when speech finishes naturally (not cancelled).
     /// Use this instead of onChange(of: isSpeaking) for reliable completion detection.
@@ -41,7 +39,6 @@ class SpeechService: NSObject, ObservableObject {
     override init() {
         super.init()
         synthesizer.delegate = self
-        observeSettingsChanges()
         configureAudioSession()
     }
 
@@ -74,26 +71,11 @@ class SpeechService: NSObject, ObservableObject {
         }
     }
 
-    private func observeSettingsChanges() {
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(updateVoiceGender),
-            name: UserDefaults.didChangeNotification,
-            object: nil
-        )
-    }
-
-    @objc private func updateVoiceGender() {
-        guard let saved = UserDefaults.standard.string(forKey: Constants.voiceGenderKey),
-              let gender = SettingsManager.VoiceGender(rawValue: saved) else { return }
-
-        // Defer update to avoid "Publishing changes from within view updates" warning
-        Task { @MainActor in
-            self.voiceGender = gender
-        }
-    }
-
-    /// Speaks the given text using the specified language and voice gender.
+    /// Speaks the given text using language-specific voice settings from SettingsManager.
+    ///
+    /// This method automatically selects the appropriate voice based on the language:
+    /// - For English ("en-US"): Uses englishVoiceGender setting
+    /// - For Japanese ("ja-JP"): Uses japaneseVoiceGender setting
     ///
     /// This method stops any ongoing speech before starting new playback. It tracks
     /// the current utterance to prevent race conditions from stale delegate callbacks.
@@ -101,9 +83,8 @@ class SpeechService: NSObject, ObservableObject {
     /// - Parameters:
     ///   - text: The text to be spoken
     ///   - language: The language code (default: "en-US")
-    ///   - voiceGender: The voice gender preference (default: .default_)
     ///   - isContinuousPlayback: Set to true when called from continuous playback to prevent stopping the session (default: false)
-    func speak(_ text: String, language: String = "en-US", voiceGender: SettingsManager.VoiceGender = .default_, isContinuousPlayback: Bool = false) {
+    func speak(_ text: String, language: String = "en-US", isContinuousPlayback: Bool = false) {
         stop()
 
         // Only notify when starting individual playback (not continuous playback)
@@ -113,6 +94,10 @@ class SpeechService: NSObject, ObservableObject {
         }
 
         speakingLanguage = language
+
+        // Get the appropriate voice gender based on language
+        let settings = SettingsManager.shared
+        let voiceGender = language == "ja-JP" ? settings.japaneseVoiceGender : settings.englishVoiceGender
 
         if voiceGender == .zundamon {
             isSpeaking = true

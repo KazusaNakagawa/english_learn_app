@@ -47,14 +47,14 @@ struct SentencePracticeView: View {
                     SpeechButton(
                         text: sentence.english, label: "英語を聞く",
                         isJapanese: false, color: .blue,
-                        speechService: speechService, voiceGender: settings.voiceGender
+                        speechService: speechService
                     )
 
                     // 日本語訳読み上げボタン
                     SpeechButton(
                         text: sentence.japanese, label: "日本語訳を聞く",
                         isJapanese: true, color: .orange,
-                        speechService: speechService, voiceGender: settings.voiceGender
+                        speechService: speechService
                     )
 
                     // 発音チェックボタン

@@ -37,8 +37,8 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section(header: Text("音声設定")) {
-                    Picker("音声の性別", selection: $settings.voiceGender) {
+                Section(header: Text("英語の音声設定")) {
+                    Picker("音声", selection: $settings.englishVoiceGender) {
                         ForEach(SettingsManager.VoiceGender.allCases, id: \.self) { gender in
                             Text(gender.label).tag(gender)
                         }
@@ -46,18 +46,44 @@ struct SettingsView: View {
                     .pickerStyle(.segmented)
 
                     Button(action: {
-                        speechService.speak("This is a test sentence.", voiceGender: settings.voiceGender)
+                        speechService.speak("This is a test sentence.", language: "en-US")
                     }) {
                         HStack {
-                            Image(systemName: speechService.isSpeaking ? "speaker.wave.3.fill" : "speaker.wave.2.fill")
+                            Image(systemName: (speechService.isSpeaking && speechService.speakingLanguage != "ja-JP") ? "speaker.wave.3.fill" : "speaker.wave.2.fill")
                                 .font(.title2)
-                            Text("サンプルを再生")
+                            Text("英語サンプルを再生")
                                 .font(.headline)
                         }
                         .frame(maxWidth: .infinity)
                         .frame(height: 50)
                         .foregroundColor(.white)
                         .background(Color.blue)
+                        .cornerRadius(10)
+                    }
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
+                }
+
+                Section(header: Text("日本語の音声設定")) {
+                    Picker("音声", selection: $settings.japaneseVoiceGender) {
+                        Text("ずんだもん").tag(SettingsManager.VoiceGender.zundamon)
+                        Text("デフォルト").tag(SettingsManager.VoiceGender.default_)
+                    }
+                    .pickerStyle(.segmented)
+
+                    Button(action: {
+                        speechService.speak("これはテスト文です。", language: "ja-JP")
+                    }) {
+                        HStack {
+                            Image(systemName: (speechService.isSpeaking && speechService.speakingLanguage == "ja-JP") ? "speaker.wave.3.fill" : "speaker.wave.2.fill")
+                                .font(.title2)
+                            Text("日本語サンプルを再生")
+                                .font(.headline)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
+                        .foregroundColor(.white)
+                        .background(Color.green)
                         .cornerRadius(10)
                     }
                     .listRowInsets(EdgeInsets())
@@ -105,7 +131,7 @@ struct SettingsView: View {
                     }
                 }
 
-                if settings.voiceGender == .zundamon {
+                if settings.englishVoiceGender == .zundamon || settings.japaneseVoiceGender == .zundamon {
                     Section(header: Text("VOICEVOX設定")) {
                         Picker("スタイル", selection: $settings.voicevoxStyle) {
                             ForEach(SettingsManager.VoicevoxStyle.allCases, id: \.self) { style in
@@ -190,10 +216,13 @@ struct SettingsView: View {
 
                 Section(header: Text("説明")) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("英語の学習コンテンツの音声として、女性または男性の音声を選択できます。")
+                        Text("英語・日本語それぞれの音声を個別に設定できます。")
                             .font(.body)
-                        Text("デフォルトを選択すると、システムの設定に従います。")
-                            .font(.body)
+                        Text("英語音声: デフォルト/女性/男性/ずんだもん から選択")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text("日本語音声: ずんだもん/デフォルト から選択")
+                            .font(.caption)
                             .foregroundColor(.secondary)
                     }
 
