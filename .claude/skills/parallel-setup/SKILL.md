@@ -55,7 +55,20 @@ For each worker (example with 3 workers handling issues #100, #101, #102):
 ```bash
 # Get issue title for branch naming
 issue_title=$(gh issue view 100 --json title -q .title)
-branch_name="feature/issue-100-$(echo $issue_title | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | cut -c1-30)"
+
+# Sanitize and truncate title (UTF-8 safe)
+# - Convert to lowercase
+# - Replace non-alphanumeric with hyphens
+# - Limit to 30 characters using awk (respects UTF-8)
+# - Remove trailing hyphens
+sanitized_title=$(echo "$issue_title" |
+  tr '[:upper:]' '[:lower:]' |
+  sed 's/[^a-z0-9]/-/g' |
+  sed 's/--*/-/g' |
+  awk '{print substr($0, 1, 30)}' |
+  sed 's/-$//')
+
+branch_name="feature/issue-100-${sanitized_title}"
 
 # Create worktree
 git worktree add ~/worktree-worker1 -b "$branch_name" develop
@@ -68,8 +81,12 @@ git worktree add ~/worktree-worker3 -b "feature/issue-102-..." develop
 **IMPORTANT: Use the verified approach that worked in testing**
 
 ```bash
-# Step 1: Create session with large dimensions for split panes
-tmux new-session -d -s parallel-dev -x 300 -y 60
+# Step 1: Create session with appropriate dimensions for split panes
+# Configurable dimensions (defaults work well for most screens)
+TMUX_WIDTH=${TMUX_WIDTH:-200}
+TMUX_HEIGHT=${TMUX_HEIGHT:-50}
+
+tmux new-session -d -s parallel-dev -x $TMUX_WIDTH -y $TMUX_HEIGHT
 tmux rename-window -t parallel-dev:0 workers
 
 # Step 2: Setup Worker 1 (pane 0)
@@ -239,6 +256,10 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 - GitHub CLI (`gh`) is authenticated
 - On `develop` branch or able to switch to it
 - No existing `parallel-dev` tmux session (or use `/parallel-cleanup` first)
+- Terminal size: Minimum 200x50 recommended for comfortable split-pane viewing
+  - Default dimensions: 200 columns × 50 rows
+  - Customize via environment variables: `TMUX_WIDTH` and `TMUX_HEIGHT`
+  - Example: `TMUX_WIDTH=250 TMUX_HEIGHT=60 /parallel-setup 2`
 
 ## Important Notes
 
