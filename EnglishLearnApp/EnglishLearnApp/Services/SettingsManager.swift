@@ -7,8 +7,9 @@ import Foundation
 ///
 /// ## Usage
 /// ```swift
-/// // Access voice gender setting
-/// let gender = SettingsManager.shared.voiceGender
+/// // Access language-specific voice settings
+/// let englishVoice = SettingsManager.shared.englishVoiceGender
+/// let japaneseVoice = SettingsManager.shared.japaneseVoiceGender
 ///
 /// // Set OpenAI API key
 /// SettingsManager.shared.openAIAPIKey = "sk-..."
@@ -17,12 +18,21 @@ class SettingsManager: ObservableObject {
     /// The shared singleton instance.
     static let shared = SettingsManager()
 
-    /// The selected voice gender for text-to-speech.
+    /// The selected voice gender for English text-to-speech.
     ///
     /// Changes are automatically persisted to UserDefaults.
-    @Published var voiceGender: VoiceGender {
+    @Published var englishVoiceGender: VoiceGender {
         didSet {
-            saveVoiceGender()
+            saveEnglishVoiceGender()
+        }
+    }
+
+    /// The selected voice gender for Japanese text-to-speech.
+    ///
+    /// Changes are automatically persisted to UserDefaults.
+    @Published var japaneseVoiceGender: VoiceGender {
+        didSet {
+            saveJapaneseVoiceGender()
         }
     }
 
@@ -227,11 +237,18 @@ class SettingsManager: ObservableObject {
 
     /// Initializes the settings manager and loads saved preferences.
     init() {
-        if let saved = UserDefaults.standard.string(forKey: "voiceGender"),
+        if let saved = UserDefaults.standard.string(forKey: "englishVoiceGender"),
            let gender = VoiceGender(rawValue: saved) {
-            self.voiceGender = gender
+            self.englishVoiceGender = gender
         } else {
-            self.voiceGender = .default_
+            self.englishVoiceGender = .default_
+        }
+
+        if let saved = UserDefaults.standard.string(forKey: "japaneseVoiceGender"),
+           let gender = VoiceGender(rawValue: saved) {
+            self.japaneseVoiceGender = gender
+        } else {
+            self.japaneseVoiceGender = .zundamon
         }
 
         // Load API key from Keychain
@@ -302,6 +319,9 @@ class SettingsManager: ObservableObject {
         // Migrate OpenAI key from UserDefaults to Keychain (one-time)
         // This must be called after all stored properties are initialized
         migrateOpenAIKeyToKeychain()
+
+        // Migrate voiceGender to language-specific settings (one-time)
+        migrateVoiceGenderSettings()
     }
 
     // MARK: - Preset Management
@@ -374,9 +394,14 @@ class SettingsManager: ObservableObject {
 
     // MARK: - Private Methods
 
-    /// Persists the voice gender setting to UserDefaults.
-    private func saveVoiceGender() {
-        UserDefaults.standard.set(voiceGender.rawValue, forKey: "voiceGender")
+    /// Persists the English voice gender setting to UserDefaults.
+    private func saveEnglishVoiceGender() {
+        UserDefaults.standard.set(englishVoiceGender.rawValue, forKey: "englishVoiceGender")
+    }
+
+    /// Persists the Japanese voice gender setting to UserDefaults.
+    private func saveJapaneseVoiceGender() {
+        UserDefaults.standard.set(japaneseVoiceGender.rawValue, forKey: "japaneseVoiceGender")
     }
 
     /// Persists built-in overrides to UserDefaults.
@@ -423,5 +448,42 @@ class SettingsManager: ObservableObject {
 
         // Mark migration as complete
         UserDefaults.standard.set(true, forKey: keychainMigrationKey)
+    }
+
+    /// Migrates the old voiceGender setting to language-specific settings.
+    ///
+    /// This handles the transition from a single voiceGender setting to separate
+    /// englishVoiceGender and japaneseVoiceGender settings.
+    private func migrateVoiceGenderSettings() {
+        let legacyKey = "voiceGender"
+        let migrationKey = "voiceGenderLanguageMigrationCompleted"
+
+        // Skip if already migrated
+        guard !UserDefaults.standard.bool(forKey: migrationKey) else { return }
+
+        // Only migrate if the new keys don't exist yet
+        let hasEnglish = UserDefaults.standard.string(forKey: "englishVoiceGender") != nil
+        let hasJapanese = UserDefaults.standard.string(forKey: "japaneseVoiceGender") != nil
+
+        if !hasEnglish || !hasJapanese {
+            // Check if there's a legacy voiceGender to migrate
+            if let legacyValue = UserDefaults.standard.string(forKey: legacyKey) {
+                // Migrate to both language settings
+                if !hasEnglish {
+                    UserDefaults.standard.set(legacyValue, forKey: "englishVoiceGender")
+                    self.englishVoiceGender = VoiceGender(rawValue: legacyValue) ?? .default_
+                }
+                if !hasJapanese {
+                    UserDefaults.standard.set(legacyValue, forKey: "japaneseVoiceGender")
+                    self.japaneseVoiceGender = VoiceGender(rawValue: legacyValue) ?? .zundamon
+                }
+
+                // Remove the old key
+                UserDefaults.standard.removeObject(forKey: legacyKey)
+            }
+        }
+
+        // Mark migration as complete
+        UserDefaults.standard.set(true, forKey: migrationKey)
     }
 }

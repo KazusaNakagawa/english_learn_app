@@ -37,31 +37,37 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section(header: Text("音声設定")) {
-                    Picker("音声の性別", selection: $settings.voiceGender) {
+                Section(header: Text("英語の音声設定")) {
+                    Picker("音声", selection: $settings.englishVoiceGender) {
                         ForEach(SettingsManager.VoiceGender.allCases, id: \.self) { gender in
                             Text(gender.label).tag(gender)
                         }
                     }
                     .pickerStyle(.segmented)
 
-                    Button(action: {
-                        speechService.speak("This is a test sentence.", voiceGender: settings.voiceGender)
-                    }) {
-                        HStack {
-                            Image(systemName: speechService.isSpeaking ? "speaker.wave.3.fill" : "speaker.wave.2.fill")
-                                .font(.title2)
-                            Text("サンプルを再生")
-                                .font(.headline)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 50)
-                        .foregroundColor(.white)
-                        .background(Color.blue)
-                        .cornerRadius(10)
+                    VoiceSampleButton(
+                        text: "This is a test sentence.",
+                        language: "en-US",
+                        label: "英語サンプルを再生",
+                        color: .blue,
+                        speechService: speechService
+                    )
+                }
+
+                Section(header: Text("日本語の音声設定")) {
+                    Picker("音声", selection: $settings.japaneseVoiceGender) {
+                        Text("ずんだもん").tag(SettingsManager.VoiceGender.zundamon)
+                        Text("デフォルト").tag(SettingsManager.VoiceGender.default_)
                     }
-                    .listRowInsets(EdgeInsets())
-                    .listRowSeparator(.hidden)
+                    .pickerStyle(.segmented)
+
+                    VoiceSampleButton(
+                        text: "これはテスト文です。",
+                        language: "ja-JP",
+                        label: "日本語サンプルを再生",
+                        color: .green,
+                        speechService: speechService
+                    )
                 }
 
                 Section(header: Text("連続再生設定")) {
@@ -105,7 +111,7 @@ struct SettingsView: View {
                     }
                 }
 
-                if settings.voiceGender == .zundamon {
+                if settings.englishVoiceGender == .zundamon || settings.japaneseVoiceGender == .zundamon {
                     Section(header: Text("VOICEVOX設定")) {
                         Picker("スタイル", selection: $settings.voicevoxStyle) {
                             ForEach(SettingsManager.VoicevoxStyle.allCases, id: \.self) { style in
@@ -190,10 +196,13 @@ struct SettingsView: View {
 
                 Section(header: Text("説明")) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("英語の学習コンテンツの音声として、女性または男性の音声を選択できます。")
+                        Text("英語・日本語それぞれの音声を個別に設定できます。")
                             .font(.body)
-                        Text("デフォルトを選択すると、システムの設定に従います。")
-                            .font(.body)
+                        Text("英語音声: デフォルト/女性/男性/ずんだもん から選択")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text("日本語音声: ずんだもん/デフォルト から選択")
+                            .font(.caption)
                             .foregroundColor(.secondary)
                     }
 
@@ -290,6 +299,39 @@ struct SettingsView: View {
         }
     }
 
+}
+
+/// A reusable button for playing voice sample in settings.
+private struct VoiceSampleButton: View {
+    let text: String
+    let language: String
+    let label: String
+    let color: Color
+    @ObservedObject var speechService: SpeechService
+
+    private var isActive: Bool {
+        speechService.isSpeaking && speechService.speakingLanguage == language
+    }
+
+    var body: some View {
+        Button(action: {
+            speechService.speak(text, language: language)
+        }) {
+            HStack {
+                Image(systemName: isActive ? "speaker.wave.3.fill" : "speaker.wave.2.fill")
+                    .font(.title2)
+                Text(label)
+                    .font(.headline)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 50)
+            .foregroundColor(.white)
+            .background(color)
+            .cornerRadius(10)
+        }
+        .listRowInsets(EdgeInsets())
+        .listRowSeparator(.hidden)
+    }
 }
 
 #Preview {

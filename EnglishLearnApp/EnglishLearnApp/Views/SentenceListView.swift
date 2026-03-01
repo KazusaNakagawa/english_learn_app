@@ -63,12 +63,12 @@ struct SentenceListView: View {
                         SpeechButton(
                             text: word.word, label: "英語を聞く",
                             isJapanese: false, color: .blue, style: .pill,
-                            speechService: speechService, voiceGender: settings.voiceGender
+                            speechService: speechService
                         )
                         SpeechButton(
                             text: word.meaning, label: "日本語を聞く",
                             isJapanese: true, color: .orange, style: .pill,
-                            speechService: speechService, voiceGender: settings.voiceGender
+                            speechService: speechService
                         )
                     }
                     .padding(.top, 4)
@@ -185,14 +185,14 @@ struct SentenceListView: View {
                 case .bilingual:
                     switch step {
                     case 0, 2:
-                        speechService.speak(sentence.english, voiceGender: settings.voiceGender, isContinuousPlayback: true)
+                        speechService.speak(sentence.english, language: "en-US", isContinuousPlayback: true)
                     case 1:
-                        speechService.speak(sentence.japanese, language: "ja-JP", voiceGender: settings.voiceGender, isContinuousPlayback: true)
+                        speechService.speak(sentence.japanese, language: "ja-JP", isContinuousPlayback: true)
                     default:
                         break
                     }
                 case .englishOnly:
-                    speechService.speak(sentence.english, voiceGender: settings.voiceGender, isContinuousPlayback: true)
+                    speechService.speak(sentence.english, language: "en-US", isContinuousPlayback: true)
                 }
 
                 // Update Now Playing info
