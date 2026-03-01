@@ -7,8 +7,9 @@ import Foundation
 ///
 /// ## Usage
 /// ```swift
-/// // Access voice gender setting
-/// let gender = SettingsManager.shared.voiceGender
+/// // Access language-specific voice settings
+/// let englishVoice = SettingsManager.shared.englishVoiceGender
+/// let japaneseVoice = SettingsManager.shared.japaneseVoiceGender
 ///
 /// // Set OpenAI API key
 /// SettingsManager.shared.openAIAPIKey = "sk-..."

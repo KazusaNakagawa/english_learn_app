@@ -310,10 +310,7 @@ private struct VoiceSampleButton: View {
     @ObservedObject var speechService: SpeechService
 
     private var isActive: Bool {
-        speechService.isSpeaking &&
-        (language == "ja-JP"
-            ? speechService.speakingLanguage == "ja-JP"
-            : speechService.speakingLanguage != "ja-JP")
+        speechService.isSpeaking && speechService.speakingLanguage == language
     }
 
     var body: some View {
