@@ -25,6 +25,9 @@ export class VoicevoxStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: VoicevoxStackProps) {
     super(scope, id, props);
 
+    // Worker 1: Test parallel development
+    console.log('Worker 1 is working on Issue #79');
+
     const { stackEnv } = props;
     const cfg = envConfig[stackEnv];
 
