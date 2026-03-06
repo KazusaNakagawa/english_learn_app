@@ -175,6 +175,13 @@ class SpeechService: NSObject, ObservableObject {
                 do {
                     audioPlayer = try AVAudioPlayer(data: audioData)
                     audioPlayer?.delegate = self
+
+                    // Enable background playback and ensure audio session is active
+                    // This is critical for VOICEVOX playback to continue in background
+                    let audioSession = AVAudioSession.sharedInstance()
+                    try audioSession.setCategory(.playback, mode: .default)
+                    try audioSession.setActive(true)
+
                     audioPlayer?.play()
                 } catch {
                     print("AVAudioPlayer error: \(error.localizedDescription)")
