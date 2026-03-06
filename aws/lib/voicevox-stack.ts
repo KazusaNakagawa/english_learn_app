@@ -131,7 +131,7 @@ export class VoicevoxStack extends cdk.Stack {
 
     const authorizerFn = new lambda.Function(this, 'ApiKeyAuthorizer', {
       functionName: `voicevox-authorizer-${stackEnv}`,
-      runtime: lambda.Runtime.NODEJS_20_X,
+      runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'index.handler',
       code: lambda.Code.fromInline(`
         exports.handler = async (event) => {
