@@ -112,9 +112,16 @@ class SpeechService: NSObject, ObservableObject {
 
         currentUtterance = utterance
         isSpeaking = true
-        // Activate audio session right before starting local TTS to avoid
-        // preempting other audio until necessary.
-        _ = activateAudioSession()
+        // Ensure audio session is configured and activated right before starting TTS.
+        // This is critical for continuous playback in background mode, especially when
+        // switching between native TTS and VOICEVOX during bilingual playback.
+        let audioSession = AVAudioSession.sharedInstance()
+        do {
+            try audioSession.setCategory(.playback, mode: .default)
+            try audioSession.setActive(true)
+        } catch {
+            print("Failed to activate audio session for native TTS: \(error.localizedDescription)")
+        }
         synthesizer.speak(utterance)
     }
 
