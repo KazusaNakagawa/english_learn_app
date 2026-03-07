@@ -205,13 +205,13 @@ final class GlobalPlaybackManager: ObservableObject {
     ///   - toOffset: The destination index
     func move(fromOffsets: IndexSet, toOffset: Int) {
         let wasPlaying = isPlaying
-        let currentItemID = currentItem.map { "\($0.word.id)-\($0.sentence.id)" }
+        let currentItemID = currentItem?.id
 
         queue.move(fromOffsets: fromOffsets, toOffset: toOffset)
 
         // Update currentIndex to track the moved item
         if let currentItemID,
-           let newIndex = queue.firstIndex(where: { "\($0.word.id)-\($0.sentence.id)" == currentItemID }) {
+           let newIndex = queue.firstIndex(where: { $0.id == currentItemID }) {
             currentIndex = newIndex
         }
 

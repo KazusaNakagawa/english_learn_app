@@ -113,8 +113,8 @@ struct WordListView: View {
     /// Checks if the current playback queue belongs to this view
     /// by comparing queue item IDs with this view's allQueueItems
     private var isPlayingThisViewsQueue: Bool {
-        let currentQueueIDs = Set(globalPlaybackManager.queue.map { "\($0.word.id)-\($0.sentence.id)" })
-        let thisViewQueueIDs = Set(allQueueItems.map { "\($0.word.id)-\($0.sentence.id)" })
+        let currentQueueIDs = Set(globalPlaybackManager.queue.map { $0.id })
+        let thisViewQueueIDs = Set(allQueueItems.map { $0.id })
         return currentQueueIDs == thisViewQueueIDs
     }
 
