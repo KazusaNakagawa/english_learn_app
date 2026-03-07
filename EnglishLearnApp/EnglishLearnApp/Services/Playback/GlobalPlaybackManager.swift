@@ -196,6 +196,31 @@ final class GlobalPlaybackManager: ObservableObject {
         }
     }
 
+    /// Moves items within the queue from one position to another.
+    ///
+    /// Adjusts currentIndex to track the currently playing item after the move.
+    ///
+    /// - Parameters:
+    ///   - fromOffsets: The indices of items to move
+    ///   - toOffset: The destination index
+    func move(fromOffsets: IndexSet, toOffset: Int) {
+        let wasPlaying = isPlaying
+        let currentItemID = currentItem.map { "\($0.word.id)-\($0.sentence.id)" }
+
+        queue.move(fromOffsets: fromOffsets, toOffset: toOffset)
+
+        // Update currentIndex to track the moved item
+        if let currentItemID,
+           let newIndex = queue.firstIndex(where: { "\($0.word.id)-\($0.sentence.id)" == currentItemID }) {
+            currentIndex = newIndex
+        }
+
+        // Re-enqueue if playing to sync internal manager
+        if wasPlaying {
+            enqueue(queue, startIndex: currentIndex)
+        }
+    }
+
     /// Clears the entire queue and stops playback.
     func clearQueue() {
         stop()

@@ -10,6 +10,7 @@ struct FullPlayerView: View {
     @EnvironmentObject private var playbackManager: GlobalPlaybackManager
     @EnvironmentObject private var settings: SettingsManager
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.editMode) private var editMode
 
     var body: some View {
         NavigationStack {
@@ -38,9 +39,20 @@ struct FullPlayerView: View {
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     if !playbackManager.queue.isEmpty {
-                        Button("クリア", role: .destructive) {
-                            playbackManager.clearQueue()
-                            dismiss()
+                        HStack(spacing: 8) {
+                            if editMode?.wrappedValue == .active {
+                                Button("完了") {
+                                    editMode?.wrappedValue = .inactive
+                                }
+                            } else {
+                                Button("編集") {
+                                    editMode?.wrappedValue = .active
+                                }
+                                Button("クリア", role: .destructive) {
+                                    playbackManager.clearQueue()
+                                    dismiss()
+                                }
+                            }
                         }
                     }
                 }
@@ -194,6 +206,9 @@ struct FullPlayerView: View {
                             Label("削除", systemImage: "trash")
                         }
                     }
+            }
+            .onMove { fromOffsets, toOffset in
+                playbackManager.move(fromOffsets: fromOffsets, toOffset: toOffset)
             }
         }
         .listStyle(.plain)
