@@ -187,7 +187,7 @@ final class GlobalPlaybackManager: ObservableObject {
     func removeFromQueue(at index: Int) {
         guard index >= 0, index < queue.count else { return }
         let wasPlaying = isPlaying
-        let currentSentenceID = currentItem?.sentence.id
+        let currentItemID = currentItem?.id
 
         queue.remove(at: index)
 
@@ -196,8 +196,8 @@ final class GlobalPlaybackManager: ObservableObject {
             return
         }
 
-        if let currentSentenceID,
-           let newIndex = queue.firstIndex(where: { $0.sentence.id == currentSentenceID }) {
+        if let currentItemID,
+           let newIndex = queue.firstIndex(where: { $0.id == currentItemID }) {
             currentIndex = newIndex
         } else {
             currentIndex = min(currentIndex, queue.count - 1)
