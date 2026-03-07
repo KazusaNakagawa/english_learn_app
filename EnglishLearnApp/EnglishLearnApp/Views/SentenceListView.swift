@@ -1,14 +1,10 @@
 import SwiftUI
-import MediaPlayer
 
 struct SentenceListView: View {
     let word: Word
-    @StateObject private var speechService = SpeechService()
+    private let speechService = SpeechService.shared
     @EnvironmentObject private var settings: SettingsManager
-
-    // MARK: - Continuous playback managers
-    @State private var playbackManager: ContinuousPlaybackManager<Sentence>?
-    @State private var remoteCommandManager = RemoteCommandCenterManager()
+    @EnvironmentObject private var globalPlaybackManager: GlobalPlaybackManager
 
     init(word: Word) {
         self.word = word
@@ -22,24 +18,27 @@ struct SentenceListView: View {
         return grouped.sorted { $0.key < $1.key }
     }
 
-    /// Flattens the grouped sentences into a single array for continuous playback.
+    /// Flattens the grouped sentences into queue items for continuous playback.
     ///
     /// This computed property provides the sentences in display order, which is used
     /// for indexing during continuous playback operations.
     ///
-    /// - Returns: An array of all sentences in display order
-    private var allSentences: [Sentence] {
-        groupedSentences.flatMap { $0.1 }
+    /// - Returns: An array of QueueItem in display order
+    private var allQueueItems: [QueueItem] {
+        groupedSentences.flatMap { _, sentences in
+            sentences.map { sentence in
+                QueueItem(sentence: sentence, word: word)
+            }
+        }
     }
 
     /// Returns the UUID of the currently playing sentence, if any.
     ///
     /// - Returns: The sentence ID if playback is active and index is valid, otherwise nil
     private var playingSentenceID: UUID? {
-        guard let manager = playbackManager,
-              manager.isPlaying,
-              manager.currentIndex < allSentences.count else { return nil }
-        return allSentences[manager.currentIndex].id
+        guard globalPlaybackManager.isPlaying,
+              globalPlaybackManager.currentIndex < globalPlaybackManager.queue.count else { return nil }
+        return globalPlaybackManager.currentItem?.sentence.id
     }
 
     var body: some View {
@@ -90,7 +89,7 @@ struct SentenceListView: View {
                             }
                             Button {
                                 if isPlaying {
-                                    stopPlayAll()
+                                    globalPlaybackManager.stop()
                                 } else {
                                     startPlayAll(from: sentence)
                                 }
@@ -111,140 +110,36 @@ struct SentenceListView: View {
         }
         .navigationTitle("例文一覧")
         .navigationBarTitleDisplayMode(.inline)
-        .onReceive(speechService.speechFinishedPublisher) { _ in
-            // Called only when speech finishes naturally (not cancelled)
-            guard let manager = playbackManager, manager.isPlaying else { return }
-
-            // Add a delay before advancing to the next step for better pacing
-            let capturedGeneration = manager.playbackGeneration
-            Task {
-                try? await Task.sleep(nanoseconds: 800_000_000)  // 0.8 second delay
-                await MainActor.run {
-                    // Verify generation hasn't changed during the delay
-                    guard manager.isValidCompletion(generation: capturedGeneration) else { return }
-                    manager.advance()
-                }
-            }
-        }
-        .onAppear {
-            setupPlaybackManager()
-
-            // Setup remote command center (callbacks already dispatched to main queue)
-            remoteCommandManager.setup(
-                onPlay: {
-                    if let manager = self.playbackManager, !manager.isPlaying {
-                        self.startPlayAll()
-                    }
-                },
-                onPause: {
-                    self.stopPlayAll()
-                },
-                onNext: {
-                    self.playbackManager?.next()
-                },
-                onPrevious: {
-                    self.playbackManager?.previous()
-                }
-            )
-        }
-        .onChange(of: settings.playbackMode) { _, newMode in
-            // If playback is active, restart current sentence from step 0 when mode changes
-            playbackManager?.updatePlaybackMode(newMode)
-        }
+        // When individual playback starts, stop continuous playback
         .onReceive(NotificationCenter.default.publisher(for: .speechServiceDidStartNewPlayback)) { _ in
-            // When individual playback starts (e.g., user taps "英語を聞く" button),
-            // stop continuous playback cleanly to avoid state confusion.
-            // The audio session remains active to allow seamless transition.
-            if let manager = playbackManager, manager.isPlaying {
-                manager.stop()
-                NowPlayingInfoManager.clear()
+            if globalPlaybackManager.isPlaying {
+                globalPlaybackManager.stop()
             }
-        }
-        .onDisappear {
-            // Always stop to invalidate any pending async tasks via generation increment
-            playbackManager?.stop()
-            speechService.deactivateAudioSession()
-            NowPlayingInfoManager.clear()
-            // Remove remote command handlers to avoid leaked handlers after view disappears
-            remoteCommandManager.cleanup()
         }
     }
 
     // MARK: - Playback control
 
-    /// Initializes the playback manager on first use.
-    private func setupPlaybackManager() {
-        guard playbackManager == nil else { return }
-
-        playbackManager = ContinuousPlaybackManager(
-            playbackMode: settings.playbackMode,
-            speechHandler: { [weak speechService, settings, word] (sentence: Sentence, step: Int) in
-                guard let speechService else { return }
-
-                switch settings.playbackMode {
-                case .bilingual:
-                    switch step {
-                    case 0, 2:
-                        speechService.speak(sentence.english, language: "en-US", isContinuousPlayback: true)
-                    case 1:
-                        speechService.speak(sentence.japanese, language: "ja-JP", isContinuousPlayback: true)
-                    default:
-                        break
-                    }
-                case .englishOnly:
-                    speechService.speak(sentence.english, language: "en-US", isContinuousPlayback: true)
-                }
-
-                // Update Now Playing info
-                let stepLabel = settings.playbackMode.stepLabel(for: step)
-                NowPlayingInfoManager.update(
-                    title: sentence.english,
-                    artist: "\(word.word) - \(stepLabel)",
-                    album: word.meaning,
-                    playbackRate: 1.0
-                )
-            },
-            completionHandler: { [weak speechService] in
-                speechService?.deactivateAudioSession()
-                NowPlayingInfoManager.clear()
-            }
-        )
-    }
-
     /// Starts continuous playback from a specific sentence or the beginning.
     ///
     /// - Parameter sentence: The sentence to start from, or nil to start from the first sentence
     private func startPlayAll(from sentence: Sentence? = nil) {
-        guard !allSentences.isEmpty else { return }
-
-        setupPlaybackManager()
-
-        // Stop current playback first
-        speechService.stop()
+        let items = allQueueItems
+        guard !items.isEmpty else { return }
 
         // Determine start index
         let startIndex: Int
         if let sentence,
-           let idx = allSentences.firstIndex(where: { $0.id == sentence.id }) {
+           let idx = items.firstIndex(where: { $0.sentence.id == sentence.id }) {
             startIndex = idx
         } else {
             startIndex = 0
         }
 
-        Task { @MainActor in
-            playbackManager?.start(items: allSentences, startIndex: startIndex)
-        }
+        globalPlaybackManager.enqueue(items, startIndex: startIndex)
     }
-
-    /// Stops all continuous playback.
-    private func stopPlayAll() {
-        playbackManager?.stop()
-        speechService.stop()
-        speechService.deactivateAudioSession()
-        NowPlayingInfoManager.clear()
-    }
-
 }
+
 
 struct SentenceRowView: View {
     let sentence: Sentence
@@ -275,4 +170,6 @@ struct SentenceRowView: View {
             ]
         ))
     }
+    .environmentObject(SettingsManager.shared)
+    .environmentObject(GlobalPlaybackManager(speechService: .shared, settings: .shared))
 }

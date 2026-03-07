@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject private var settings: SettingsManager
+    @EnvironmentObject private var globalPlaybackManager: GlobalPlaybackManager
     @State private var selectedTab = 0
     @State private var showingAddWordView = false
 
@@ -54,10 +55,16 @@ struct ContentView: View {
                 WordDataManager.shared.addWord(newWord)
             }
         }
+        .safeAreaInset(edge: .bottom) {
+            if !globalPlaybackManager.queue.isEmpty {
+                MiniPlayerView()
+            }
+        }
     }
 }
 
 #Preview {
     ContentView()
         .environmentObject(SettingsManager.shared)
+        .environmentObject(GlobalPlaybackManager(speechService: .shared, settings: .shared))
 }

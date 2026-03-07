@@ -14,6 +14,10 @@ extension Notification.Name {
 /// These warnings do not impact user experience or app stability.
 @MainActor
 class SpeechService: NSObject, ObservableObject {
+    // MARK: - Shared Instance
+
+    static let shared = SpeechService()
+
     // MARK: - Constants
 
     private enum Constants {
