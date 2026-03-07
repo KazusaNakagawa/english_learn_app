@@ -111,9 +111,10 @@ final class GlobalPlaybackManager: ObservableObject {
     ///   - items: The items to enqueue
     ///   - startIndex: The index to start from (default: 0)
     func enqueue(_ items: [QueueItem], startIndex: Int = 0) {
-        guard !items.isEmpty else { return }
+        guard !items.isEmpty, items.indices.contains(startIndex) else { return }
 
-        // Stop any current playback
+        // Invalidate pending completion work tied to the previous manager
+        internalManager?.stop()
         speechService.stop()
 
         // Create or recreate the internal manager
@@ -172,28 +173,26 @@ final class GlobalPlaybackManager: ObservableObject {
     /// - If removing before current index, adjusts current index
     func removeFromQueue(at index: Int) {
         guard index >= 0, index < queue.count else { return }
+        let wasPlaying = isPlaying
+        let currentSentenceID = currentItem?.sentence.id
 
-        if index == currentIndex {
-            // Removing current item
-            queue.remove(at: index)
-            if queue.isEmpty {
-                clearQueue()
-            } else {
-                // Restart from the same index (now next item) or last item
-                let newIndex = min(currentIndex, queue.count - 1)
-                if isPlaying {
-                    enqueue(queue, startIndex: newIndex)
-                } else {
-                    currentIndex = newIndex
-                }
-            }
-        } else if index < currentIndex {
-            // Removing before current - adjust index
-            queue.remove(at: index)
-            currentIndex -= 1
+        queue.remove(at: index)
+
+        guard !queue.isEmpty else {
+            clearQueue()
+            return
+        }
+
+        if let currentSentenceID,
+           let newIndex = queue.firstIndex(where: { $0.sentence.id == currentSentenceID }) {
+            currentIndex = newIndex
         } else {
-            // Removing after current - just remove
-            queue.remove(at: index)
+            currentIndex = min(currentIndex, queue.count - 1)
+            currentStep = 0
+        }
+
+        if wasPlaying {
+            enqueue(queue, startIndex: currentIndex)
         }
     }
 

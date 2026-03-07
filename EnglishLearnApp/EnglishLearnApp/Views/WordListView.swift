@@ -110,6 +110,14 @@ struct WordListView: View {
         }
     }
 
+    /// Checks if the current playback queue belongs to this view
+    /// by comparing queue item IDs with this view's allQueueItems
+    private var isPlayingThisViewsQueue: Bool {
+        let currentQueueIDs = Set(globalPlaybackManager.queue.map { "\($0.word.id)-\($0.sentence.id)" })
+        let thisViewQueueIDs = Set(allQueueItems.map { "\($0.word.id)-\($0.sentence.id)" })
+        return currentQueueIDs == thisViewQueueIDs
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             letterFilterBar
@@ -173,15 +181,16 @@ struct WordListView: View {
                     HStack {
                         // Play all words button
                         if !allQueueItems.isEmpty {
+                            let isPlayingOurQueue = globalPlaybackManager.isPlaying && isPlayingThisViewsQueue
                             Button {
-                                if globalPlaybackManager.isPlaying {
+                                if isPlayingOurQueue {
                                     globalPlaybackManager.stop()
                                 } else {
                                     globalPlaybackManager.enqueue(allQueueItems)
                                 }
                             } label: {
-                                Image(systemName: globalPlaybackManager.isPlaying ? "stop.fill" : "play.fill")
-                                    .foregroundColor(globalPlaybackManager.isPlaying ? .red : .blue)
+                                Image(systemName: isPlayingOurQueue ? "stop.fill" : "play.fill")
+                                    .foregroundColor(isPlayingOurQueue ? .red : .blue)
                             }
                         }
                         sortMenu
@@ -201,18 +210,30 @@ struct WordListView: View {
         // user can continue selecting from the newly filtered results.
         .onChange(of: searchText) { _, _ in
             selection.selectedIDs = []
-            if globalPlaybackManager.isPlaying { globalPlaybackManager.stop() }
+            // Only stop if this view's queue is currently playing
+            if globalPlaybackManager.isPlaying && isPlayingThisViewsQueue {
+                globalPlaybackManager.stop()
+            }
         }
         .onChange(of: selectedLetter) { _, _ in
             selection.selectedIDs = []
-            if globalPlaybackManager.isPlaying { globalPlaybackManager.stop() }
+            // Only stop if this view's queue is currently playing
+            if globalPlaybackManager.isPlaying && isPlayingThisViewsQueue {
+                globalPlaybackManager.stop()
+            }
         }
         .onChange(of: selectedCategory) { _, _ in
             selection.selectedIDs = []
-            if globalPlaybackManager.isPlaying { globalPlaybackManager.stop() }
+            // Only stop if this view's queue is currently playing
+            if globalPlaybackManager.isPlaying && isPlayingThisViewsQueue {
+                globalPlaybackManager.stop()
+            }
         }
         .onChange(of: sortOptionRaw) { _, _ in
-            if globalPlaybackManager.isPlaying { globalPlaybackManager.stop() }
+            // Only stop if this view's queue is currently playing
+            if globalPlaybackManager.isPlaying && isPlayingThisViewsQueue {
+                globalPlaybackManager.stop()
+            }
         }
         // When individual playback starts, stop continuous playback
         .onReceive(NotificationCenter.default.publisher(for: .speechServiceDidStartNewPlayback)) { _ in

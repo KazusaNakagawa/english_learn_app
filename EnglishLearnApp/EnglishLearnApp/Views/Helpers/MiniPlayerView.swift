@@ -11,11 +11,11 @@ struct MiniPlayerView: View {
     @State private var showingFullPlayer = false
 
     var body: some View {
-        Button {
-            showingFullPlayer = true
-        } label: {
-            HStack(spacing: 12) {
-                // Current sentence info
+        HStack(spacing: 12) {
+            // Current sentence info - tappable to expand
+            Button {
+                showingFullPlayer = true
+            } label: {
                 VStack(alignment: .leading, spacing: 2) {
                     if let item = playbackManager.currentItem {
                         currentSentenceText(for: item)
@@ -34,49 +34,49 @@ struct MiniPlayerView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-
-                // Playback controls
-                HStack(spacing: 16) {
-                    Button {
-                        playbackManager.previous()
-                    } label: {
-                        Image(systemName: "backward.fill")
-                            .font(.title3)
-                            .foregroundColor(.primary)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(playbackManager.currentIndex == 0)
-
-                    Button {
-                        if playbackManager.isPlaying {
-                            playbackManager.stop()
-                        } else {
-                            playbackManager.resume()
-                        }
-                    } label: {
-                        Image(systemName: playbackManager.isPlaying ? "pause.fill" : "play.fill")
-                            .font(.title2)
-                            .foregroundColor(.primary)
-                    }
-                    .buttonStyle(.plain)
-
-                    Button {
-                        playbackManager.next()
-                    } label: {
-                        Image(systemName: "forward.fill")
-                            .font(.title3)
-                            .foregroundColor(.primary)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(playbackManager.currentIndex >= playbackManager.queue.count - 1)
-                }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(.regularMaterial)
-            .overlay(alignment: .top) { Divider() }
+            .buttonStyle(.plain)
+
+            // Playback controls - sibling buttons, not nested
+            HStack(spacing: 16) {
+                Button {
+                    playbackManager.previous()
+                } label: {
+                    Image(systemName: "backward.fill")
+                        .font(.title3)
+                        .foregroundColor(.primary)
+                }
+                .buttonStyle(.plain)
+                .disabled(playbackManager.currentIndex == 0)
+
+                Button {
+                    if playbackManager.isPlaying {
+                        playbackManager.stop()
+                    } else {
+                        playbackManager.resume()
+                    }
+                } label: {
+                    Image(systemName: playbackManager.isPlaying ? "pause.fill" : "play.fill")
+                        .font(.title2)
+                        .foregroundColor(.primary)
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    playbackManager.next()
+                } label: {
+                    Image(systemName: "forward.fill")
+                        .font(.title3)
+                        .foregroundColor(.primary)
+                }
+                .buttonStyle(.plain)
+                .disabled(playbackManager.currentIndex >= playbackManager.queue.count - 1)
+            }
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(.regularMaterial)
+        .overlay(alignment: .top) { Divider() }
         .sheet(isPresented: $showingFullPlayer) {
             FullPlayerView()
         }

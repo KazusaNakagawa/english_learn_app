@@ -3,7 +3,7 @@ import SwiftUI
 struct WordPracticeView: View {
     let word: Word
 
-    private let speechService = SpeechService.shared
+    @ObservedObject private var speechService = SpeechService.shared
     @StateObject private var speechRecognizer = SpeechRecognizer()
     @State private var pronunciationResult: PronunciationResult?
     @State private var showResult = false
