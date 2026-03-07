@@ -103,6 +103,19 @@ final class GlobalPlaybackManager: ObservableObject {
         return queue[currentIndex]
     }
 
+    /// Checks if the given queue matches the currently playing queue.
+    ///
+    /// Useful for views to determine if they "own" the current playback.
+    ///
+    /// - Parameter items: Queue items to compare against current queue
+    /// - Returns: true if the items match the current queue (same IDs in same order)
+    func isPlayingQueue(_ items: [QueueItem]) -> Bool {
+        guard isPlaying else { return false }
+        let currentIDs = queue.map { $0.id }
+        let givenIDs = items.map { $0.id }
+        return currentIDs == givenIDs
+    }
+
     /// Enqueues items and starts playback from the specified index.
     ///
     /// This replaces any existing queue and starts fresh playback.

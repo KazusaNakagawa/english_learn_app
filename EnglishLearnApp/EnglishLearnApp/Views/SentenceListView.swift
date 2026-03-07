@@ -32,11 +32,16 @@ struct SentenceListView: View {
         }
     }
 
+    /// Checks if the current playback queue belongs to this view
+    private var isPlayingThisViewsQueue: Bool {
+        globalPlaybackManager.isPlayingQueue(allQueueItems)
+    }
+
     /// Returns the UUID of the currently playing sentence, if any.
     ///
     /// - Returns: The sentence ID if playback is active and index is valid, otherwise nil
     private var playingSentenceID: UUID? {
-        guard globalPlaybackManager.isPlaying,
+        guard isPlayingThisViewsQueue,
               globalPlaybackManager.currentIndex < globalPlaybackManager.queue.count else { return nil }
         return globalPlaybackManager.currentItem?.sentence.id
     }
@@ -110,9 +115,9 @@ struct SentenceListView: View {
         }
         .navigationTitle("例文一覧")
         .navigationBarTitleDisplayMode(.inline)
-        // When individual playback starts, stop continuous playback
+        // When individual playback starts, stop continuous playback only if it's this view's queue
         .onReceive(NotificationCenter.default.publisher(for: .speechServiceDidStartNewPlayback)) { _ in
-            if globalPlaybackManager.isPlaying {
+            if isPlayingThisViewsQueue {
                 globalPlaybackManager.stop()
             }
         }
