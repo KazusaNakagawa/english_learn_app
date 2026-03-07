@@ -112,15 +112,17 @@ class SpeechService: NSObject, ObservableObject {
 
         currentUtterance = utterance
         isSpeaking = true
-        // Ensure audio session is configured and activated right before starting TTS.
-        // This is critical for continuous playback in background mode, especially when
-        // switching between native TTS and VOICEVOX during bilingual playback.
+        // Ensure audio session is active for background playback.
+        // During continuous playback, avoid reconfiguring category to prevent interruption.
         let audioSession = AVAudioSession.sharedInstance()
         do {
-            try audioSession.setCategory(.playback, mode: .default)
+            // Only set category if we're starting fresh (not during continuous playback)
+            if !isContinuousPlayback || audioSession.category != .playback {
+                try audioSession.setCategory(.playback, mode: .default)
+            }
             try audioSession.setActive(true)
         } catch {
-            print("Failed to activate audio session for native TTS: \(error.localizedDescription)")
+            print("Failed to configure audio session for native TTS: \(error.localizedDescription)")
         }
         synthesizer.speak(utterance)
     }
