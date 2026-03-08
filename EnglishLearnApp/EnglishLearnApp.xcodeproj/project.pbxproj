@@ -9,10 +9,6 @@
 /* Begin PBXBuildFile section */
 		850E49D02F4952F8000F46C6 /* ActionBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 850E49CE2F4952F8000F46C6 /* ActionBar.swift */; };
 		850E49D12F4952F8000F46C6 /* SelectableListRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 850E49CF2F4952F8000F46C6 /* SelectableListRow.swift */; };
-		C1A00001238D1234567890AB /* QueueItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A00011238D1234567890AB /* QueueItem.swift */; };
-		C1A00002238D1234567890AB /* GlobalPlaybackManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A00012238D1234567890AB /* GlobalPlaybackManager.swift */; };
-		C1A00003238D1234567890AB /* MiniPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A00013238D1234567890AB /* MiniPlayerView.swift */; };
-		C1A00004238D1234567890AB /* FullPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A00014238D1234567890AB /* FullPlayerView.swift */; };
 		8577C1722F4BE3D20061F175 /* WordImportErrorHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8577C1712F4BE3D20061F175 /* WordImportErrorHandler.swift */; };
 		8577C1982F4BE5AC0061F175 /* SettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8577C1942F4BE5AC0061F175 /* SettingsManager.swift */; };
 		8577C1992F4BE5AC0061F175 /* NowPlayingInfoManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8577C18D2F4BE5AC0061F175 /* NowPlayingInfoManager.swift */; };
@@ -49,6 +45,10 @@
 		A1000087238D1234567890AB /* PronunciationResultView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000088238D1234567890AB /* PronunciationResultView.swift */; };
 		A1000089238D1234567890AB /* RecognitionResultView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100008A238D1234567890AB /* RecognitionResultView.swift */; };
 		A100008B238D1234567890AB /* SpeechButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100008C238D1234567890AB /* SpeechButton.swift */; };
+		C1A00001238D1234567890AB /* QueueItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A00011238D1234567890AB /* QueueItem.swift */; };
+		C1A00002238D1234567890AB /* GlobalPlaybackManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A00012238D1234567890AB /* GlobalPlaybackManager.swift */; };
+		C1A00003238D1234567890AB /* MiniPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A00013238D1234567890AB /* MiniPlayerView.swift */; };
+		C1A00004238D1234567890AB /* FullPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A00014238D1234567890AB /* FullPlayerView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
