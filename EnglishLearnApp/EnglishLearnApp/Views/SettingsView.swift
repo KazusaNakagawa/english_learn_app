@@ -15,7 +15,7 @@ struct SettingsView: View {
     @EnvironmentObject private var settings: SettingsManager
 
     /// The speech service for playing sample audio.
-    @StateObject private var speechService = SpeechService()
+    private let speechService = SpeechService.shared
 
     /// Local state for the OpenAI API key input field.
     @State private var apiKeyInput: String = ""
