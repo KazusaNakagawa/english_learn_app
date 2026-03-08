@@ -232,11 +232,10 @@ struct WordListView: View {
                 globalPlaybackManager.stop()
             }
         }
-        // When individual playback starts, stop continuous playback
+        // When individual playback starts, always stop continuous playback
+        // to prevent stale queues from advancing via delayed completion handlers
         .onReceive(NotificationCenter.default.publisher(for: .speechServiceDidStartNewPlayback)) { _ in
-            if globalPlaybackManager.isPlaying {
-                globalPlaybackManager.stop()
-            }
+            globalPlaybackManager.stop()
         }
     }
 

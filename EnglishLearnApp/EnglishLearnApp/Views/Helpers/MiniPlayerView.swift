@@ -51,7 +51,7 @@ struct MiniPlayerView: View {
 
                 Button {
                     if playbackManager.isPlaying {
-                        playbackManager.stop()
+                        playbackManager.pause()
                     } else {
                         playbackManager.resume()
                     }

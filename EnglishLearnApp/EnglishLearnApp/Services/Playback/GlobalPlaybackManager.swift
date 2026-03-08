@@ -72,7 +72,7 @@ final class GlobalPlaybackManager: ObservableObject {
                 self.resume()
             },
             onPause: { [weak self] in
-                self?.stop()
+                self?.pause()
             },
             onNext: { [weak self] in
                 self?.next()
@@ -154,6 +154,31 @@ final class GlobalPlaybackManager: ObservableObject {
 
         // Restart from current index
         internalManager?.start(items: queue, startIndex: currentIndex)
+        syncStateFromManager()
+    }
+
+    /// Pauses playback while maintaining queue and Now Playing info.
+    ///
+    /// Unlike `stop()`, this keeps the Now Playing metadata visible on the lock screen
+    /// with playbackRate set to 0, allowing easy resume from the same position.
+    func pause() {
+        guard isPlaying else { return }
+
+        internalManager?.stop()
+        speechService.stop()
+        speechService.deactivateAudioSession()
+
+        // Update Now Playing to paused state (playbackRate = 0) instead of clearing
+        if let item = currentItem {
+            let stepLabel = settings.playbackMode.stepLabel(for: currentStep)
+            NowPlayingInfoManager.update(
+                title: item.sentence.english,
+                artist: "\(item.word.word) - \(stepLabel)",
+                album: item.word.meaning,
+                playbackRate: 0.0
+            )
+        }
+
         syncStateFromManager()
     }
 
