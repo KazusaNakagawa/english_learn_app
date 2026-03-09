@@ -89,7 +89,16 @@ class SpeechService: NSObject, ObservableObject {
     ///   - language: The language code (default: "en-US")
     ///   - isContinuousPlayback: Set to true when called from continuous playback to prevent stopping the session (default: false)
     func speak(_ text: String, language: String = "en-US", isContinuousPlayback: Bool = false) {
-        stop()
+        // Only stop if actually playing to avoid putting synthesizer in unstable state
+        if synthesizer.isSpeaking || audioPlayer?.isPlaying == true {
+            stop()
+        } else {
+            // Reset state without calling stopSpeaking
+            currentUtterance = nil
+            audioPlayer = nil
+            isSpeaking = false
+            speakingLanguage = nil
+        }
 
         // Only notify when starting individual playback (not continuous playback)
         // This allows continuous playback views to stop cleanly when user taps individual play buttons
@@ -128,7 +137,16 @@ class SpeechService: NSObject, ObservableObject {
         } catch {
             print("Failed to configure audio session for native TTS: \(error.localizedDescription)")
         }
-        synthesizer.speak(utterance)
+
+        // Small delay to allow audio session to fully activate before speaking
+        // This fixes an issue where speak() fails silently on first call
+        if !isContinuousPlayback {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+                self?.synthesizer.speak(utterance)
+            }
+        } else {
+            synthesizer.speak(utterance)
+        }
     }
 
     /// Synthesizes speech using the VOICEVOX API and plays it via AVAudioPlayer.
