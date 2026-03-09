@@ -133,78 +133,97 @@ class SpeechService: NSObject, ObservableObject {
 
     /// Synthesizes speech using the VOICEVOX API and plays it via AVAudioPlayer.
     ///
-    /// This method makes two HTTP requests to the VOICEVOX server:
-    /// 1. POST /audio_query to generate query parameters
-    /// 2. POST /synthesis to synthesize audio from the query
+    /// This method first checks the audio cache for previously synthesized audio.
+    /// On cache miss, it fetches from the VOICEVOX API and caches the result.
     ///
     /// - Parameter text: The Japanese text to be spoken
     private func speakWithVoicevox(_ text: String) async {
-        let baseURL = AppConfig.voicevoxBaseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        guard !baseURL.isEmpty else {
-            handleVoicevoxFailure()
-            return
-        }
-
-        // Ensure API key is configured
-        let apiKey = AppConfig.voicevoxApiKey
-        guard !apiKey.isEmpty else {
-            print("VOICEVOX API key not configured in AppConfig")
-            handleVoicevoxFailure()
-            return
-        }
-
         let speakerID = SettingsManager.shared.voicevoxStyle.rawValue
+
+        // Check cache first
+        if let cachedAudio = await AudioCache.shared.get(text: text, speakerID: speakerID) {
+            playAudioData(cachedAudio)
+            return
+        }
+
+        // Cache miss - fetch from API
+        guard let audioData = await fetchVoicevoxAudio(text: text, speakerID: speakerID) else {
+            handleVoicevoxFailure()
+            return
+        }
+
+        // Cache the audio data for future playback
+        await AudioCache.shared.set(audioData, text: text, speakerID: speakerID)
+
+        playAudioData(audioData)
+    }
+
+    /// Fetches audio data from VOICEVOX API.
+    ///
+    /// Makes two HTTP requests to the VOICEVOX server:
+    /// 1. POST /audio_query to generate query parameters
+    /// 2. POST /synthesis to synthesize audio from the query
+    ///
+    /// - Parameters:
+    ///   - text: The text to synthesize
+    ///   - speakerID: The VOICEVOX speaker ID
+    /// - Returns: Audio data on success, nil on failure
+    private func fetchVoicevoxAudio(text: String, speakerID: Int) async -> Data? {
+        let baseURL = AppConfig.voicevoxBaseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard !baseURL.isEmpty else { return nil }
+        guard !AppConfig.voicevoxApiKey.isEmpty else {
+            print("VOICEVOX API key not configured in AppConfig")
+            return nil
+        }
 
         guard let encodedText = text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
               let queryURL = URL(string: "\(baseURL)/audio_query?text=\(encodedText)&speaker=\(speakerID)"),
               let synthURL = URL(string: "\(baseURL)/synthesis?speaker=\(speakerID)") else {
-            handleVoicevoxFailure()
-            return
+            return nil
         }
 
         do {
             let (queryData, queryResponse) = try await performPOSTRequest(to: queryURL)
             guard isSuccessfulResponse(queryResponse) else {
                 print("VOICEVOX audio_query failed: \((queryResponse as? HTTPURLResponse)?.statusCode ?? -1)")
-                handleVoicevoxFailure()
-                return
+                return nil
             }
 
             let (audioData, synthResponse) = try await performPOSTRequest(to: synthURL, body: queryData, contentType: "application/json")
             guard isSuccessfulResponse(synthResponse) else {
                 print("VOICEVOX synthesis failed: \((synthResponse as? HTTPURLResponse)?.statusCode ?? -1)")
-                handleVoicevoxFailure()
-                return
+                return nil
             }
 
-            // Validate audio data before creating AVAudioPlayer to avoid buffer warnings
             guard !audioData.isEmpty else {
                 print("VOICEVOX returned empty audio data")
-                handleVoicevoxFailure()
-                return
+                return nil
             }
 
-            await MainActor.run {
-                do {
-                    audioPlayer = try AVAudioPlayer(data: audioData)
-                    audioPlayer?.delegate = self
-
-                    // Enable background playback and ensure audio session is active
-                    // This is critical for VOICEVOX playback to continue in background
-                    let audioSession = AVAudioSession.sharedInstance()
-                    try audioSession.setCategory(.playback, mode: .default)
-                    try audioSession.setActive(true)
-
-                    audioPlayer?.play()
-                } catch {
-                    print("AVAudioPlayer error: \(error.localizedDescription)")
-                    isSpeaking = false
-                    speechFinishedPublisher.send()
-                }
-            }
+            return audioData
         } catch {
             print("VOICEVOX error: \(error.localizedDescription)")
-            handleVoicevoxFailure()
+            return nil
+        }
+    }
+
+    /// Plays audio data using AVAudioPlayer.
+    /// - Parameter audioData: The audio data to play
+    private func playAudioData(_ audioData: Data) {
+        do {
+            audioPlayer = try AVAudioPlayer(data: audioData)
+            audioPlayer?.delegate = self
+
+            // Enable background playback and ensure audio session is active
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setCategory(.playback, mode: .default)
+            try audioSession.setActive(true)
+
+            audioPlayer?.play()
+        } catch {
+            print("AVAudioPlayer error: \(error.localizedDescription)")
+            isSpeaking = false
+            speechFinishedPublisher.send()
         }
     }
 

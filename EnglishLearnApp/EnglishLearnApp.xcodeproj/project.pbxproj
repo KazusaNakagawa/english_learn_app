@@ -49,6 +49,7 @@
 		C1A00002238D1234567890AB /* GlobalPlaybackManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A00012238D1234567890AB /* GlobalPlaybackManager.swift */; };
 		C1A00003238D1234567890AB /* MiniPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A00013238D1234567890AB /* MiniPlayerView.swift */; };
 		C1A00004238D1234567890AB /* FullPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A00014238D1234567890AB /* FullPlayerView.swift */; };
+		D1A00031238D1234567890AB /* AudioCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1A00021238D1234567890AB /* AudioCache.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -96,6 +97,7 @@
 		C1A00012238D1234567890AB /* GlobalPlaybackManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalPlaybackManager.swift; sourceTree = "<group>"; };
 		C1A00013238D1234567890AB /* MiniPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiniPlayerView.swift; sourceTree = "<group>"; };
 		C1A00014238D1234567890AB /* FullPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FullPlayerView.swift; sourceTree = "<group>"; };
+		D1A00021238D1234567890AB /* AudioCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioCache.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -123,6 +125,7 @@
 		8577C1972F4BE5AC0061F175 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				D1A00021238D1234567890AB /* AudioCache.swift */,
 				85DE1EC02F52867000A4CA59 /* KeychainService.swift */,
 				8577C18F2F4BE5AC0061F175 /* Playback */,
 				8577C1922F4BE5AC0061F175 /* OpenAIService.swift */,
@@ -303,6 +306,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D1A00031238D1234567890AB /* AudioCache.swift in Sources */,
 				A1000001238D1234567890AB /* EnglishLearnAppApp.swift in Sources */,
 				A1000002238D1234567890AB /* ContentView.swift in Sources */,
 				A1000003238D1234567890AB /* Word.swift in Sources */,
