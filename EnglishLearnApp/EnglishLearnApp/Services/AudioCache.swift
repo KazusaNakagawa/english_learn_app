@@ -84,7 +84,7 @@ actor AudioCache {
 
         // Store on disk
         let fileURL = cacheDirectory.appendingPathComponent(key)
-        try? data.write(to: fileURL)
+        try? data.write(to: fileURL, options: .atomic)
 
         // Enforce disk cache size limit
         enforceDiskCacheLimit()
