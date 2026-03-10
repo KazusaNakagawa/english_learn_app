@@ -112,14 +112,24 @@ actor AudioCache {
         }
     }
 
-    // MARK: - Private Methods
+    // MARK: - Public Utility Methods
 
     /// Generates a cache key from text and speaker ID using SHA256.
-    private func cacheKey(text: String, speakerID: Int) -> String {
+    ///
+    /// Exposed publicly to allow PrefetchService to track tasks by cache key
+    /// without duplicating the hashing logic.
+    ///
+    /// - Parameters:
+    ///   - text: The text that will be synthesized
+    ///   - speakerID: The VOICEVOX speaker ID
+    /// - Returns: A SHA256 hash-based cache key with .wav extension
+    func cacheKey(text: String, speakerID: Int) -> String {
         let input = "\(text)-\(speakerID)"
         let hash = SHA256.hash(data: Data(input.utf8))
         return hash.compactMap { String(format: "%02x", $0) }.joined() + ".wav"
     }
+
+    // MARK: - Private Methods
 
     /// Removes oldest files when disk cache exceeds size limit (LRU eviction).
     private func enforceDiskCacheLimit() {

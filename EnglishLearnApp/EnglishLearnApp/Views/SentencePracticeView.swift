@@ -1,6 +1,15 @@
 import SwiftUI
 
 struct SentencePracticeView: View {
+    // MARK: - Constants
+
+    private enum Constants {
+        /// Default VOICEVOX speaker ID for English TTS
+        static let englishSpeakerID = 3
+    }
+
+    // MARK: - Properties
+
     let sentence: Sentence
     let word: Word
 
@@ -8,6 +17,7 @@ struct SentencePracticeView: View {
     @StateObject private var speechRecognizer = SpeechRecognizer()
     @State private var pronunciationResult: PronunciationResult?
     @State private var showResult = false
+    @State private var prefetchTask: Task<Void, Never>?
     @EnvironmentObject private var settings: SettingsManager
 
     var body: some View {
@@ -116,6 +126,32 @@ struct SentencePracticeView: View {
         }
         .navigationTitle(word.word)
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            prefetchTask = Task {
+                // Prefetch both English and Japanese in parallel (if using VOICEVOX)
+                async let englishPrefetch = {
+                    if settings.englishVoiceGender == .zundamon {
+                        await PrefetchService.shared.prefetch(
+                            text: sentence.english,
+                            speakerID: Constants.englishSpeakerID
+                        )
+                    }
+                }()
+                async let japanesePrefetch = {
+                    if settings.japaneseVoiceGender == .zundamon {
+                        await PrefetchService.shared.prefetch(
+                            text: sentence.japanese,
+                            speakerID: settings.voicevoxStyle.rawValue
+                        )
+                    }
+                }()
+                await (englishPrefetch, japanesePrefetch)
+            }
+        }
+        .onDisappear {
+            prefetchTask?.cancel()
+            prefetchTask = nil
+        }
     }
 
     private func checkPronunciation() {

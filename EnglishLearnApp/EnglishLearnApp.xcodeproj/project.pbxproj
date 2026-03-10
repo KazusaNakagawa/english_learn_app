@@ -9,6 +9,8 @@
 /* Begin PBXBuildFile section */
 		850E49D02F4952F8000F46C6 /* ActionBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 850E49CE2F4952F8000F46C6 /* ActionBar.swift */; };
 		850E49D12F4952F8000F46C6 /* SelectableListRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 850E49CF2F4952F8000F46C6 /* SelectableListRow.swift */; };
+		851E4B1F2F6045A600E6C962 /* NetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 851E4B1D2F6045A600E6C962 /* NetworkMonitor.swift */; };
+		851E4B202F6045A600E6C962 /* PrefetchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 851E4B1E2F6045A600E6C962 /* PrefetchService.swift */; };
 		8577C1722F4BE3D20061F175 /* WordImportErrorHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8577C1712F4BE3D20061F175 /* WordImportErrorHandler.swift */; };
 		8577C1982F4BE5AC0061F175 /* SettingsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8577C1942F4BE5AC0061F175 /* SettingsManager.swift */; };
 		8577C1992F4BE5AC0061F175 /* NowPlayingInfoManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8577C18D2F4BE5AC0061F175 /* NowPlayingInfoManager.swift */; };
@@ -55,6 +57,8 @@
 /* Begin PBXFileReference section */
 		850E49CE2F4952F8000F46C6 /* ActionBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionBar.swift; sourceTree = "<group>"; };
 		850E49CF2F4952F8000F46C6 /* SelectableListRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectableListRow.swift; sourceTree = "<group>"; };
+		851E4B1D2F6045A600E6C962 /* NetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMonitor.swift; sourceTree = "<group>"; };
+		851E4B1E2F6045A600E6C962 /* PrefetchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrefetchService.swift; sourceTree = "<group>"; };
 		8577C1712F4BE3D20061F175 /* WordImportErrorHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WordImportErrorHandler.swift; sourceTree = "<group>"; };
 		8577C18C2F4BE5AC0061F175 /* ContinuousPlaybackManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContinuousPlaybackManager.swift; sourceTree = "<group>"; };
 		8577C18D2F4BE5AC0061F175 /* NowPlayingInfoManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingInfoManager.swift; sourceTree = "<group>"; };
@@ -125,6 +129,8 @@
 		8577C1972F4BE5AC0061F175 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				851E4B1D2F6045A600E6C962 /* NetworkMonitor.swift */,
+				851E4B1E2F6045A600E6C962 /* PrefetchService.swift */,
 				D1A00021238D1234567890AB /* AudioCache.swift */,
 				85DE1EC02F52867000A4CA59 /* KeychainService.swift */,
 				8577C18F2F4BE5AC0061F175 /* Playback */,
@@ -318,6 +324,8 @@
 				8577C1992F4BE5AC0061F175 /* NowPlayingInfoManager.swift in Sources */,
 				8577C19A2F4BE5AC0061F175 /* ContinuousPlaybackManager.swift in Sources */,
 				8577C19B2F4BE5AC0061F175 /* SpeechService.swift in Sources */,
+				851E4B1F2F6045A600E6C962 /* NetworkMonitor.swift in Sources */,
+				851E4B202F6045A600E6C962 /* PrefetchService.swift in Sources */,
 				8577C19C2F4BE5AC0061F175 /* OpenAIService.swift in Sources */,
 				8577C19D2F4BE5AC0061F175 /* RemoteCommandCenterManager.swift in Sources */,
 				8577C19F2F4BE5AC0061F175 /* SpeechRecognizer.swift in Sources */,

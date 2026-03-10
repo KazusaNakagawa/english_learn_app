@@ -13,6 +13,20 @@ import Combine
 /// **Usage:** Inject as an `@EnvironmentObject` from the app root.
 @MainActor
 final class GlobalPlaybackManager: ObservableObject {
+    // MARK: - Constants
+
+    private enum Constants {
+        /// Default VOICEVOX speaker ID for English TTS
+        /// Note: Only used when englishVoiceGender is set to .zundamon
+        static let englishSpeakerID = 3
+
+        /// Prefetch lookahead for bilingual mode (3 steps per item = longer playback)
+        static let bilingualPrefetchLookahead = 1
+
+        /// Prefetch lookahead for English-only mode (2 steps per item = shorter playback)
+        static let englishOnlyPrefetchLookahead = 2
+    }
+
     // MARK: - Published State
 
     /// The current playback queue.
@@ -180,6 +194,9 @@ final class GlobalPlaybackManager: ObservableObject {
         }
 
         syncStateFromManager()
+
+        // Cancel all prefetch tasks when pausing
+        Task { await PrefetchService.shared.cancelAll() }
     }
 
     /// Stops playback and clears state (but keeps the queue).
@@ -189,6 +206,9 @@ final class GlobalPlaybackManager: ObservableObject {
         speechService.deactivateAudioSession()
         NowPlayingInfoManager.clear()
         syncStateFromManager()
+
+        // Cancel all prefetch tasks when stopping
+        Task { await PrefetchService.shared.cancelAll() }
     }
 
     /// Advances to the next item.
@@ -295,6 +315,11 @@ final class GlobalPlaybackManager: ObservableObject {
             album: item.word.meaning,
             playbackRate: 1.0
         )
+
+        // Trigger prefetch on new item start (step 0)
+        if step == 0 {
+            prefetchUpcoming()
+        }
     }
 
     private func handleSpeechFinished() {
@@ -336,5 +361,51 @@ final class GlobalPlaybackManager: ObservableObject {
         if !manager.isPlaying && manager.items.isEmpty && !queue.isEmpty {
             // Manager was stopped - keep queue for resume capability
         }
+    }
+
+    // MARK: - Prefetching
+
+    /// Prefetches audio for upcoming items in the queue.
+    ///
+    /// Strategy:
+    /// - Bilingual mode (3 steps): prefetch N+1 only (longer playback time)
+    /// - English-only mode (2 steps): prefetch N+1 and N+2 (shorter playback time)
+    private func prefetchUpcoming() {
+        Task {
+            guard let nextItems = getNextItemsToPrefetch() else { return }
+
+            let speakerID = settings.voicevoxStyle.rawValue
+            var itemsToPrefetch: [(text: String, speakerID: Int)] = []
+
+            for item in nextItems {
+                // Prefetch English if using VOICEVOX for English
+                if settings.englishVoiceGender == .zundamon {
+                    itemsToPrefetch.append((item.sentence.english, Constants.englishSpeakerID))
+                }
+
+                // Prefetch Japanese if using VOICEVOX
+                if settings.japaneseVoiceGender == .zundamon {
+                    itemsToPrefetch.append((item.sentence.japanese, speakerID))
+                }
+            }
+
+            await PrefetchService.shared.prefetchBatch(items: itemsToPrefetch)
+        }
+    }
+
+    /// Returns the next items to prefetch based on playback mode.
+    ///
+    /// - Returns: Array of items to prefetch, or nil if at end of queue
+    private func getNextItemsToPrefetch() -> [QueueItem]? {
+        let nextIndex = currentIndex + 1
+        guard nextIndex < queue.count else { return nil }
+
+        // Bilingual (3 steps): N+1 only, English-only (2 steps): N+1 and N+2
+        let maxLookahead = settings.playbackMode == .bilingual
+            ? Constants.bilingualPrefetchLookahead
+            : Constants.englishOnlyPrefetchLookahead
+        let endIndex = min(nextIndex + maxLookahead, queue.count)
+
+        return Array(queue[nextIndex..<endIndex])
     }
 }

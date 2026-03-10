@@ -1,8 +1,22 @@
 import SwiftUI
 
 struct SentenceListView: View {
+    // MARK: - Constants
+
+    private enum Constants {
+        /// Number of sentences to prefetch on view appear
+        /// Conservative approach to avoid wasting bandwidth on unused audio
+        static let prefetchLimit = 5
+
+        /// Default VOICEVOX speaker ID for English TTS
+        static let englishSpeakerID = 3
+    }
+
+    // MARK: - Properties
+
     let word: Word
     private let speechService = SpeechService.shared
+    @State private var prefetchTask: Task<Void, Never>?
     @EnvironmentObject private var settings: SettingsManager
     @EnvironmentObject private var globalPlaybackManager: GlobalPlaybackManager
 
@@ -119,6 +133,33 @@ struct SentenceListView: View {
         // to prevent stale queues from advancing via delayed completion handlers
         .onReceive(NotificationCenter.default.publisher(for: .speechServiceDidStartNewPlayback)) { _ in
             globalPlaybackManager.stop()
+        }
+        .onAppear {
+            prefetchTask = Task {
+                // Conservative: prefetch first N visible sentences
+                let visibleSentences = allQueueItems.prefix(Constants.prefetchLimit)
+                for item in visibleSentences {
+                    // Prefetch English audio if using VOICEVOX
+                    if settings.englishVoiceGender == .zundamon {
+                        await PrefetchService.shared.prefetch(
+                            text: item.sentence.english,
+                            speakerID: Constants.englishSpeakerID
+                        )
+                    }
+
+                    // Prefetch Japanese audio if using VOICEVOX
+                    if settings.japaneseVoiceGender == .zundamon {
+                        await PrefetchService.shared.prefetch(
+                            text: item.sentence.japanese,
+                            speakerID: settings.voicevoxStyle.rawValue
+                        )
+                    }
+                }
+            }
+        }
+        .onDisappear {
+            prefetchTask?.cancel()
+            prefetchTask = nil
         }
     }
 
