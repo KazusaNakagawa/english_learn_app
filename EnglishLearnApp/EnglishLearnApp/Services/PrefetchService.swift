@@ -49,6 +49,9 @@ actor PrefetchService {
     /// Tracks active prefetch tasks by cache key for cancellation and duplicate prevention
     private var activeTasks: [String: Task<Void, Never>] = [:]
 
+    /// Pending prefetch requests waiting for an available slot
+    private var pendingQueue: [(text: String, speakerID: Int, cacheKey: String)] = []
+
     /// Memory warning observer token (nonisolated for simpler lifecycle management)
     private nonisolated(unsafe) var memoryWarningObserver: NSObjectProtocol?
 
@@ -91,20 +94,15 @@ actor PrefetchService {
             return
         }
 
-        // Check concurrent prefetch limit
-        guard activeTasks.count < Constants.maxConcurrentPrefetch else {
-            log("Max concurrent prefetch limit reached (\(Constants.maxConcurrentPrefetch))")
+        // Check concurrent prefetch limit - queue if at capacity
+        if activeTasks.count >= Constants.maxConcurrentPrefetch {
+            log("Max concurrent prefetch limit reached (\(Constants.maxConcurrentPrefetch)), queueing request")
+            pendingQueue.append((text, speakerID, cacheKey))
             return
         }
 
         log("Starting prefetch for '\(text.prefix(30))...' (speaker: \(speakerID))")
-
-        // Create background prefetch task
-        let task: Task<Void, Never> = Task.detached(priority: .background) { [weak self] in
-            await self?.performPrefetch(text: text, speakerID: speakerID, cacheKey: cacheKey)
-        }
-
-        activeTasks[cacheKey] = task
+        startPrefetchTask(text: text, speakerID: speakerID, cacheKey: cacheKey)
     }
 
     /// Prefetches a batch of audio items with staggered starts.
@@ -134,16 +132,18 @@ actor PrefetchService {
         activeTasks.removeValue(forKey: cacheKey)
     }
 
-    /// Cancels all active prefetch tasks.
+    /// Cancels all active prefetch tasks and clears the pending queue.
     func cancelAll() {
-        let count = activeTasks.count
-        if count > 0 {
-            log("Cancelling all \(count) active prefetch tasks")
+        let activeCount = activeTasks.count
+        let pendingCount = pendingQueue.count
+        if activeCount > 0 || pendingCount > 0 {
+            log("Cancelling \(activeCount) active and \(pendingCount) pending prefetch tasks")
         }
         for task in activeTasks.values {
             task.cancel()
         }
         activeTasks.removeAll()
+        pendingQueue.removeAll()
     }
 
     // MARK: - Private Methods
@@ -248,9 +248,27 @@ actor PrefetchService {
         return (200...299).contains(httpResponse.statusCode)
     }
 
-    /// Removes a task from the active task tracking.
+    /// Starts a prefetch task and registers it in activeTasks.
+    private func startPrefetchTask(text: String, speakerID: Int, cacheKey: String) {
+        // Create background prefetch task
+        // Use child Task (not Task.detached) to allow cancellation propagation
+        let task: Task<Void, Never> = Task(priority: .background) { [weak self] in
+            await self?.performPrefetch(text: text, speakerID: speakerID, cacheKey: cacheKey)
+        }
+
+        activeTasks[cacheKey] = task
+    }
+
+    /// Removes a task from the active task tracking and starts next queued task.
     private func removeTask(cacheKey: String) {
         activeTasks.removeValue(forKey: cacheKey)
+
+        // Start next queued task if available
+        if !pendingQueue.isEmpty {
+            let next = pendingQueue.removeFirst()
+            log("Starting queued prefetch for '\(next.text.prefix(30))...' (speaker: \(next.speakerID))")
+            startPrefetchTask(text: next.text, speakerID: next.speakerID, cacheKey: next.cacheKey)
+        }
     }
 
     /// Sets up observer for memory warning notifications.

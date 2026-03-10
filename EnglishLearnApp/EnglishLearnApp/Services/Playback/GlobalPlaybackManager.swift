@@ -201,14 +201,18 @@ final class GlobalPlaybackManager: ObservableObject {
 
     /// Stops playback and clears state (but keeps the queue).
     func stop() {
+        let wasPlaying = isPlaying
         internalManager?.stop()
         speechService.stop()
         speechService.deactivateAudioSession()
         NowPlayingInfoManager.clear()
         syncStateFromManager()
 
-        // Cancel all prefetch tasks when stopping
-        Task { await PrefetchService.shared.cancelAll() }
+        // Only cancel prefetch tasks if this manager was actually playing
+        // to avoid clearing view-level prefetch caches
+        if wasPlaying {
+            Task { await PrefetchService.shared.cancelAll() }
+        }
     }
 
     /// Advances to the next item.
