@@ -52,6 +52,9 @@ actor PrefetchService {
     /// Pending prefetch requests waiting for an available slot
     private var pendingQueue: [(text: String, speakerID: Int, cacheKey: String)] = []
 
+    /// Tracks all scheduled cache keys (active + queued) to prevent duplicates
+    private var scheduledKeys: Set<String> = []
+
     /// Memory warning observer token (nonisolated for simpler lifecycle management)
     private nonisolated(unsafe) var memoryWarningObserver: NSObjectProtocol?
 
@@ -76,21 +79,25 @@ actor PrefetchService {
     func prefetch(text: String, speakerID: Int) async {
         let cacheKey = await AudioCache.shared.cacheKey(text: text, speakerID: speakerID)
 
+        // Early return if already scheduled (active or queued)
+        guard !scheduledKeys.contains(cacheKey) else {
+            log("Already scheduled '\(text.prefix(30))...' (speaker: \(speakerID))")
+            return
+        }
+
         // Early return if already cached
         if await AudioCache.shared.get(text: text, speakerID: speakerID) != nil {
             log("Cache hit for '\(text.prefix(30))...' (speaker: \(speakerID))")
             return
         }
 
-        // Early return if already prefetching this item
-        guard activeTasks[cacheKey] == nil else {
-            log("Already prefetching '\(text.prefix(30))...' (speaker: \(speakerID))")
-            return
-        }
+        // Reserve this key immediately to prevent duplicates
+        scheduledKeys.insert(cacheKey)
 
         // Check network conditions
         guard await NetworkMonitor.shared.isSuitableForPrefetch() else {
             log("Network unsuitable for prefetch")
+            scheduledKeys.remove(cacheKey)
             return
         }
 
@@ -114,10 +121,23 @@ actor PrefetchService {
         let itemsToPrefetch = items.prefix(maxItems)
 
         for item in itemsToPrefetch {
+            // Check for cancellation before each iteration
+            guard !Task.isCancelled else {
+                log("Batch prefetch cancelled")
+                return
+            }
+
             await prefetch(text: item.text, speakerID: item.speakerID)
 
             // Stagger requests to avoid overwhelming the API
-            try? await Task.sleep(nanoseconds: Constants.batchStaggerDelay)
+            // Propagate cancellation by using try/await instead of try?
+            do {
+                try await Task.sleep(nanoseconds: Constants.batchStaggerDelay)
+            } catch {
+                // CancellationError - stop batch processing
+                log("Batch prefetch interrupted during sleep")
+                return
+            }
         }
     }
 
@@ -128,8 +148,15 @@ actor PrefetchService {
     ///   - speakerID: The speaker ID being prefetched
     func cancel(text: String, speakerID: Int) async {
         let cacheKey = await AudioCache.shared.cacheKey(text: text, speakerID: speakerID)
+
+        // Remove from pending queue if queued
+        if pendingQueue.contains(where: { $0.cacheKey == cacheKey }) {
+            pendingQueue.removeAll { $0.cacheKey == cacheKey }
+            scheduledKeys.remove(cacheKey)
+        }
+
+        // Cancel active task if running (removal happens in removeTask when task completes)
         activeTasks[cacheKey]?.cancel()
-        activeTasks.removeValue(forKey: cacheKey)
     }
 
     /// Cancels all active prefetch tasks and clears the pending queue.
@@ -139,11 +166,17 @@ actor PrefetchService {
         if activeCount > 0 || pendingCount > 0 {
             log("Cancelling \(activeCount) active and \(pendingCount) pending prefetch tasks")
         }
+
+        // Clear pending queue and their scheduled keys
+        for pending in pendingQueue {
+            scheduledKeys.remove(pending.cacheKey)
+        }
+        pendingQueue.removeAll()
+
+        // Cancel all active tasks (cleanup happens in removeTask when each completes)
         for task in activeTasks.values {
             task.cancel()
         }
-        activeTasks.removeAll()
-        pendingQueue.removeAll()
     }
 
     // MARK: - Private Methods
@@ -193,11 +226,23 @@ actor PrefetchService {
             return nil
         }
 
-        guard let encodedText = text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let queryURL = URL(string: "\(baseURL)/audio_query?text=\(encodedText)&speaker=\(speakerID)"),
-              let synthURL = URL(string: "\(baseURL)/synthesis?speaker=\(speakerID)") else {
-            return nil
-        }
+        // Build URLs using URLComponents for safe parameter encoding
+        guard let baseURLObj = URL(string: baseURL) else { return nil }
+
+        // Build audio_query URL
+        var queryComponents = URLComponents(url: baseURLObj.appendingPathComponent("audio_query"), resolvingAgainstBaseURL: false)
+        queryComponents?.queryItems = [
+            URLQueryItem(name: "text", value: text),
+            URLQueryItem(name: "speaker", value: String(speakerID))
+        ]
+        guard let queryURL = queryComponents?.url else { return nil }
+
+        // Build synthesis URL
+        var synthComponents = URLComponents(url: baseURLObj.appendingPathComponent("synthesis"), resolvingAgainstBaseURL: false)
+        synthComponents?.queryItems = [
+            URLQueryItem(name: "speaker", value: String(speakerID))
+        ]
+        guard let synthURL = synthComponents?.url else { return nil }
 
         do {
             // Step 1: Generate audio query
@@ -262,6 +307,7 @@ actor PrefetchService {
     /// Removes a task from the active task tracking and starts next queued task.
     private func removeTask(cacheKey: String) {
         activeTasks.removeValue(forKey: cacheKey)
+        scheduledKeys.remove(cacheKey)
 
         // Start next queued task if available
         if !pendingQueue.isEmpty {
