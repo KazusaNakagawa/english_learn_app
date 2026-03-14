@@ -127,25 +127,32 @@ struct SentencePracticeView: View {
         .navigationTitle(word.word)
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
+            // Capture settings on main actor before entering Task
+            let shouldPrefetchEnglish = settings.englishVoiceGender == .zundamon
+            let shouldPrefetchJapanese = settings.japaneseVoiceGender == .zundamon
+            let japaneseSpeakerID = settings.voicevoxStyle.rawValue
+            let englishText = sentence.english
+            let japaneseText = sentence.japanese
+
             prefetchTask = Task {
                 // Prefetch both English and Japanese in parallel (if using VOICEVOX)
-                async let englishPrefetch = {
-                    if settings.englishVoiceGender == .zundamon {
+                async let englishPrefetch: Void = {
+                    if shouldPrefetchEnglish {
                         await PrefetchService.shared.prefetch(
-                            text: sentence.english,
+                            text: englishText,
                             speakerID: Constants.englishSpeakerID
                         )
                     }
                 }()
-                async let japanesePrefetch = {
-                    if settings.japaneseVoiceGender == .zundamon {
+                async let japanesePrefetch: Void = {
+                    if shouldPrefetchJapanese {
                         await PrefetchService.shared.prefetch(
-                            text: sentence.japanese,
-                            speakerID: settings.voicevoxStyle.rawValue
+                            text: japaneseText,
+                            speakerID: japaneseSpeakerID
                         )
                     }
                 }()
-                await (englishPrefetch, japanesePrefetch)
+                _ = await (englishPrefetch, japanesePrefetch)
             }
         }
         .onDisappear {

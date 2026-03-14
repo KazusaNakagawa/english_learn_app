@@ -79,6 +79,20 @@ struct SettingsView: View {
                     .pickerStyle(.segmented)
 
                     VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("例文間の間隔")
+                            Spacer()
+                            Text(String(format: "%.1f秒", settings.sentenceDelaySeconds))
+                                .foregroundColor(.secondary)
+                        }
+                        Slider(
+                            value: $settings.sentenceDelaySeconds,
+                            in: 0.5...3.0,
+                            step: 0.5
+                        )
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
                         Text("連続再生時の音声パターンを選択できます")
                             .font(.body)
                         Text("バイリンガル: 英語→日本語→英語の順で再生")
