@@ -90,6 +90,20 @@ actor AudioCache {
         enforceDiskCacheLimit()
     }
 
+    /// Removes a specific cache entry from both memory and disk.
+    ///
+    /// Use this to evict potentially corrupt cache entries when playback fails.
+    ///
+    /// - Parameters:
+    ///   - text: The text that was synthesized
+    ///   - speakerID: The VOICEVOX speaker ID
+    func evict(text: String, speakerID: Int) {
+        let key = cacheKey(text: text, speakerID: speakerID)
+        memoryCache.removeObject(forKey: key as NSString)
+        let fileURL = cacheDirectory.appendingPathComponent(key)
+        try? fileManager.removeItem(at: fileURL)
+    }
+
     /// Clears all cached audio data from both memory and disk.
     func clearAll() {
         memoryCache.removeAllObjects()

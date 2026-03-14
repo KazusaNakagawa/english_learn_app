@@ -33,6 +33,10 @@ class SpeechService: NSObject, ObservableObject {
     private var audioPlayer: AVAudioPlayer?
     private var currentUtterance: AVSpeechUtterance?
 
+    /// Unique identifier for the current VOICEVOX request.
+    /// Used to invalidate stale async tasks when stop() or new speak() is called.
+    private var voicevoxRequestID = UUID()
+
     @Published var isSpeaking = false
     @Published var speakingLanguage: String? = nil
 
@@ -115,8 +119,10 @@ class SpeechService: NSObject, ObservableObject {
         if voiceGender == .zundamon {
             isSpeaking = true
             _ = activateAudioSession()
+            let requestID = UUID()
+            voicevoxRequestID = requestID
             Task { [weak self] in
-                await self?.speakWithVoicevox(text)
+                await self?.speakWithVoicevox(text, requestID: requestID)
             }
             return
         }
@@ -154,26 +160,35 @@ class SpeechService: NSObject, ObservableObject {
     /// This method first checks the audio cache for previously synthesized audio.
     /// On cache miss, it fetches from the VOICEVOX API and caches the result.
     ///
-    /// - Parameter text: The Japanese text to be spoken
-    private func speakWithVoicevox(_ text: String) async {
+    /// - Parameters:
+    ///   - text: The text to be spoken
+    ///   - requestID: The unique identifier for this request, used to invalidate stale tasks
+    private func speakWithVoicevox(_ text: String, requestID: UUID) async {
         let speakerID = SettingsManager.shared.voicevoxStyle.rawValue
 
         // Check cache first
         if let cachedAudio = await AudioCache.shared.get(text: text, speakerID: speakerID) {
-            playAudioData(cachedAudio)
+            // Verify request is still valid before playing
+            guard requestID == voicevoxRequestID else { return }
+            playAudioData(cachedAudio, text: text, speakerID: speakerID)
             return
         }
 
         // Cache miss - fetch from API
         guard let audioData = await fetchVoicevoxAudio(text: text, speakerID: speakerID) else {
+            // Verify request is still valid before handling failure
+            guard requestID == voicevoxRequestID else { return }
             handleVoicevoxFailure()
             return
         }
 
+        // Verify request is still valid before caching and playing
+        guard requestID == voicevoxRequestID else { return }
+
         // Cache the audio data for future playback
         await AudioCache.shared.set(audioData, text: text, speakerID: speakerID)
 
-        playAudioData(audioData)
+        playAudioData(audioData, text: text, speakerID: speakerID)
     }
 
     /// Fetches audio data from VOICEVOX API.
@@ -226,8 +241,15 @@ class SpeechService: NSObject, ObservableObject {
     }
 
     /// Plays audio data using AVAudioPlayer.
-    /// - Parameter audioData: The audio data to play
-    private func playAudioData(_ audioData: Data) {
+    ///
+    /// If playback fails due to corrupt audio data, the cache entry is evicted
+    /// to allow re-fetching on the next attempt.
+    ///
+    /// - Parameters:
+    ///   - audioData: The audio data to play
+    ///   - text: The original text (used for cache eviction on failure)
+    ///   - speakerID: The VOICEVOX speaker ID (used for cache eviction on failure)
+    private func playAudioData(_ audioData: Data, text: String, speakerID: Int) {
         do {
             audioPlayer = try AVAudioPlayer(data: audioData)
             audioPlayer?.delegate = self
@@ -237,20 +259,28 @@ class SpeechService: NSObject, ObservableObject {
             try audioSession.setCategory(.playback, mode: .default)
             try audioSession.setActive(true)
 
-            audioPlayer?.play()
+            if !audioPlayer!.play() {
+                // Playback failed to start - evict potentially corrupt cache entry
+                print("AVAudioPlayer.play() returned false - evicting cache entry")
+                Task {
+                    await AudioCache.shared.evict(text: text, speakerID: speakerID)
+                }
+                handleVoicevoxFailure()
+            }
         } catch {
+            // Initialization failed - evict potentially corrupt cache entry
             print("AVAudioPlayer error: \(error.localizedDescription)")
-            isSpeaking = false
-            speechFinishedPublisher.send()
+            Task {
+                await AudioCache.shared.evict(text: text, speakerID: speakerID)
+            }
+            handleVoicevoxFailure()
         }
     }
 
     /// Handles VOICEVOX playback failure by resetting state and notifying listeners.
-    private nonisolated func handleVoicevoxFailure() {
-        Task { @MainActor [weak self] in
-            self?.isSpeaking = false
-            self?.speechFinishedPublisher.send()
-        }
+    private func handleVoicevoxFailure() {
+        isSpeaking = false
+        speechFinishedPublisher.send()
     }
 
     // MARK: - Helper Methods
@@ -323,6 +353,7 @@ class SpeechService: NSObject, ObservableObject {
     /// fully stopping a playback session (e.g., user stops continuous playback or view disappears).
     func stop() {
         currentUtterance = nil
+        voicevoxRequestID = UUID()  // Invalidate in-flight VOICEVOX requests
         synthesizer.stopSpeaking(at: .immediate)
         audioPlayer?.stop()
         audioPlayer = nil
