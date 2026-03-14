@@ -332,9 +332,10 @@ final class GlobalPlaybackManager: ObservableObject {
         // Capture generation for validation
         let generation = manager.playbackGeneration
 
-        // Add delay before advancing (0.8 seconds)
+        // Add configurable delay before advancing
+        let delayNanoseconds = UInt64(settings.sentenceDelaySeconds * 1_000_000_000)
         Task {
-            try? await Task.sleep(nanoseconds: 800_000_000)
+            try? await Task.sleep(nanoseconds: delayNanoseconds)
             await MainActor.run {
                 guard manager.isValidCompletion(generation: generation) else { return }
                 manager.advance()
