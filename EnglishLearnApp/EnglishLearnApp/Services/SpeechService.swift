@@ -250,6 +250,9 @@ class SpeechService: NSObject, ObservableObject {
     ///   - text: The original text (used for cache eviction on failure)
     ///   - speakerID: The VOICEVOX speaker ID (used for cache eviction on failure)
     private func playAudioData(_ audioData: Data, text: String, speakerID: Int) {
+        // Capture current request ID for eviction validation
+        let currentRequestID = voicevoxRequestID
+
         do {
             audioPlayer = try AVAudioPlayer(data: audioData)
             audioPlayer?.delegate = self
@@ -259,18 +262,21 @@ class SpeechService: NSObject, ObservableObject {
             try audioSession.setCategory(.playback, mode: .default)
             try audioSession.setActive(true)
 
-            if !audioPlayer!.play() {
+            guard let player = audioPlayer, player.play() else {
                 // Playback failed to start - evict potentially corrupt cache entry
                 print("AVAudioPlayer.play() returned false - evicting cache entry")
-                Task {
+                Task { [weak self] in
+                    guard self?.voicevoxRequestID == currentRequestID else { return }
                     await AudioCache.shared.evict(text: text, speakerID: speakerID)
                 }
                 handleVoicevoxFailure()
+                return
             }
         } catch {
             // Initialization failed - evict potentially corrupt cache entry
             print("AVAudioPlayer error: \(error.localizedDescription)")
-            Task {
+            Task { [weak self] in
+                guard self?.voicevoxRequestID == currentRequestID else { return }
                 await AudioCache.shared.evict(text: text, speakerID: speakerID)
             }
             handleVoicevoxFailure()
