@@ -94,8 +94,14 @@ class SettingsManager: ObservableObject {
     /// The delay in seconds between sentences during continuous playback.
     ///
     /// Range: 0.5 - 3.0 seconds. Default: 1.5 seconds.
+    /// Values outside this range are clamped automatically.
     @Published var sentenceDelaySeconds: Double {
         didSet {
+            let clamped = min(max(sentenceDelaySeconds, 0.5), 3.0)
+            if sentenceDelaySeconds != clamped {
+                sentenceDelaySeconds = clamped
+                return
+            }
             UserDefaults.standard.set(sentenceDelaySeconds, forKey: "sentenceDelaySeconds")
         }
     }
