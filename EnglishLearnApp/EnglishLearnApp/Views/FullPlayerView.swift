@@ -192,26 +192,37 @@ struct FullPlayerView: View {
     }
 
     private var queueList: some View {
-        List {
-            ForEach(playbackManager.queue.indices, id: \.self) { index in
-                let item = playbackManager.queue[index]
-                queueRow(item: item, index: index)
-                    .listRowBackground(
-                        index == playbackManager.currentIndex ? Color.accentColor.opacity(0.12) : nil
-                    )
-                    .swipeActions(edge: .trailing) {
-                        Button(role: .destructive) {
-                            playbackManager.removeFromQueue(at: index)
-                        } label: {
-                            Label("削除", systemImage: "trash")
+        ScrollViewReader { proxy in
+            List {
+                ForEach(playbackManager.queue.indices, id: \.self) { index in
+                    let item = playbackManager.queue[index]
+                    queueRow(item: item, index: index)
+                        .id(index)
+                        .listRowBackground(
+                            index == playbackManager.currentIndex ? Color.accentColor.opacity(0.12) : nil
+                        )
+                        .swipeActions(edge: .trailing) {
+                            Button(role: .destructive) {
+                                playbackManager.removeFromQueue(at: index)
+                            } label: {
+                                Label("削除", systemImage: "trash")
+                            }
                         }
-                    }
+                }
+                .onMove { fromOffsets, toOffset in
+                    playbackManager.move(fromOffsets: fromOffsets, toOffset: toOffset)
+                }
             }
-            .onMove { fromOffsets, toOffset in
-                playbackManager.move(fromOffsets: fromOffsets, toOffset: toOffset)
+            .listStyle(.plain)
+            .onChange(of: playbackManager.currentIndex) { _, index in
+                withAnimation {
+                    proxy.scrollTo(index, anchor: .center)
+                }
+            }
+            .onAppear {
+                proxy.scrollTo(playbackManager.currentIndex, anchor: .center)
             }
         }
-        .listStyle(.plain)
     }
 
     @ViewBuilder
