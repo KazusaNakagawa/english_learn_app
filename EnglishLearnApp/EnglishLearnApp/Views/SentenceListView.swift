@@ -61,69 +61,78 @@ struct SentenceListView: View {
     }
 
     var body: some View {
-        List {
-            // 単語情報セクション
-            Section {
-                VStack(alignment: .center, spacing: 8) {
-                    Text(word.word)
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
+        ScrollViewReader { proxy in
+            List {
+                // 単語情報セクション
+                Section {
+                    VStack(alignment: .center, spacing: 8) {
+                        Text(word.word)
+                            .font(.largeTitle)
+                            .fontWeight(.bold)
 
-                    Text(word.phonetic)
-                        .font(.title3)
-                        .foregroundColor(.secondary)
+                        Text(word.phonetic)
+                            .font(.title3)
+                            .foregroundColor(.secondary)
 
-                    Text(word.meaning)
-                        .font(.title3)
-                        .foregroundColor(.blue)
+                        Text(word.meaning)
+                            .font(.title3)
+                            .foregroundColor(.blue)
 
-                    HStack(spacing: 12) {
-                        SpeechButton(
-                            text: word.word, label: "英語を聞く",
-                            isJapanese: false, color: .blue, style: .pill,
-                            speechService: speechService
-                        )
-                        SpeechButton(
-                            text: word.meaning, label: "日本語を聞く",
-                            isJapanese: true, color: .orange, style: .pill,
-                            speechService: speechService
-                        )
-                    }
-                    .padding(.top, 4)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-            }
-
-            // 例文セクション（カテゴリ別）
-            ForEach(groupedSentences, id: \.0) { category, sentences in
-                Section(header: Text(category)) {
-                    ForEach(sentences) { sentence in
-                        let isPlaying = playingSentenceID == sentence.id
-                        // NavigationLink and play button are siblings in HStack so the
-                        // button tap is not intercepted by the NavigationLink gesture.
-                        HStack {
-                            NavigationLink(destination: SentencePracticeView(sentence: sentence, word: word)) {
-                                SentenceRowView(sentence: sentence, speechService: speechService)
-                            }
-                            Button {
-                                if isPlaying {
-                                    globalPlaybackManager.stop()
-                                } else {
-                                    startPlayAll(from: sentence)
-                                }
-                            } label: {
-                                Image(systemName: isPlaying ? "stop.fill" : "play.fill")
-                                    .font(.subheadline)
-                                    .foregroundColor(isPlaying ? .red : .secondary)
-                                    .frame(width: 32, height: 32)
-                            }
-                            .buttonStyle(.borderless)
+                        HStack(spacing: 12) {
+                            SpeechButton(
+                                text: word.word, label: "英語を聞く",
+                                isJapanese: false, color: .blue, style: .pill,
+                                speechService: speechService
+                            )
+                            SpeechButton(
+                                text: word.meaning, label: "日本語を聞く",
+                                isJapanese: true, color: .orange, style: .pill,
+                                speechService: speechService
+                            )
                         }
-                        .listRowBackground(
-                            isPlaying ? Color.accentColor.opacity(0.12) : nil
-                        )
+                        .padding(.top, 4)
                     }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                }
+
+                // 例文セクション（カテゴリ別）
+                ForEach(groupedSentences, id: \.0) { category, sentences in
+                    Section(header: Text(category)) {
+                        ForEach(sentences) { sentence in
+                            let isPlaying = playingSentenceID == sentence.id
+                            // NavigationLink and play button are siblings in HStack so the
+                            // button tap is not intercepted by the NavigationLink gesture.
+                            HStack {
+                                NavigationLink(destination: SentencePracticeView(sentence: sentence, word: word)) {
+                                    SentenceRowView(sentence: sentence, speechService: speechService)
+                                }
+                                Button {
+                                    if isPlaying {
+                                        globalPlaybackManager.stop()
+                                    } else {
+                                        startPlayAll(from: sentence)
+                                    }
+                                } label: {
+                                    Image(systemName: isPlaying ? "stop.fill" : "play.fill")
+                                        .font(.subheadline)
+                                        .foregroundColor(isPlaying ? .red : .secondary)
+                                        .frame(width: 32, height: 32)
+                                }
+                                .buttonStyle(.borderless)
+                            }
+                            .id(sentence.id)
+                            .listRowBackground(
+                                isPlaying ? Color.accentColor.opacity(0.12) : nil
+                            )
+                        }
+                    }
+                }
+            }
+            .onChange(of: playingSentenceID) { _, id in
+                guard let id else { return }
+                withAnimation {
+                    proxy.scrollTo(id, anchor: .center)
                 }
             }
         }

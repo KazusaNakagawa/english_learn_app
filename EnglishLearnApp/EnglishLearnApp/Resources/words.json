@@ -533,6 +533,394 @@
           "category": "Gold Experience Requiem"
         }
       ]
+    },
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440004",
+      "word": "perspective",
+      "meaning": "視点・観点",
+      "phonetic": "pərˈspek.tɪv",
+      "sentences": [
+        {
+          "id": "a0000004-0001-0001-0001-000000000001",
+          "english": "Try to see things from a different perspective.",
+          "japanese": "物事を別の視点から見てみてください。",
+          "category": "一般的な使い方"
+        },
+        {
+          "id": "a0000004-0001-0001-0001-000000000002",
+          "english": "Traveling abroad gave me a new perspective on life.",
+          "japanese": "海外旅行が、人生に対する新たな視点を与えてくれた。",
+          "category": "一般的な使い方"
+        },
+        {
+          "id": "a0000004-0001-0001-0001-000000000003",
+          "english": "From my perspective, the project is going well.",
+          "japanese": "私の観点から見ると、プロジェクトは順調に進んでいます。",
+          "category": "ビジネス・職場"
+        },
+        {
+          "id": "a0000004-0001-0001-0001-000000000004",
+          "english": "It's important to keep things in perspective.",
+          "japanese": "物事を正しい視野で捉えることが大切です。",
+          "category": "一般的な使い方"
+        },
+        {
+          "id": "a0000004-0001-0001-0001-000000000005",
+          "english": "Her unique perspective made the meeting more productive.",
+          "japanese": "彼女のユニークな視点が、会議をより実りあるものにした。",
+          "category": "ビジネス・職場"
+        },
+        {
+          "id": "a0000004-0001-0001-0001-000000000006",
+          "english": "Reading books helps you gain new perspectives.",
+          "japanese": "読書は新しい視点を得るのに役立ちます。",
+          "category": "教育・人生の教訓"
+        },
+        {
+          "id": "a0000004-0001-0001-0001-000000000007",
+          "english": "The artist painted the city from an aerial perspective.",
+          "japanese": "その画家は、空からの視点で街を描いた。",
+          "category": "芸術・表現"
+        },
+        {
+          "id": "a0000004-0001-0001-0001-000000000008",
+          "english": "We need to consider this issue from multiple perspectives.",
+          "japanese": "この問題は複数の視点から考える必要があります。",
+          "category": "ビジネス・職場"
+        },
+        {
+          "id": "a0000004-0001-0001-0001-000000000009",
+          "english": "A child's perspective on the world is wonderfully pure.",
+          "japanese": "子供の世界に対する視点は、素晴らしいほど純粋だ。",
+          "category": "日常・会話"
+        },
+        {
+          "id": "a0000004-0001-0001-0001-000000000010",
+          "english": "Losing that job turned out to be a blessing in perspective.",
+          "japanese": "その仕事を失ったことは、振り返ってみると幸運だった。",
+          "category": "教育・人生の教訓"
+        },
+        {
+          "id": "a0000004-0001-0001-0001-000000000011",
+          "english": "His historical perspective helped us understand the roots of the conflict.",
+          "japanese": "彼の歴史的視点は、紛争の根源を理解するのに役立った。",
+          "category": "学術・知識"
+        },
+        {
+          "id": "a0000004-0001-0001-0001-000000000012",
+          "english": "Put it in perspective — it's just one mistake.",
+          "japanese": "冷静に考えてみて。たった一つのミスに過ぎないんだから。",
+          "category": "日常・会話"
+        }
+      ]
+    },
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440005",
+      "word": "accomplish",
+      "meaning": "達成する・成し遂げる",
+      "phonetic": "əˈkɑːm.plɪʃ",
+      "sentences": [
+        {
+          "id": "a0000005-0001-0001-0001-000000000001",
+          "english": "She accomplished her goal of running a marathon.",
+          "japanese": "彼女はマラソン完走という目標を達成した。",
+          "category": "一般的な使い方"
+        },
+        {
+          "id": "a0000005-0001-0001-0001-000000000002",
+          "english": "What do you hope to accomplish this year?",
+          "japanese": "今年は何を成し遂げたいと思っていますか？",
+          "category": "日常・会話"
+        },
+        {
+          "id": "a0000005-0001-0001-0001-000000000003",
+          "english": "Together, we can accomplish anything.",
+          "japanese": "力を合わせれば、何でも成し遂げられる。",
+          "category": "一般的な使い方"
+        },
+        {
+          "id": "a0000005-0001-0001-0001-000000000004",
+          "english": "The team accomplished the project ahead of schedule.",
+          "japanese": "チームはプロジェクトを予定より早く完了させた。",
+          "category": "ビジネス・職場"
+        },
+        {
+          "id": "a0000005-0001-0001-0001-000000000005",
+          "english": "Hard work and dedication help you accomplish your dreams.",
+          "japanese": "努力と献身が、夢の実現を助けてくれる。",
+          "category": "教育・人生の教訓"
+        },
+        {
+          "id": "a0000005-0001-0001-0001-000000000006",
+          "english": "He felt proud of what he had accomplished.",
+          "japanese": "彼は自分が達成したことに誇りを感じた。",
+          "category": "感情・心理"
+        },
+        {
+          "id": "a0000005-0001-0001-0001-000000000007",
+          "english": "We accomplished more in one hour than we expected.",
+          "japanese": "1時間で予想以上のことを成し遂げた。",
+          "category": "ビジネス・職場"
+        },
+        {
+          "id": "a0000005-0001-0001-0001-000000000008",
+          "english": "The mission was accomplished without any problems.",
+          "japanese": "任務は問題なく達成された。",
+          "category": "一般的な使い方"
+        },
+        {
+          "id": "a0000005-0001-0001-0001-000000000009",
+          "english": "She is an accomplished pianist who has performed worldwide.",
+          "japanese": "彼女は世界中で演奏してきた、熟練したピアニストだ。",
+          "category": "芸術・表現"
+        },
+        {
+          "id": "a0000005-0001-0001-0001-000000000010",
+          "english": "Setting small goals helps you accomplish bigger ones.",
+          "japanese": "小さな目標を設定することが、より大きな目標の達成につながる。",
+          "category": "教育・人生の教訓"
+        },
+        {
+          "id": "a0000005-0001-0001-0001-000000000011",
+          "english": "Nothing great was ever accomplished without passion.",
+          "japanese": "情熱なしに偉大なことは成し遂げられない。",
+          "category": "名言・格言"
+        },
+        {
+          "id": "a0000005-0001-0001-0001-000000000012",
+          "english": "I finally accomplished what I had been working toward for years.",
+          "japanese": "ようやく、何年もかけて取り組んできたことを達成できた。",
+          "category": "感情・心理"
+        }
+      ]
+    },
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440006",
+      "word": "remarkable",
+      "meaning": "注目すべき・素晴らしい",
+      "phonetic": "rɪˈmɑːr.kə.bəl",
+      "sentences": [
+        {
+          "id": "a0000006-0001-0001-0001-000000000001",
+          "english": "She made a remarkable recovery after the surgery.",
+          "japanese": "彼女は手術後、目覚ましい回復を見せた。",
+          "category": "一般的な使い方"
+        },
+        {
+          "id": "a0000006-0001-0001-0001-000000000002",
+          "english": "It is remarkable how quickly children learn languages.",
+          "japanese": "子供たちがいかに素早く言語を習得するか、実に驚くべきことだ。",
+          "category": "教育・人生の教訓"
+        },
+        {
+          "id": "a0000006-0001-0001-0001-000000000003",
+          "english": "The team achieved remarkable results this quarter.",
+          "japanese": "チームは今四半期に目覚ましい成果を上げた。",
+          "category": "ビジネス・職場"
+        },
+        {
+          "id": "a0000006-0001-0001-0001-000000000004",
+          "english": "What a remarkable performance — the audience was speechless.",
+          "japanese": "なんと素晴らしい演奏だろう——観客は言葉を失った。",
+          "category": "芸術・表現"
+        },
+        {
+          "id": "a0000006-0001-0001-0001-000000000005",
+          "english": "He has a remarkable memory for names and faces.",
+          "japanese": "彼は名前や顔を覚える驚くべき記憶力を持っている。",
+          "category": "日常・会話"
+        },
+        {
+          "id": "a0000006-0001-0001-0001-000000000006",
+          "english": "The technology behind this product is truly remarkable.",
+          "japanese": "この製品の背後にある技術は、本当に目覚ましいものだ。",
+          "category": "科学・技術"
+        },
+        {
+          "id": "a0000006-0001-0001-0001-000000000007",
+          "english": "Their friendship has lasted for a remarkable forty years.",
+          "japanese": "彼らの友情は、驚くべきことに40年も続いている。",
+          "category": "日常・会話"
+        },
+        {
+          "id": "a0000006-0001-0001-0001-000000000008",
+          "english": "It's remarkable what you can achieve with determination.",
+          "japanese": "決意があれば何を達成できるか、本当に素晴らしいことだ。",
+          "category": "教育・人生の教訓"
+        },
+        {
+          "id": "a0000006-0001-0001-0001-000000000009",
+          "english": "The explorer made a remarkable discovery deep in the jungle.",
+          "japanese": "探検家はジャングルの奥深くで、驚くべき発見をした。",
+          "category": "科学・技術"
+        },
+        {
+          "id": "a0000006-0001-0001-0001-000000000010",
+          "english": "She is a remarkable woman who has inspired thousands.",
+          "japanese": "彼女は何千人もの人々を鼓舞してきた、素晴らしい女性だ。",
+          "category": "人物・描写"
+        }
+      ]
+    },
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440007",
+      "word": "challenge",
+      "meaning": "挑戦・困難",
+      "phonetic": "ˈtʃæl.ɪndʒ",
+      "sentences": [
+        {
+          "id": "a0000007-0001-0001-0001-000000000001",
+          "english": "Learning a new language is a great challenge.",
+          "japanese": "新しい言語を学ぶことは、大きな挑戦だ。",
+          "category": "一般的な使い方"
+        },
+        {
+          "id": "a0000007-0001-0001-0001-000000000002",
+          "english": "She accepted the challenge without hesitation.",
+          "japanese": "彼女はためらうことなく挑戦を受け入れた。",
+          "category": "一般的な使い方"
+        },
+        {
+          "id": "a0000007-0001-0001-0001-000000000003",
+          "english": "Every challenge is an opportunity to grow.",
+          "japanese": "あらゆる困難は、成長する機会だ。",
+          "category": "教育・人生の教訓"
+        },
+        {
+          "id": "a0000007-0001-0001-0001-000000000004",
+          "english": "The biggest challenge we face is time management.",
+          "japanese": "私たちが直面する最大の課題は、時間管理だ。",
+          "category": "ビジネス・職場"
+        },
+        {
+          "id": "a0000007-0001-0001-0001-000000000005",
+          "english": "He challenged himself to run every morning.",
+          "japanese": "彼は毎朝ランニングすることを自分への挑戦にした。",
+          "category": "日常・会話"
+        },
+        {
+          "id": "a0000007-0001-0001-0001-000000000006",
+          "english": "The new policy challenges the company's old way of thinking.",
+          "japanese": "新しい方針は、会社の古い考え方に異議を唱えるものだ。",
+          "category": "ビジネス・職場"
+        },
+        {
+          "id": "a0000007-0001-0001-0001-000000000007",
+          "english": "Don't run away from challenges — face them head-on.",
+          "japanese": "困難から逃げるな——正面から向き合え。",
+          "category": "名言・格言"
+        },
+        {
+          "id": "a0000007-0001-0001-0001-000000000008",
+          "english": "Raising children is one of life's greatest challenges and rewards.",
+          "japanese": "子育ては人生最大の困難であり、喜びの一つだ。",
+          "category": "日常・会話"
+        },
+        {
+          "id": "a0000007-0001-0001-0001-000000000009",
+          "english": "The team overcame every challenge thrown at them.",
+          "japanese": "チームは降りかかるあらゆる困難を乗り越えた。",
+          "category": "ビジネス・職場"
+        },
+        {
+          "id": "a0000007-0001-0001-0001-000000000010",
+          "english": "I thrive under pressure and love a good challenge.",
+          "japanese": "プレッシャーの中でこそ力を発揮するし、挑戦が大好きだ。",
+          "category": "日常・会話"
+        },
+        {
+          "id": "a0000007-0001-0001-0001-000000000011",
+          "english": "Climate change is the defining challenge of our generation.",
+          "japanese": "気候変動は、私たちの世代を定義する課題だ。",
+          "category": "社会・環境"
+        },
+        {
+          "id": "a0000007-0001-0001-0001-000000000012",
+          "english": "She challenged the unfair rules and won.",
+          "japanese": "彼女は不公平なルールに異議を唱え、勝利した。",
+          "category": "社会・環境"
+        }
+      ]
+    },
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440008",
+      "word": "opportunity",
+      "meaning": "機会・チャンス",
+      "phonetic": "ˌɑː.pərˈtuː.nɪ.ti",
+      "sentences": [
+        {
+          "id": "a0000008-0001-0001-0001-000000000001",
+          "english": "Don't miss this opportunity — it may not come again.",
+          "japanese": "このチャンスを逃すな——二度と来ないかもしれない。",
+          "category": "一般的な使い方"
+        },
+        {
+          "id": "a0000008-0001-0001-0001-000000000002",
+          "english": "The internship gave her the opportunity to learn from experts.",
+          "japanese": "インターンシップが、彼女に専門家から学ぶ機会を与えてくれた。",
+          "category": "教育・人生の教訓"
+        },
+        {
+          "id": "a0000008-0001-0001-0001-000000000003",
+          "english": "Every setback is an opportunity in disguise.",
+          "japanese": "あらゆる挫折は、変装した好機だ。",
+          "category": "名言・格言"
+        },
+        {
+          "id": "a0000008-0001-0001-0001-000000000004",
+          "english": "We have a great opportunity to expand our business overseas.",
+          "japanese": "海外にビジネスを拡大する絶好の機会がある。",
+          "category": "ビジネス・職場"
+        },
+        {
+          "id": "a0000008-0001-0001-0001-000000000005",
+          "english": "I jumped at the opportunity to study abroad.",
+          "japanese": "留学の機会に飛びついた。",
+          "category": "日常・会話"
+        },
+        {
+          "id": "a0000008-0001-0001-0001-000000000006",
+          "english": "Opportunity knocks only once — make the most of it.",
+          "japanese": "チャンスは一度しかノックしない——最大限に活かせ。",
+          "category": "名言・格言"
+        },
+        {
+          "id": "a0000008-0001-0001-0001-000000000007",
+          "english": "The company offers equal opportunity to all employees.",
+          "japanese": "その会社は全社員に平等な機会を提供している。",
+          "category": "ビジネス・職場"
+        },
+        {
+          "id": "a0000008-0001-0001-0001-000000000008",
+          "english": "This trip is a once-in-a-lifetime opportunity.",
+          "japanese": "この旅は一生に一度の機会だ。",
+          "category": "日常・会話"
+        },
+        {
+          "id": "a0000008-0001-0001-0001-000000000009",
+          "english": "He used every opportunity to practice his English.",
+          "japanese": "彼はあらゆる機会を使って英語を練習した。",
+          "category": "教育・人生の教訓"
+        },
+        {
+          "id": "a0000008-0001-0001-0001-000000000010",
+          "english": "The crisis brought both risk and opportunity.",
+          "japanese": "その危機はリスクと機会の両方をもたらした。",
+          "category": "ビジネス・職場"
+        },
+        {
+          "id": "a0000008-0001-0001-0001-000000000011",
+          "english": "She volunteers on weekends to create opportunities for others.",
+          "japanese": "彼女は週末にボランティアをして、他の人のために機会を作っている。",
+          "category": "社会・環境"
+        },
+        {
+          "id": "a0000008-0001-0001-0001-000000000012",
+          "english": "Opportunities are created by those who are prepared.",
+          "japanese": "機会は準備している者が作り出すものだ。",
+          "category": "名言・格言"
+        }
+      ]
     }
   ]
 }
