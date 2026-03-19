@@ -17123,6 +17123,393 @@
           "category": "ビジネス"
         }
       ]
+    },
+    {
+      "id": "10000134-0134-0134-0134-000000000134",
+      "word": "frequently",
+      "meaning": "頻繁に",
+      "phonetic": "ˈfriː.kwənt.li",
+      "sentences": [
+        {
+          "id": "10000134-0134-0134-0134-000000000001",
+          "english": "I frequently visit the library.",
+          "japanese": "私は頻繁に図書館を訪れます。",
+          "category": "日常会話"
+        },
+        {
+          "id": "10000134-0134-0134-0134-000000000002",
+          "english": "We frequently meet for coffee.",
+          "japanese": "私たちは頻繁なコーヒーで会います。",
+          "category": "日常会話"
+        },
+        {
+          "id": "10000134-0134-0134-0134-000000000003",
+          "english": "She frequently travels for work.",
+          "japanese": "彼女は仕事で頻繁に旅行します。",
+          "category": "ビジネス"
+        },
+        {
+          "id": "10000134-0134-0134-0134-000000000004",
+          "english": "This problem occurs frequently.",
+          "japanese": "この問題は頻繁に発生します。",
+          "category": "テクノロジー"
+        },
+        {
+          "id": "10000134-0134-0134-0134-000000000005",
+          "english": "He frequently checks his email.",
+          "japanese": "彼は頻繁にメールをチェックします。",
+          "category": "日常会話"
+        },
+        {
+          "id": "10000134-0134-0134-0134-000000000006",
+          "english": "They frequently update the software.",
+          "japanese": "彼らはソフトウェアを頻繁に更新します。",
+          "category": "テクノロジー"
+        },
+        {
+          "id": "10000134-0134-0134-0134-000000000007",
+          "english": "Customers frequently complain about service.",
+          "japanese": "顧客はサービスについて頻繁に不満を言う。",
+          "category": "ビジネス"
+        },
+        {
+          "id": "10000134-0134-0134-0134-000000000008",
+          "english": "I frequently forget my password.",
+          "japanese": "私はパスワードを頻繁に忘れます。",
+          "category": "日常会話"
+        },
+        {
+          "id": "10000134-0134-0134-0134-000000000009",
+          "english": "The weather changes frequently here.",
+          "japanese": "ここの天気はよく変わります。",
+          "category": "自然"
+        },
+        {
+          "id": "10000134-0134-0134-0134-000000000010",
+          "english": "She frequently uses public transportation.",
+          "japanese": "彼女は頻繁に公共交通を利用する。",
+          "category": "日常会話"
+        },
+        {
+          "id": "10000134-0134-0134-0134-000000000011",
+          "english": "The team frequently meets for updates.",
+          "japanese": "チームは頻繁に更新のために会う。",
+          "category": "ビジネス"
+        },
+        {
+          "id": "10000134-0134-0134-0134-000000000012",
+          "english": "This error frequently appears in the log.",
+          "japanese": "このエラーはログに頻繁に表示される。",
+          "category": "テクノロジー"
+        },
+        {
+          "id": "10000134-0134-0134-0134-000000000013",
+          "english": "Children frequently ask questions.",
+          "japanese": "子供は頻繁に質問をします。",
+          "category": "教育"
+        },
+        {
+          "id": "10000134-0134-0134-0134-000000000014",
+          "english": "The store is frequently crowded.",
+          "japanese": "その店は頻繁に混雑している。",
+          "category": "日常会話"
+        },
+        {
+          "id": "10000134-0134-0134-0134-000000000015",
+          "english": "Prices frequently fluctuate in this market.",
+          "japanese": "この市場では価格が頻繁に変動する。",
+          "category": "経済"
+        },
+        {
+          "id": "10000134-0134-0134-0134-000000000016",
+          "english": "They frequently attend conferences.",
+          "japanese": "彼らは頻繁に会議に参加する。",
+          "category": "ビジネス"
+        },
+        {
+          "id": "10000134-0134-0134-0134-000000000017",
+          "english": "This phenomenon occurs frequently in nature.",
+          "japanese": "この現象は自然界で頻繁に起こります。",
+          "category": "科学"
+        },
+        {
+          "id": "10000134-0134-0134-0134-000000000018",
+          "english": "The app frequently crashes on this device.",
+          "japanese": "このアプリはこのデバイスで頻繁にクラッシュする。",
+          "category": "テクノロジー"
+        },
+        {
+          "id": "10000134-0134-0134-0134-000000000019",
+          "english": "They frequently collaborate on projects.",
+          "japanese": "彼らはプロジェクトで頻繁に協力する。",
+          "category": "ビジネス"
+        },
+        {
+          "id": "10000134-0134-0134-0134-000000000020",
+          "english": "I frequently watch movies on weekends.",
+          "japanese": "週末は頻繁に映画を見ます。",
+          "category": "娯楽"
+        }
+      ],
+      "createdAt": 793378800.0
+    },
+    {
+      "id": "10000135-0135-0135-0135-000000000135",
+      "word": "apply",
+      "meaning": "応用する、適用する、申し込む",
+      "phonetic": "əˈplaɪ",
+      "sentences": [
+        {
+          "id": "10000135-0135-0135-0135-000000000001",
+          "english": "Please apply for the job online.",
+          "japanese": "オンラインで仕事に申し込んでください。",
+          "category": "ビジネス"
+        },
+        {
+          "id": "10000135-0135-0135-0135-000000000002",
+          "english": "This rule applies to everyone.",
+          "japanese": "このルールはすべての人に適用されます。",
+          "category": "ビジネス"
+        },
+        {
+          "id": "10000135-0135-0135-0135-000000000003",
+          "english": "You can apply sunscreen every hour.",
+          "japanese": "1時間ごとに日焼け止めを塗ることができます。",
+          "category": "健康"
+        },
+        {
+          "id": "10000135-0135-0135-0135-000000000004",
+          "english": "Apply the knowledge you learned.",
+          "japanese": "学んだ知識を応用してください。",
+          "category": "教育"
+        },
+        {
+          "id": "10000135-0135-0135-0135-000000000005",
+          "english": "She wants to apply to college.",
+          "japanese": "彼女は大学に申し込みたいと思っている。",
+          "category": "教育"
+        },
+        {
+          "id": "10000135-0135-0135-0135-000000000006",
+          "english": "These principles apply in all situations.",
+          "japanese": "これらの原則はすべての状況に適用される。",
+          "category": "一般的な使い方"
+        },
+        {
+          "id": "10000135-0135-0135-0135-000000000007",
+          "english": "Apply pressure firmly to stop bleeding.",
+          "japanese": "止血するために強く圧力をかけてください。",
+          "category": "健康"
+        },
+        {
+          "id": "10000135-0135-0135-0135-000000000008",
+          "english": "You need to apply for a visa.",
+          "japanese": "ビザの申請が必要です。",
+          "category": "旅行"
+        },
+        {
+          "id": "10000135-0135-0135-0135-000000000009",
+          "english": "Apply this strategy to your business.",
+          "japanese": "この戦略をあなたのビジネスに適用してください。",
+          "category": "ビジネス"
+        },
+        {
+          "id": "10000135-0135-0135-0135-000000000010",
+          "english": "The discount applies to all items.",
+          "japanese": "割引はすべての商品に適用されます。",
+          "category": "ショッピング"
+        },
+        {
+          "id": "10000135-0135-0135-0135-000000000011",
+          "english": "Apply the paint with a brush.",
+          "japanese": "ブラシでペンキを塗ってください。",
+          "category": "日常会話"
+        },
+        {
+          "id": "10000135-0135-0135-0135-000000000012",
+          "english": "These findings apply to your case.",
+          "japanese": "これらの調査結果はあなたのケースに適用される。",
+          "category": "ビジネス"
+        },
+        {
+          "id": "10000135-0135-0135-0135-000000000013",
+          "english": "Apply online before the deadline.",
+          "japanese": "期限前にオンラインで申し込んでください。",
+          "category": "ビジネス"
+        },
+        {
+          "id": "10000135-0135-0135-0135-000000000014",
+          "english": "The same rules apply here.",
+          "japanese": "同じルールがここに適用されます。",
+          "category": "一般的な使い方"
+        },
+        {
+          "id": "10000135-0135-0135-0135-000000000015",
+          "english": "Apply the technique to improve results.",
+          "japanese": "結果を改善するために技術を適用してください。",
+          "category": "テクノロジー"
+        },
+        {
+          "id": "10000135-0135-0135-0135-000000000016",
+          "english": "I will apply your feedback to the project.",
+          "japanese": "プロジェクトにあなたのフィードバックを適用します。",
+          "category": "ビジネス"
+        },
+        {
+          "id": "10000135-0135-0135-0135-000000000017",
+          "english": "Apply cold water to the burn.",
+          "japanese": "火傷に冷たい水を塗ってください。",
+          "category": "健康"
+        },
+        {
+          "id": "10000135-0135-0135-0135-000000000018",
+          "english": "She decided to apply for the grant.",
+          "japanese": "彼女は助成金に申し込むことにしました。",
+          "category": "ビジネス"
+        },
+        {
+          "id": "10000135-0135-0135-0135-000000000019",
+          "english": "Can you apply these changes to all files?",
+          "japanese": "これらの変更をすべてのファイルに適用できますか？",
+          "category": "テクノロジー"
+        },
+        {
+          "id": "10000135-0135-0135-0135-000000000020",
+          "english": "Apply the solution consistently.",
+          "japanese": "解決策を一貫して適用してください。",
+          "category": "ビジネス"
+        }
+      ],
+      "createdAt": 793378800.0
+    },
+    {
+      "id": "10000136-0136-0136-0136-000000000136",
+      "word": "eligibility",
+      "meaning": "適格性、資格",
+      "phonetic": "ˌel.ɪ.dʒəˈbɪl.ə.ti",
+      "sentences": [
+        {
+          "id": "10000136-0136-0136-0136-000000000001",
+          "english": "Check eligibility for the program.",
+          "japanese": "プログラムの適格性を確認してください。",
+          "category": "ビジネス"
+        },
+        {
+          "id": "10000136-0136-0136-0136-000000000002",
+          "english": "Your eligibility depends on age.",
+          "japanese": "あなたの適格性は年齢に依存します。",
+          "category": "ビジネス"
+        },
+        {
+          "id": "10000136-0136-0136-0136-000000000003",
+          "english": "Eligibility requirements are strict.",
+          "japanese": "適格性の要件は厳しい。",
+          "category": "ビジネス"
+        },
+        {
+          "id": "10000136-0136-0136-0136-000000000004",
+          "english": "You meet the eligibility criteria.",
+          "japanese": "あなたは適格性の基準を満たしています。",
+          "category": "ビジネス"
+        },
+        {
+          "id": "10000136-0136-0136-0136-000000000005",
+          "english": "Verify eligibility before enrollment.",
+          "japanese": "登録する前に適格性を確認してください。",
+          "category": "教育"
+        },
+        {
+          "id": "10000136-0136-0136-0136-000000000006",
+          "english": "Multiple factors affect eligibility.",
+          "japanese": "複数の要因が適格性に影響します。",
+          "category": "ビジネス"
+        },
+        {
+          "id": "10000136-0136-0136-0136-000000000007",
+          "english": "Determine eligibility for benefits.",
+          "japanese": "給付金の適格性を決定する。",
+          "category": "ビジネス"
+        },
+        {
+          "id": "10000136-0136-0136-0136-000000000008",
+          "english": "Eligibility is automatically reviewed.",
+          "japanese": "適格性は自動的に審査される。",
+          "category": "ビジネス"
+        },
+        {
+          "id": "10000136-0136-0136-0136-000000000009",
+          "english": "Income limits affect eligibility.",
+          "japanese": "所得制限は適格性に影響します。",
+          "category": "経済"
+        },
+        {
+          "id": "10000136-0136-0136-0136-000000000010",
+          "english": "Test your eligibility status.",
+          "japanese": "あなたの適格性を確認してください。",
+          "category": "ビジネス"
+        },
+        {
+          "id": "10000136-0136-0136-0136-000000000011",
+          "english": "Eligibility for the scholarship is competitive.",
+          "japanese": "奨学金の適格性は競争的です。",
+          "category": "教育"
+        },
+        {
+          "id": "10000136-0136-0136-0136-000000000012",
+          "english": "Confirm your eligibility by submitting documents.",
+          "japanese": "書類を提出して適格性を確認してください。",
+          "category": "ビジネス"
+        },
+        {
+          "id": "10000136-0136-0136-0136-000000000013",
+          "english": "Eligibility ends on the specified date.",
+          "japanese": "適格性は指定された日付に終了します。",
+          "category": "ビジネス"
+        },
+        {
+          "id": "10000136-0136-0136-0136-000000000014",
+          "english": "Educational background affects eligibility.",
+          "japanese": "教育背景は適格性に影響します。",
+          "category": "教育"
+        },
+        {
+          "id": "10000136-0136-0136-0136-000000000015",
+          "english": "Eligibility for employment requires experience.",
+          "japanese": "雇用の適格性は経験が必要です。",
+          "category": "ビジネス"
+        },
+        {
+          "id": "10000136-0136-0136-0136-000000000016",
+          "english": "Review the eligibility checklist carefully.",
+          "japanese": "適格性チェックリストを注意深く確認してください。",
+          "category": "ビジネス"
+        },
+        {
+          "id": "10000136-0136-0136-0136-000000000017",
+          "english": "Your eligibility may change over time.",
+          "japanese": "あなたの適格性は時間とともに変わる可能性があります。",
+          "category": "ビジネス"
+        },
+        {
+          "id": "10000136-0136-0136-0136-000000000018",
+          "english": "Prove eligibility with valid documentation.",
+          "japanese": "有効な文書で適格性を証明してください。",
+          "category": "ビジネス"
+        },
+        {
+          "id": "10000136-0136-0136-0136-000000000019",
+          "english": "Eligibility is limited to full-time students.",
+          "japanese": "適格性はフルタイムの学生に限定されます。",
+          "category": "教育"
+        },
+        {
+          "id": "10000136-0136-0136-0136-000000000020",
+          "english": "Maintain eligibility by meeting all requirements.",
+          "japanese": "すべての要件を満たすことにより適格性を維持してください。",
+          "category": "ビジネス"
+        }
+      ],
+      "createdAt": 793378800.0
     }
   ]
 }
