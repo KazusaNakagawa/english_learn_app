@@ -34,6 +34,11 @@ struct SettingsView: View {
     @State private var importSuccessMessage: String? = nil
     @State private var showingImportSuccess = false
 
+    // MARK: - Cache state
+    @State private var cacheSize: String = "..."
+    @State private var showingClearCacheConfirm = false
+    @State private var showingClearCacheSuccess = false
+
     var body: some View {
         NavigationStack {
             Form {
@@ -197,6 +202,19 @@ struct SettingsView: View {
                     } label: {
                         Label("単語リストをインポート", systemImage: "square.and.arrow.down")
                     }
+
+                    HStack {
+                        Label("音声キャッシュ", systemImage: "waveform")
+                        Spacer()
+                        Text(cacheSize)
+                            .foregroundColor(.secondary)
+                    }
+
+                    Button(role: .destructive) {
+                        showingClearCacheConfirm = true
+                    } label: {
+                        Label("キャッシュをクリア", systemImage: "trash")
+                    }
                 }
 
                 Section(header: Text("法的情報")) {
@@ -310,6 +328,46 @@ struct SettingsView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(exportErrorMessage ?? "不明なエラーが発生しました")
+        }
+        .confirmationDialog(
+            "音声キャッシュをクリアしますか？",
+            isPresented: $showingClearCacheConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("クリア", role: .destructive) {
+                Task {
+                    await AudioCache.shared.clearAll()
+                    let bytes = await AudioCache.shared.diskCacheSize()
+                    await MainActor.run {
+                        cacheSize = formatCacheSize(bytes)
+                        showingClearCacheSuccess = true
+                    }
+                }
+            }
+            Button("キャンセル", role: .cancel) {}
+        } message: {
+            Text("ダウンロード済みの音声データがすべて削除されます")
+        }
+        .alert("クリア完了", isPresented: $showingClearCacheSuccess) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("音声キャッシュをクリアしました")
+        }
+        .task {
+            let bytes = await AudioCache.shared.diskCacheSize()
+            cacheSize = formatCacheSize(bytes)
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func formatCacheSize(_ bytes: UInt64) -> String {
+        if bytes >= 1024 * 1024 {
+            return String(format: "%.1f MB", Double(bytes) / (1024 * 1024))
+        } else if bytes >= 1024 {
+            return String(format: "%.1f KB", Double(bytes) / 1024)
+        } else {
+            return "\(bytes) B"
         }
     }
 
