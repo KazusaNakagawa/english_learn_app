@@ -35,7 +35,7 @@ struct SettingsView: View {
     @State private var showingImportSuccess = false
 
     // MARK: - Cache state
-    @State private var cacheSize: String = "..."
+    @State private var cacheBytes: UInt64 = 0
     @State private var showingClearCacheConfirm = false
     @State private var showingClearCacheSuccess = false
 
@@ -206,7 +206,7 @@ struct SettingsView: View {
                     HStack {
                         Label("音声キャッシュ", systemImage: "waveform")
                         Spacer()
-                        Text(cacheSize)
+                        Text(Self.cacheSizeFormatter.string(fromByteCount: Int64(cacheBytes)))
                             .foregroundColor(.secondary)
                     }
 
@@ -215,6 +215,7 @@ struct SettingsView: View {
                     } label: {
                         Label("キャッシュをクリア", systemImage: "trash")
                     }
+                    .disabled(cacheBytes == 0)
                 }
 
                 Section(header: Text("法的情報")) {
@@ -336,10 +337,10 @@ struct SettingsView: View {
         ) {
             Button("クリア", role: .destructive) {
                 Task {
-                    let before = await AudioCache.shared.diskCacheSize()
+                    let before = cacheBytes
                     await AudioCache.shared.clearAll()
                     let after = await AudioCache.shared.diskCacheSize()
-                    cacheSize = Self.cacheSizeFormatter.string(fromByteCount: Int64(after))
+                    cacheBytes = after
                     if after < before {
                         showingClearCacheSuccess = true
                     }
@@ -355,8 +356,7 @@ struct SettingsView: View {
             Text("音声キャッシュをクリアしました")
         }
         .task {
-            let bytes = await AudioCache.shared.diskCacheSize()
-            cacheSize = Self.cacheSizeFormatter.string(fromByteCount: Int64(bytes))
+            cacheBytes = await AudioCache.shared.diskCacheSize()
         }
     }
 
@@ -368,10 +368,6 @@ struct SettingsView: View {
         f.countStyle = .file
         return f
     }()
-
-    private func formatCacheSize(_ bytes: UInt64) -> String {
-        Self.cacheSizeFormatter.string(fromByteCount: Int64(bytes))
-    }
 
 }
 
