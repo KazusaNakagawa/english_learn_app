@@ -34,6 +34,11 @@ struct SettingsView: View {
     @State private var importSuccessMessage: String? = nil
     @State private var showingImportSuccess = false
 
+    // MARK: - Cache state
+    @State private var cacheBytes: UInt64 = 0
+    @State private var showingClearCacheConfirm = false
+    @State private var showingClearCacheSuccess = false
+
     var body: some View {
         NavigationStack {
             Form {
@@ -197,6 +202,20 @@ struct SettingsView: View {
                     } label: {
                         Label("単語リストをインポート", systemImage: "square.and.arrow.down")
                     }
+
+                    HStack {
+                        Label("音声キャッシュ", systemImage: "waveform")
+                        Spacer()
+                        Text(Self.cacheSizeFormatter.string(fromByteCount: Int64(cacheBytes)))
+                            .foregroundColor(.secondary)
+                    }
+
+                    Button(role: .destructive) {
+                        showingClearCacheConfirm = true
+                    } label: {
+                        Label("キャッシュをクリア", systemImage: "trash")
+                    }
+                    .disabled(cacheBytes == 0)
                 }
 
                 Section(header: Text("法的情報")) {
@@ -311,7 +330,44 @@ struct SettingsView: View {
         } message: {
             Text(exportErrorMessage ?? "不明なエラーが発生しました")
         }
+        .confirmationDialog(
+            "音声キャッシュをクリアしますか？",
+            isPresented: $showingClearCacheConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("クリア", role: .destructive) {
+                Task {
+                    let before = cacheBytes
+                    await AudioCache.shared.clearAll()
+                    let after = await AudioCache.shared.diskCacheSize()
+                    cacheBytes = after
+                    if after < before {
+                        showingClearCacheSuccess = true
+                    }
+                }
+            }
+            Button("キャンセル", role: .cancel) {}
+        } message: {
+            Text("ダウンロード済みの音声データがすべて削除されます")
+        }
+        .alert("クリア完了", isPresented: $showingClearCacheSuccess) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("音声キャッシュをクリアしました")
+        }
+        .task {
+            cacheBytes = await AudioCache.shared.diskCacheSize()
+        }
     }
+
+    // MARK: - Helpers
+
+    private static let cacheSizeFormatter: ByteCountFormatter = {
+        let f = ByteCountFormatter()
+        f.allowedUnits = [.useBytes, .useKB, .useMB]
+        f.countStyle = .file
+        return f
+    }()
 
 }
 
