@@ -336,10 +336,11 @@ struct SettingsView: View {
         ) {
             Button("クリア", role: .destructive) {
                 Task {
+                    let before = await AudioCache.shared.diskCacheSize()
                     await AudioCache.shared.clearAll()
-                    let bytes = await AudioCache.shared.diskCacheSize()
-                    await MainActor.run {
-                        cacheSize = formatCacheSize(bytes)
+                    let after = await AudioCache.shared.diskCacheSize()
+                    cacheSize = Self.cacheSizeFormatter.string(fromByteCount: Int64(after))
+                    if after < before {
                         showingClearCacheSuccess = true
                     }
                 }
@@ -355,17 +356,21 @@ struct SettingsView: View {
         }
         .task {
             let bytes = await AudioCache.shared.diskCacheSize()
-            cacheSize = formatCacheSize(bytes)
+            cacheSize = Self.cacheSizeFormatter.string(fromByteCount: Int64(bytes))
         }
     }
 
     // MARK: - Helpers
 
+    private static let cacheSizeFormatter: ByteCountFormatter = {
+        let f = ByteCountFormatter()
+        f.allowedUnits = [.useBytes, .useKB, .useMB]
+        f.countStyle = .file
+        return f
+    }()
+
     private func formatCacheSize(_ bytes: UInt64) -> String {
-        let formatter = ByteCountFormatter()
-        formatter.allowedUnits = [.useBytes, .useKB, .useMB]
-        formatter.countStyle = .file
-        return formatter.string(fromByteCount: Int64(bytes))
+        Self.cacheSizeFormatter.string(fromByteCount: Int64(bytes))
     }
 
 }
