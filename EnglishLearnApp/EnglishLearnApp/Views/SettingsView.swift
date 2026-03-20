@@ -362,13 +362,10 @@ struct SettingsView: View {
     // MARK: - Helpers
 
     private func formatCacheSize(_ bytes: UInt64) -> String {
-        if bytes >= 1024 * 1024 {
-            return String(format: "%.1f MB", Double(bytes) / (1024 * 1024))
-        } else if bytes >= 1024 {
-            return String(format: "%.1f KB", Double(bytes) / 1024)
-        } else {
-            return "\(bytes) B"
-        }
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useBytes, .useKB, .useMB]
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: Int64(bytes))
     }
 
 }
