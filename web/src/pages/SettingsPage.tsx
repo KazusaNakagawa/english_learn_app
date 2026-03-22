@@ -229,7 +229,7 @@ export default function SettingsPage() {
               </div>
               <input
                 type="range" min={0.5} max={5.0} step={0.5} value={interval}
-                onChange={(e) => setIntervalS(Number(e.target.value))}
+                onChange={(e) => { const v = Number(e.target.value); setIntervalS(v); saveSettings({ intervalSec: v }) }}
                 className="w-full accent-[var(--ios-blue)]"
               />
             </Row>
