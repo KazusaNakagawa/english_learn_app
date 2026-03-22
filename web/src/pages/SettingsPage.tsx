@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { playTTS, type VoiceType } from '@/services/AudioService'
 import { useNavigate } from 'react-router'
 import { getCacheUsage, clearCache } from '@/services/AudioCacheService'
 import { loadSettings, saveSettings, type AppSettings } from '@/services/SettingsService'
@@ -112,43 +113,6 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-function resolveEnVoice(
-  selection: EnVoice,
-  voices: SpeechSynthesisVoice[],
-): SpeechSynthesisVoice | null {
-  const female = voices.find((v) => /female/i.test(v.name)) ?? null
-  if (selection === 'デフォルト') return female
-  if (selection === '女性') return female
-  if (selection === '男性') return voices.find((v) => /male/i.test(v.name) && !/female/i.test(v.name)) ?? null
-  return null
-}
-
-async function playVoicevoxAudio(
-  text: string,
-  speakerId: string,
-  apiKey: string,
-  onEnd: () => void,
-): Promise<boolean> {
-  const base = import.meta.env.VITE_VOICEVOX_ENDPOINT_POC ?? ''
-  if (!base || !apiKey) return false
-  const headers = { 'Content-Type': 'application/json', 'x-api-key': apiKey }
-  try {
-    const qRes = await fetch(`${base}/audio_query?text=${encodeURIComponent(text)}&speaker=${speakerId}`, { method: 'POST', headers })
-    if (!qRes.ok) return false
-    const sRes = await fetch(`${base}/synthesis?speaker=${speakerId}`, {
-      method: 'POST', headers, body: JSON.stringify(await qRes.json()),
-    })
-    if (!sRes.ok) return false
-    const url = URL.createObjectURL(await sRes.blob())
-    const audio = new Audio(url)
-    audio.onended = () => { URL.revokeObjectURL(url); onEnd() }
-    audio.onerror = () => { URL.revokeObjectURL(url); onEnd() }
-    await audio.play()
-    return true
-  } catch {
-    return false
-  }
-}
 
 // ---- Page ----
 
@@ -175,7 +139,6 @@ export default function SettingsPage() {
   const [vvKey,     setVvKeyRaw]     = useState(saved.voicevoxApiKey)
   const [openAIKey, setOpenAIKeyRaw] = useState(saved.openAIKey)
   const [aiModel,   setAiModelRaw]   = useState(saved.openAIModel)
-  const [enVoices,  setEnVoices]     = useState<SpeechSynthesisVoice[]>([])
   const [playing,   setPlaying]      = useState(false)
   const [cacheBytes, setCacheBytes]  = useState(0)
 
@@ -194,36 +157,18 @@ export default function SettingsPage() {
 
   useEffect(() => { refreshCacheUsage() }, [refreshCacheUsage])
 
-  useEffect(() => {
-    const load = () =>
-      setEnVoices(window.speechSynthesis.getVoices().filter((v) => v.lang.startsWith('en')))
-    load()
-    window.speechSynthesis.onvoiceschanged = load
-  }, [])
-
   const resolvedVvKey = vvKey || (import.meta.env.VITE_VOICEVOX_API_KEY_POC ?? '')
 
-  async function playSample(text: string, lang: 'en' | 'ja', useZundamon: boolean) {
+  async function playSample(text: string, lang: 'en' | 'ja') {
     if (playing) return
-    window.speechSynthesis.cancel()
     setPlaying(true)
-    const done = () => setPlaying(false)
-
-    if (useZundamon) {
-      const ok = await playVoicevoxAudio(text, vvStyle, resolvedVvKey, done)
-      if (!ok) done()
-      return
+    try {
+      const voice = (lang === 'en' ? EN_VOICE_RMAP[enVoice] : JA_VOICE_RMAP[jaVoice]) as VoiceType
+      await playTTS(text, { voice, speakerId: vvStyle, apiKey: resolvedVvKey, lang })
+    } finally {
+      setPlaying(false)
+      refreshCacheUsage()
     }
-
-    const utt = new SpeechSynthesisUtterance(text)
-    utt.lang = lang === 'en' ? 'en-US' : 'ja-JP'
-    if (lang === 'en') {
-      const voice = resolveEnVoice(enVoice, enVoices)
-      if (voice) utt.voice = voice
-    }
-    utt.onend = done
-    utt.onerror = done
-    window.speechSynthesis.speak(utt)
   }
 
   const patternDesc = pattern === 'バイリンガル (EN+JA)'
@@ -247,7 +192,7 @@ export default function SettingsPage() {
               <Button
                 className="w-full bg-[var(--ios-blue)] hover:bg-[var(--ios-blue)]/90 text-white"
                 disabled={playing}
-                onClick={() => playSample('This is a sample of the English voice.', 'en', enVoice === 'ずんだもん')}
+                onClick={() => playSample('This is a sample of the English voice.', 'en')}
               >
                 <Volume2 size={16} className="mr-1.5" />英語サンプルを再生
               </Button>
@@ -264,7 +209,7 @@ export default function SettingsPage() {
               <Button
                 className="w-full bg-[var(--ios-blue)] hover:bg-[var(--ios-blue)]/90 text-white"
                 disabled={playing}
-                onClick={() => playSample('これは日本語の音声サンプルです。', 'ja', jaVoice === 'ずんだもん')}
+                onClick={() => playSample('これは日本語の音声サンプルです。', 'ja')}
               >
                 <Volume2 size={16} className="mr-1.5" />日本語サンプルを再生
               </Button>
