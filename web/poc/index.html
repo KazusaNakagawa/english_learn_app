@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>EnglishLearnApp Web — Phase 0 PoC</title>
+  <script src="env.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: system-ui, sans-serif; background: #f5f5f5; color: #222; }
@@ -197,17 +198,18 @@ const httpApi = new apigatewayv2.HttpApi(this, 'VoicevoxHttpApi', {
 
   <div class="card">
     <h3>VOICEVOX Endpoint Configuration</h3>
-    <label>Base URL (API Gateway endpoint)</label>
-    <input type="url" id="vv-base-url" placeholder="https://xxxxxxxxxx.execute-api.ap-northeast-1.amazonaws.com" />
-    <label>API Key (x-api-key header)</label>
-    <input type="password" id="vv-api-key" placeholder="your-api-key" />
+    <p style="font-size:13px;color:#555;margin-bottom:10px;">
+      Loaded from <code>web/poc/.env</code> via <code>env.js</code>.
+      Run <code>node generate-env.js</code> to regenerate after editing <code>.env</code>.
+    </p>
+    <div id="vv-env-status" style="margin-bottom:10px;"></div>
     <label>Speaker ID</label>
     <input type="text" id="vv-speaker-id" value="3" style="width:80px;" />
     <label>Text to synthesize</label>
     <input type="text" id="vv-text" value="こんにちは、ずんだもんです。" />
     <button class="btn primary" onclick="testVoicevox()">▶ Fetch &amp; Play WAV</button>
     <button class="btn secondary" onclick="checkCORS()">🔍 CORS Preflight Check</button>
-    <div class="result" id="vv-result">Enter endpoint URL and API key above</div>
+    <div class="result" id="vv-result">—</div>
     <div class="timing-grid" id="vv-timing" style="display:none;">
       <div class="timing-cell"><div class="val" id="t-audio-query">—</div><div class="lbl">audio_query (ms)</div></div>
       <div class="timing-cell"><div class="val" id="t-synthesis">—</div><div class="lbl">synthesis (ms)</div></div>
@@ -630,9 +632,32 @@ async function deleteDB() {
 
 // ─── TAB 3: VOICEVOX / CORS ──────────────────────────────────────────────────
 
+function getEnvConfig() {
+  const baseUrl = window.VOICEVOX_ENDPOINT_POC;
+  const apiKey  = window.VOICEVOX_API_KEY_POC;
+  return { baseUrl, apiKey };
+}
+
+function checkEnvStatus() {
+  const { baseUrl, apiKey } = getEnvConfig();
+  const el = document.getElementById('vv-env-status');
+  if (!el) return;
+  if (baseUrl && apiKey) {
+    el.innerHTML = `<span class="badge supported">✓ env.js loaded</span>
+      <span style="font-size:12px;color:#555;margin-left:8px;">
+        Endpoint: <code>${baseUrl.replace(/\/+$/, '')}</code> &nbsp;|&nbsp; API Key: <code>${apiKey.slice(0, 4)}****</code>
+      </span>`;
+  } else {
+    el.innerHTML = `<span class="badge unsupported">✗ env.js missing or incomplete</span>
+      <p style="font-size:12px;color:#c62828;margin-top:4px;">
+        Run: <code>cd web/poc &amp;&amp; cp .env.example .env</code>, fill in values, then <code>node generate-env.js</code>.
+      </p>`;
+  }
+}
+
 async function checkVersion() {
-  const baseUrl = document.getElementById('vv-base-url').value.trim();
-  if (!baseUrl) { setResult('vv-version-result', '⚠ Enter a Base URL first', 'warn'); return; }
+  const { baseUrl } = getEnvConfig();
+  if (!baseUrl) { setResult('vv-version-result', '⚠ env.js not loaded. Run node generate-env.js first.', 'warn'); return; }
   setResult('vv-version-result', '⋯ Fetching…', 'warn');
   try {
     const t0 = performance.now();
@@ -646,8 +671,8 @@ async function checkVersion() {
 }
 
 async function checkCORS() {
-  const baseUrl = document.getElementById('vv-base-url').value.trim();
-  if (!baseUrl) { setResult('vv-result', '⚠ Enter a Base URL first', 'warn'); return; }
+  const { baseUrl } = getEnvConfig();
+  if (!baseUrl) { setResult('vv-result', '⚠ env.js not loaded. Run node generate-env.js first.', 'warn'); return; }
   setResult('vv-result', '⋯ Sending OPTIONS preflight request…', 'warn');
   try {
     const res = await fetch(`${baseUrl}/audio_query`, {
@@ -684,13 +709,12 @@ async function checkCORS() {
 }
 
 async function testVoicevox() {
-  const baseUrl  = document.getElementById('vv-base-url').value.trim();
-  const apiKey   = document.getElementById('vv-api-key').value.trim();
+  const { baseUrl, apiKey } = getEnvConfig();
   const speakerId = document.getElementById('vv-speaker-id').value;
-  const text     = document.getElementById('vv-text').value;
+  const text      = document.getElementById('vv-text').value;
 
   if (!baseUrl || !apiKey) {
-    setResult('vv-result', '⚠ Enter Base URL and API Key first', 'warn');
+    setResult('vv-result', '⚠ env.js not loaded. Run node generate-env.js first.', 'warn');
     return;
   }
 
@@ -811,6 +835,7 @@ function exportSummary() {
 
 // ─── Init ────────────────────────────────────────────────────────────────────
 checkSpeechSupport();
+checkEnvStatus();
 </script>
 </body>
 </html>
