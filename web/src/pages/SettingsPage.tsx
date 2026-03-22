@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router'
+import { getCacheUsage, clearCache } from '@/services/AudioCacheService'
 import {
   ChevronRight, FlaskConical, Volume2,
   Upload, Download, Trash2, FileText, Shield,
@@ -103,6 +104,13 @@ function SegmentedControl<T extends string>({
 
 // ---- Helpers ----
 
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0バイト'
+  if (bytes < 1024) return `${bytes}バイト`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
 function resolveEnVoice(
   selection: EnVoice,
   voices: SpeechSynthesisVoice[],
@@ -156,6 +164,13 @@ export default function SettingsPage() {
   const [aiModel,   setAiModel]   = useState('gpt-4o-mini')
   const [enVoices,  setEnVoices]  = useState<SpeechSynthesisVoice[]>([])
   const [playing,   setPlaying]   = useState(false)
+  const [cacheBytes, setCacheBytes] = useState(0)
+
+  const refreshCacheUsage = useCallback(() => {
+    getCacheUsage().then(setCacheBytes).catch(() => {})
+  }, [])
+
+  useEffect(() => { refreshCacheUsage() }, [refreshCacheUsage])
 
   useEffect(() => {
     const load = () =>
@@ -343,10 +358,19 @@ export default function SettingsPage() {
             <Row>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">音声キャッシュ</span>
-                <span className="text-sm text-muted-foreground">0バイト</span>
+                <span className="text-sm text-muted-foreground">{formatBytes(cacheBytes)}</span>
               </div>
             </Row>
-            <ListRow icon={Trash2} iconColor="text-[var(--ios-red)]" label="キャッシュをクリア" destructive />
+            <ListRow
+              icon={Trash2}
+              iconColor="text-[var(--ios-red)]"
+              label="キャッシュをクリア"
+              destructive
+              onClick={async () => {
+                await clearCache()
+                refreshCacheUsage()
+              }}
+            />
           </GroupCard>
         </div>
 

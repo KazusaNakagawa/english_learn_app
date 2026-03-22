@@ -3,10 +3,12 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-import { Volume2 } from 'lucide-react'
+import { Volume2, Loader2 } from 'lucide-react'
+import { playTTS } from '@/services/AudioService'
 
 const appVersion = import.meta.env.VITE_APP_VERSION ?? '—'
 const appEnv = import.meta.env.VITE_APP_ENV ?? '—'
+const VV_API_KEY = import.meta.env.VITE_VOICEVOX_API_KEY_POC ?? ''
 
 const SAMPLE_WORDS = [
   { id: '1', word: 'rarity',      meaning: '珍しさ・希少性',          phonetic: 'ˈreər.ɪ.ti',        sentences: 30 },
@@ -23,6 +25,7 @@ const LETTERS = ['ALL', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')]
 export default function WordListPage() {
   const [search, setSearch] = useState('')
   const [activeLetter, setActiveLetter] = useState('ALL')
+  const [playingId, setPlayingId] = useState<string | null>(null) // `${id}-en` | `${id}-ja`
 
   const filtered = SAMPLE_WORDS.filter((w) => {
     const matchesSearch =
@@ -34,6 +37,22 @@ export default function WordListPage() {
       activeLetter === 'ALL' || w.word.toUpperCase().startsWith(activeLetter)
     return matchesSearch && matchesLetter
   })
+
+  async function play(id: string, text: string, lang: 'en' | 'ja') {
+    const key = `${id}-${lang}`
+    if (playingId) return
+    setPlayingId(key)
+    try {
+      await playTTS(text, {
+        voice: lang === 'en' ? 'female' : 'zundamon',
+        speakerId: '22', // ささやき
+        apiKey: VV_API_KEY,
+        lang,
+      })
+    } finally {
+      setPlayingId(null)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-[var(--ios-grouped-bg)]">
@@ -107,24 +126,33 @@ export default function WordListPage() {
 
               {/* Right: speaker buttons */}
               <div className="flex items-center gap-1.5 shrink-0">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-8 px-2 rounded-lg text-[var(--ios-blue)] hover:bg-[var(--ios-blue)]/10"
-                  title="英語を再生"
-                >
-                  <Volume2 size={15} />
-                  <span className="text-[11px] font-medium ml-0.5">EN</span>
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-8 px-2 rounded-lg text-[var(--ios-orange)] hover:bg-[var(--ios-orange)]/10"
-                  title="日本語を再生"
-                >
-                  <Volume2 size={15} />
-                  <span className="text-[11px] font-medium ml-0.5">JA</span>
-                </Button>
+                {(['en', 'ja'] as const).map((lang) => {
+                  const key = `${word.id}-${lang}`
+                  const isPlaying = playingId === key
+                  return (
+                    <Button
+                      key={lang}
+                      size="sm"
+                      variant="ghost"
+                      disabled={!!playingId}
+                      onClick={() => play(word.id, lang === 'en' ? word.word : word.meaning, lang)}
+                      className={cn(
+                        'h-8 px-2 rounded-lg',
+                        lang === 'en'
+                          ? 'text-[var(--ios-blue)] hover:bg-[var(--ios-blue)]/10'
+                          : 'text-[var(--ios-orange)] hover:bg-[var(--ios-orange)]/10',
+                      )}
+                      title={lang === 'en' ? '英語を再生' : '日本語を再生'}
+                    >
+                      {isPlaying
+                        ? <Loader2 size={15} className="animate-spin" />
+                        : <Volume2 size={15} />}
+                      <span className="text-[11px] font-medium ml-0.5">
+                        {lang.toUpperCase()}
+                      </span>
+                    </Button>
+                  )
+                })}
               </div>
             </div>
           ))
