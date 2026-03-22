@@ -4,11 +4,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { Volume2, Loader2 } from 'lucide-react'
-import { playTTS } from '@/services/AudioService'
+import { playTTS, type VoiceType } from '@/services/AudioService'
+import { loadSettings } from '@/services/SettingsService'
 
 const appVersion = import.meta.env.VITE_APP_VERSION ?? '—'
 const appEnv = import.meta.env.VITE_APP_ENV ?? '—'
-const VV_API_KEY = import.meta.env.VITE_VOICEVOX_API_KEY_POC ?? ''
 
 const SAMPLE_WORDS = [
   { id: '1', word: 'rarity',      meaning: '珍しさ・希少性',          phonetic: 'ˈreər.ɪ.ti',        sentences: 30 },
@@ -42,11 +42,12 @@ export default function WordListPage() {
     const key = `${id}-${lang}`
     if (playingId) return
     setPlayingId(key)
+    const s = loadSettings()
     try {
       await playTTS(text, {
-        voice: lang === 'en' ? 'female' : 'zundamon',
-        speakerId: '22', // ささやき
-        apiKey: VV_API_KEY,
+        voice: (lang === 'en' ? s.enVoice : s.jaVoice) as VoiceType,
+        speakerId: s.voicevoxStyle,
+        apiKey: s.voicevoxApiKey || (import.meta.env.VITE_VOICEVOX_API_KEY_POC ?? ''),
         lang,
       })
     } finally {

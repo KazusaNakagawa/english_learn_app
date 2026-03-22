@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router'
 import { getCacheUsage, clearCache } from '@/services/AudioCacheService'
+import { loadSettings, saveSettings, type AppSettings } from '@/services/SettingsService'
 import {
   ChevronRight, FlaskConical, Volume2,
   Upload, Download, Trash2, FileText, Shield,
@@ -151,20 +152,41 @@ async function playVoicevoxAudio(
 
 // ---- Page ----
 
+const EN_VOICE_MAP: Record<string, EnVoice> = {
+  female: '女性', male: '男性', zundamon: 'ずんだもん', default: 'デフォルト',
+}
+const EN_VOICE_RMAP: Record<EnVoice, string> = {
+  '女性': 'female', '男性': 'male', 'ずんだもん': 'zundamon', 'デフォルト': 'default',
+}
+const JA_VOICE_MAP: Record<string, JaVoice> = { zundamon: 'ずんだもん', default: 'デフォルト' }
+const JA_VOICE_RMAP: Record<JaVoice, string> = { 'ずんだもん': 'zundamon', 'デフォルト': 'default' }
+const PATTERN_MAP: Record<string, Pattern> = { bilingual: 'バイリンガル (EN+JA)', 'en-only': '英語のみ (EN+EN)' }
+const PATTERN_RMAP: Record<Pattern, string> = { 'バイリンガル (EN+JA)': 'bilingual', '英語のみ (EN+EN)': 'en-only' }
+
 export default function SettingsPage() {
   const navigate = useNavigate()
 
-  const [enVoice,   setEnVoice]   = useState<EnVoice>('デフォルト')
-  const [jaVoice,   setJaVoice]   = useState<JaVoice>('ずんだもん')
-  const [pattern,   setPattern]   = useState<Pattern>('バイリンガル (EN+JA)')
-  const [interval,  setIntervalS] = useState(1.5)
-  const [vvStyle,   setVvStyle]   = useState('22')
-  const [vvKey,     setVvKey]     = useState('')
-  const [openAIKey, setOpenAIKey] = useState('')
-  const [aiModel,   setAiModel]   = useState('gpt-4o-mini')
-  const [enVoices,  setEnVoices]  = useState<SpeechSynthesisVoice[]>([])
-  const [playing,   setPlaying]   = useState(false)
-  const [cacheBytes, setCacheBytes] = useState(0)
+  const saved = loadSettings()
+  const [enVoice,   setEnVoiceRaw]   = useState<EnVoice>(EN_VOICE_MAP[saved.enVoice] ?? '女性')
+  const [jaVoice,   setJaVoiceRaw]   = useState<JaVoice>(JA_VOICE_MAP[saved.jaVoice] ?? 'ずんだもん')
+  const [pattern,   setPatternRaw]   = useState<Pattern>(PATTERN_MAP[saved.playPattern] ?? 'バイリンガル (EN+JA)')
+  const [interval,  setIntervalS]    = useState(saved.intervalSec)
+  const [vvStyle,   setVvStyleRaw]   = useState(saved.voicevoxStyle)
+  const [vvKey,     setVvKeyRaw]     = useState(saved.voicevoxApiKey)
+  const [openAIKey, setOpenAIKeyRaw] = useState(saved.openAIKey)
+  const [aiModel,   setAiModelRaw]   = useState(saved.openAIModel)
+  const [enVoices,  setEnVoices]     = useState<SpeechSynthesisVoice[]>([])
+  const [playing,   setPlaying]      = useState(false)
+  const [cacheBytes, setCacheBytes]  = useState(0)
+
+  // Wrappers that also persist to localStorage
+  const setEnVoice = (v: EnVoice) => { setEnVoiceRaw(v); saveSettings({ enVoice: EN_VOICE_RMAP[v] as AppSettings['enVoice'] }) }
+  const setJaVoice = (v: JaVoice) => { setJaVoiceRaw(v); saveSettings({ jaVoice: JA_VOICE_RMAP[v] as AppSettings['jaVoice'] }) }
+  const setPattern = (v: Pattern) => { setPatternRaw(v); saveSettings({ playPattern: PATTERN_RMAP[v] as AppSettings['playPattern'] }) }
+  const setVvStyle = (v: string)  => { setVvStyleRaw(v); saveSettings({ voicevoxStyle: v }) }
+  const setVvKey   = (v: string)  => { setVvKeyRaw(v);   saveSettings({ voicevoxApiKey: v }) }
+  const setOpenAIKey = (v: string) => { setOpenAIKeyRaw(v); saveSettings({ openAIKey: v }) }
+  const setAiModel   = (v: string) => { setAiModelRaw(v);   saveSettings({ openAIModel: v }) }
 
   const refreshCacheUsage = useCallback(() => {
     getCacheUsage().then(setCacheBytes).catch(() => {})
