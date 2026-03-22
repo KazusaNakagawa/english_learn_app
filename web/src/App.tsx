@@ -5,6 +5,7 @@ import ArchivePage from '@/pages/ArchivePage'
 import AddPage from '@/pages/AddPage'
 import TrashPage from '@/pages/TrashPage'
 import SettingsPage from '@/pages/SettingsPage'
+import PocPage from '@/pages/PocPage'
 
 function App() {
   return (
@@ -16,6 +17,7 @@ function App() {
         <Route path="/trash" element={<TrashPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>
+      <Route path="/poc" element={<PocPage />} />
     </Routes>
   )
 }
