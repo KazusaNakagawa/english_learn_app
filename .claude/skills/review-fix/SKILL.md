@@ -17,48 +17,47 @@ Review PR feedback from reviewers or bots, apply fixes, and push updates.
 
 ## Workflow
 
-1. **Get PR details and comments**
-   ```bash
-   gh pr view $ARGUMENTS --comments
-   ```
+### Phase 1: Fetch Feedback
 
-2. **Check for review comments on specific files**
-   ```bash
-   gh pr view $ARGUMENTS --json reviews,comments
-   gh api repos/{owner}/{repo}/pulls/$ARGUMENTS/comments
-   ```
+```bash
+gh pr view $ARGUMENTS --comments
+gh api --paginate repos/{owner}/{repo}/pulls/$ARGUMENTS/comments
+gh api --paginate repos/{owner}/{repo}/pulls/$ARGUMENTS/reviews
+```
 
-3. **Analyze feedback**
-   - Read all review comments
-   - Identify actionable items
-   - Prioritize by severity (blocking vs suggestions)
+**完了条件:** 全てのレビューコメントとレビュー状態を取得できた
 
-4. **Apply fixes**
-   - Make the necessary code changes
-   - Address each comment systematically
+### Phase 2: Classify & Prioritize
 
-5. **Commit and push**
-   ```bash
-   git add <changed-files>
-   git commit -m "fix: Address PR review feedback"
-   git push
-   ```
+`references/review-criteria.md` の基準に従い、各コメントを分類：
 
-6. **Verify PR status**
-   ```bash
-   gh pr view $ARGUMENTS
-   gh pr checks $ARGUMENTS
-   ```
+1. 全コメントを P0 / P1 / P2 に分類
+2. P0 があれば最優先で対応リストに追加
+3. P1 は原則対応（工数大なら確認）
+4. P2 は時間があれば対応
 
-## Common Review Feedback Types
+**完了条件:** 対応すべきコメントのリストが確定
 
-| Type | Action |
-|------|--------|
-| Code style | Fix formatting, add language specifiers to code blocks |
-| Logic issues | Review and fix the implementation |
-| Missing tests | Add or update test cases |
-| Documentation | Update comments or README |
-| Security | Address vulnerabilities immediately |
+### Phase 3: Apply Fixes
+
+優先度順に修正を適用：
+
+1. P0 を全て解消
+2. P1 を順次対応
+3. P2 は可能な範囲で対応
+
+**完了条件:** 対応リストの項目が全て解消
+
+### Phase 4: Commit & Verify
+
+```bash
+git add <changed-files>
+git commit -m "fix: Address PR review feedback"
+git push
+gh pr checks $ARGUMENTS
+```
+
+**完了条件:** push 成功、CI が green（または確認中）
 
 ## Prerequisites
 
@@ -66,9 +65,6 @@ Review PR feedback from reviewers or bots, apply fixes, and push updates.
 - You are on the PR branch
 - Have write access to the repository
 
-## Notes
+## References
 
-- Always read the full context of review comments
-- If unsure about a comment, ask the user for clarification
-- Run tests after making changes if applicable
-- Respond to reviewers if needed using `gh pr comment`
+- [Review Criteria](references/review-criteria.md) - 優先度分類と対応判断基準

@@ -3,7 +3,7 @@ import SwiftUI
 struct WordPracticeView: View {
     let word: Word
 
-    @StateObject private var speechService = SpeechService()
+    @ObservedObject private var speechService = SpeechService.shared
     @StateObject private var speechRecognizer = SpeechRecognizer()
     @State private var pronunciationResult: PronunciationResult?
     @State private var showResult = false
@@ -32,7 +32,7 @@ struct WordPracticeView: View {
             // 音声読み上げボタン
             HStack(spacing: 16) {
                 Button(action: {
-                    speechService.speak(word.word, voiceGender: settings.voiceGender)
+                    speechService.speak(word.word, language: "en-US")
                 }) {
                     VStack {
                         Image(systemName: (speechService.isSpeaking && speechService.speakingLanguage != "ja-JP") ? "speaker.wave.3.fill" : "speaker.wave.2.fill")
@@ -47,7 +47,7 @@ struct WordPracticeView: View {
                 .foregroundColor(.blue)
 
                 Button(action: {
-                    speechService.speak(word.meaning, language: "ja-JP", voiceGender: settings.voiceGender)
+                    speechService.speak(word.meaning, language: "ja-JP")
                 }) {
                     VStack {
                         Image(systemName: (speechService.isSpeaking && speechService.speakingLanguage == "ja-JP") ? "speaker.wave.3.fill" : "speaker.wave.2.fill")

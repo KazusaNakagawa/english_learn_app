@@ -1,13 +1,23 @@
 import SwiftUI
 
 struct SentencePracticeView: View {
+    // MARK: - Constants
+
+    private enum Constants {
+        /// Default VOICEVOX speaker ID for English TTS
+        static let englishSpeakerID = 3
+    }
+
+    // MARK: - Properties
+
     let sentence: Sentence
     let word: Word
 
-    @StateObject private var speechService = SpeechService()
+    private let speechService = SpeechService.shared
     @StateObject private var speechRecognizer = SpeechRecognizer()
     @State private var pronunciationResult: PronunciationResult?
     @State private var showResult = false
+    @State private var prefetchTask: Task<Void, Never>?
     @EnvironmentObject private var settings: SettingsManager
 
     var body: some View {
@@ -47,14 +57,14 @@ struct SentencePracticeView: View {
                     SpeechButton(
                         text: sentence.english, label: "英語を聞く",
                         isJapanese: false, color: .blue,
-                        speechService: speechService, voiceGender: settings.voiceGender
+                        speechService: speechService
                     )
 
                     // 日本語訳読み上げボタン
                     SpeechButton(
                         text: sentence.japanese, label: "日本語訳を聞く",
                         isJapanese: true, color: .orange,
-                        speechService: speechService, voiceGender: settings.voiceGender
+                        speechService: speechService
                     )
 
                     // 発音チェックボタン
@@ -116,6 +126,39 @@ struct SentencePracticeView: View {
         }
         .navigationTitle(word.word)
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            // Capture settings on main actor before entering Task
+            let shouldPrefetchEnglish = settings.englishVoiceGender == .zundamon
+            let shouldPrefetchJapanese = settings.japaneseVoiceGender == .zundamon
+            let japaneseSpeakerID = settings.voicevoxStyle.rawValue
+            let englishText = sentence.english
+            let japaneseText = sentence.japanese
+
+            prefetchTask = Task {
+                // Prefetch both English and Japanese in parallel (if using VOICEVOX)
+                async let englishPrefetch: Void = {
+                    if shouldPrefetchEnglish {
+                        await PrefetchService.shared.prefetch(
+                            text: englishText,
+                            speakerID: Constants.englishSpeakerID
+                        )
+                    }
+                }()
+                async let japanesePrefetch: Void = {
+                    if shouldPrefetchJapanese {
+                        await PrefetchService.shared.prefetch(
+                            text: japaneseText,
+                            speakerID: japaneseSpeakerID
+                        )
+                    }
+                }()
+                _ = await (englishPrefetch, japanesePrefetch)
+            }
+        }
+        .onDisappear {
+            prefetchTask?.cancel()
+            prefetchTask = nil
+        }
     }
 
     private func checkPronunciation() {

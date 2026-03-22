@@ -1,5 +1,4 @@
 import SwiftUI
-import MediaPlayer
 
 // MARK: - Sort Option
 
@@ -34,14 +33,11 @@ struct WordListView: View {
 
     @AppStorage("wordSortOption") private var sortOptionRaw: String = WordSortOption.alphabeticalAZ.rawValue
 
-    @StateObject private var speechService = SpeechService()
+    private let speechService = SpeechService.shared
     @EnvironmentObject private var settings: SettingsManager
+    @EnvironmentObject private var globalPlaybackManager: GlobalPlaybackManager
 
     @State private var selection = SelectionState()
-
-    // MARK: - Continuous playback managers
-    @State private var playbackManager: ContinuousPlaybackManager<(Word, Sentence)>?
-    @State private var remoteCommandManager = RemoteCommandCenterManager()
 
     private var sortOption: WordSortOption {
         WordSortOption(rawValue: sortOptionRaw) ?? .alphabeticalAZ
@@ -100,18 +96,23 @@ struct WordListView: View {
         return result
     }
 
-    /// Flattens all words and their sentences into a single array for continuous playback.
+    /// Flattens all words and their sentences into queue items for continuous playback.
     ///
-    /// Each element is a tuple of (Word, Sentence) representing one playback unit.
+    /// Each element is a QueueItem representing one playback unit.
     /// Only includes words that have at least one sentence.
     ///
-    /// - Returns: Array of (Word, Sentence) tuples in display order
-    private var allWordSentences: [(Word, Sentence)] {
+    /// - Returns: Array of QueueItem in display order
+    private var allQueueItems: [QueueItem] {
         filteredWords.flatMap { word in
             word.sentences.map { sentence in
-                (word, sentence)
+                QueueItem(sentence: sentence, word: word)
             }
         }
+    }
+
+    /// Checks if the current playback queue belongs to this view
+    private var isPlayingThisViewsQueue: Bool {
+        globalPlaybackManager.isPlayingQueue(allQueueItems)
     }
 
     var body: some View {
@@ -176,17 +177,17 @@ struct WordListView: View {
                 } else {
                     HStack {
                         // Play all words button
-                        let isPlaying = playbackManager?.isPlaying ?? false
-                        if !allWordSentences.isEmpty {
+                        if !allQueueItems.isEmpty {
+                            let isPlayingOurQueue = globalPlaybackManager.isPlaying && isPlayingThisViewsQueue
                             Button {
-                                if isPlaying {
-                                    stopPlayAllWords()
+                                if isPlayingOurQueue {
+                                    globalPlaybackManager.stop()
                                 } else {
-                                    startPlayAllWords()
+                                    globalPlaybackManager.enqueue(allQueueItems)
                                 }
                             } label: {
-                                Image(systemName: isPlaying ? "stop.fill" : "play.fill")
-                                    .foregroundColor(isPlaying ? .red : .blue)
+                                Image(systemName: isPlayingOurQueue ? "stop.fill" : "play.fill")
+                                    .foregroundColor(isPlayingOurQueue ? .red : .blue)
                             }
                         }
                         sortMenu
@@ -206,58 +207,35 @@ struct WordListView: View {
         // user can continue selecting from the newly filtered results.
         .onChange(of: searchText) { _, _ in
             selection.selectedIDs = []
-            if playbackManager?.isPlaying == true { stopPlayAllWords() }
+            // Only stop if this view's queue is currently playing
+            if globalPlaybackManager.isPlaying && isPlayingThisViewsQueue {
+                globalPlaybackManager.stop()
+            }
         }
         .onChange(of: selectedLetter) { _, _ in
             selection.selectedIDs = []
-            if playbackManager?.isPlaying == true { stopPlayAllWords() }
+            // Only stop if this view's queue is currently playing
+            if globalPlaybackManager.isPlaying && isPlayingThisViewsQueue {
+                globalPlaybackManager.stop()
+            }
         }
         .onChange(of: selectedCategory) { _, _ in
             selection.selectedIDs = []
-            if playbackManager?.isPlaying == true { stopPlayAllWords() }
-        }
-        .onChange(of: sortOptionRaw) { _, _ in
-            if playbackManager?.isPlaying == true { stopPlayAllWords() }
-        }
-        // Continuous playback event handlers
-        .onReceive(speechService.speechFinishedPublisher) { _ in
-            guard let manager = playbackManager, manager.isPlaying else { return }
-
-            scheduleDelayedAdvance(generation: manager.playbackGeneration)
-        }
-        .onAppear {
-            setupPlaybackManager()
-
-            // Setup remote command center (callbacks already dispatched to main queue)
-            remoteCommandManager.setup(
-                onPlay: {
-                    if let manager = self.playbackManager, !manager.isPlaying {
-                        self.startPlayAllWords()
-                    }
-                },
-                onPause: {
-                    self.stopPlayAllWords()
-                },
-                onNext: {
-                    self.playbackManager?.next()
-                },
-                onPrevious: {
-                    self.playbackManager?.previous()
-                }
-            )
-        }
-        .onChange(of: settings.playbackMode) { _, newMode in
-            playbackManager?.updatePlaybackMode(newMode)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .speechServiceDidStartNewPlayback)) { _ in
-            if let manager = playbackManager, manager.isPlaying {
-                manager.stop()
-                NowPlayingInfoManager.clear()
+            // Only stop if this view's queue is currently playing
+            if globalPlaybackManager.isPlaying && isPlayingThisViewsQueue {
+                globalPlaybackManager.stop()
             }
         }
-        .onDisappear {
-            stopPlayAllWords()
-            remoteCommandManager.cleanup()
+        .onChange(of: sortOptionRaw) { _, _ in
+            // Only stop if this view's queue is currently playing
+            if globalPlaybackManager.isPlaying && isPlayingThisViewsQueue {
+                globalPlaybackManager.stop()
+            }
+        }
+        // When individual playback starts, always stop continuous playback
+        // to prevent stale queues from advancing via delayed completion handlers
+        .onReceive(NotificationCenter.default.publisher(for: .speechServiceDidStartNewPlayback)) { _ in
+            globalPlaybackManager.stop()
         }
     }
 
@@ -375,88 +353,6 @@ struct WordListView: View {
         }
     }
 
-    // MARK: - Continuous Playback Logic
-
-    /// Initializes the playback manager on first use.
-    private func setupPlaybackManager() {
-        guard playbackManager == nil else { return }
-
-        playbackManager = ContinuousPlaybackManager(
-            playbackMode: settings.playbackMode,
-            speechHandler: { [weak speechService, settings] (item: (Word, Sentence), step: Int) in
-                guard let speechService else { return }
-
-                let (word, sentence) = item
-
-                switch settings.playbackMode {
-                case .bilingual:
-                    switch step {
-                    case 0, 2:
-                        speechService.speak(sentence.english, voiceGender: settings.voiceGender, isContinuousPlayback: true)
-                    case 1:
-                        speechService.speak(sentence.japanese, language: "ja-JP", voiceGender: settings.voiceGender, isContinuousPlayback: true)
-                    default:
-                        break
-                    }
-                case .englishOnly:
-                    speechService.speak(sentence.english, voiceGender: settings.voiceGender, isContinuousPlayback: true)
-                }
-
-                // Update Now Playing info
-                let stepLabel = settings.playbackMode.stepLabel(for: step)
-                NowPlayingInfoManager.update(
-                    title: sentence.english,
-                    artist: "\(word.word) - \(stepLabel)",
-                    album: word.meaning,
-                    playbackRate: 1.0
-                )
-            },
-            completionHandler: { [weak speechService] in
-                speechService?.deactivateAudioSession()
-                NowPlayingInfoManager.clear()
-            }
-        )
-    }
-
-    /// Starts continuous playback across all words and their sentences.
-    private func startPlayAllWords() {
-        let snapshot = allWordSentences
-        guard !snapshot.isEmpty else { return }
-
-        setupPlaybackManager()
-
-        // Stop current playback
-        speechService.stop()
-
-        Task { @MainActor in
-            playbackManager?.start(items: snapshot, startIndex: 0)
-        }
-    }
-
-    /// Stops continuous playback of all words.
-    private func stopPlayAllWords() {
-        playbackManager?.stop()
-        speechService.stop()
-        speechService.deactivateAudioSession()
-        NowPlayingInfoManager.clear()
-    }
-
-    /// Schedules a delayed task with generation-based cancellation.
-    private func scheduleDelayedAdvance(generation: Int, delay: UInt64 = 800_000_000) {
-        Task {
-            do {
-                try await Task.sleep(nanoseconds: delay)
-                await MainActor.run {
-                    guard let manager = playbackManager,
-                          manager.isValidCompletion(generation: generation) else { return }
-                    manager.advance()
-                }
-            } catch {
-                // Task cancellation is expected when view disappears or playback stops
-                // No action needed
-            }
-        }
-    }
 }
 
 // MARK: - WordRowView
@@ -496,7 +392,7 @@ struct WordRowView: View {
 
             HStack(spacing: 12) {
                 Button(action: {
-                    speechService.speak(word.word, voiceGender: speechService.voiceGender)
+                    speechService.speak(word.word, language: "en-US")
                 }) {
                     Image(systemName: (speechService.isSpeaking && speechService.speakingLanguage != "ja-JP") ? "speaker.wave.3.fill" : "speaker.wave.2.fill")
                         .font(.title2)
@@ -505,7 +401,7 @@ struct WordRowView: View {
                 .buttonStyle(.borderless)
 
                 Button(action: {
-                    speechService.speak(word.meaning, language: "ja-JP", voiceGender: speechService.voiceGender)
+                    speechService.speak(word.meaning, language: "ja-JP")
                 }) {
                     Image(systemName: (speechService.isSpeaking && speechService.speakingLanguage == "ja-JP") ? "speaker.wave.3.fill" : "speaker.wave.2.fill")
                         .font(.title2)
@@ -522,6 +418,8 @@ struct WordRowView: View {
     NavigationStack {
         WordListView()
     }
+    .environmentObject(SettingsManager.shared)
+    .environmentObject(GlobalPlaybackManager(speechService: .shared, settings: .shared))
 }
 
 // MARK: - Badge Overlay

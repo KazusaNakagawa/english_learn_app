@@ -14,6 +14,10 @@ extension Notification.Name {
 /// These warnings do not impact user experience or app stability.
 @MainActor
 class SpeechService: NSObject, ObservableObject {
+    // MARK: - Shared Instance
+
+    static let shared = SpeechService()
+
     // MARK: - Constants
 
     private enum Constants {
@@ -21,7 +25,6 @@ class SpeechService: NSObject, ObservableObject {
         static let pitchMultiplier: Float = 1.0
         static let volume: Float = 1.0
         static let utteranceDelay: TimeInterval = 0.0
-        static let voiceGenderKey = "voiceGender"
     }
 
     // MARK: - Properties
@@ -30,9 +33,12 @@ class SpeechService: NSObject, ObservableObject {
     private var audioPlayer: AVAudioPlayer?
     private var currentUtterance: AVSpeechUtterance?
 
+    /// Unique identifier for the current VOICEVOX request.
+    /// Used to invalidate stale async tasks when stop() or new speak() is called.
+    private var voicevoxRequestID = UUID()
+
     @Published var isSpeaking = false
     @Published var speakingLanguage: String? = nil
-    @Published var voiceGender: SettingsManager.VoiceGender = .default_
 
     /// Publisher that emits when speech finishes naturally (not cancelled).
     /// Use this instead of onChange(of: isSpeaking) for reliable completion detection.
@@ -41,7 +47,6 @@ class SpeechService: NSObject, ObservableObject {
     override init() {
         super.init()
         synthesizer.delegate = self
-        observeSettingsChanges()
         configureAudioSession()
     }
 
@@ -74,26 +79,11 @@ class SpeechService: NSObject, ObservableObject {
         }
     }
 
-    private func observeSettingsChanges() {
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(updateVoiceGender),
-            name: UserDefaults.didChangeNotification,
-            object: nil
-        )
-    }
-
-    @objc private func updateVoiceGender() {
-        guard let saved = UserDefaults.standard.string(forKey: Constants.voiceGenderKey),
-              let gender = SettingsManager.VoiceGender(rawValue: saved) else { return }
-
-        // Defer update to avoid "Publishing changes from within view updates" warning
-        Task { @MainActor in
-            self.voiceGender = gender
-        }
-    }
-
-    /// Speaks the given text using the specified language and voice gender.
+    /// Speaks the given text using language-specific voice settings from SettingsManager.
+    ///
+    /// This method automatically selects the appropriate voice based on the language:
+    /// - For English ("en-US"): Uses englishVoiceGender setting
+    /// - For Japanese ("ja-JP"): Uses japaneseVoiceGender setting
     ///
     /// This method stops any ongoing speech before starting new playback. It tracks
     /// the current utterance to prevent race conditions from stale delegate callbacks.
@@ -101,10 +91,18 @@ class SpeechService: NSObject, ObservableObject {
     /// - Parameters:
     ///   - text: The text to be spoken
     ///   - language: The language code (default: "en-US")
-    ///   - voiceGender: The voice gender preference (default: .default_)
     ///   - isContinuousPlayback: Set to true when called from continuous playback to prevent stopping the session (default: false)
-    func speak(_ text: String, language: String = "en-US", voiceGender: SettingsManager.VoiceGender = .default_, isContinuousPlayback: Bool = false) {
-        stop()
+    func speak(_ text: String, language: String = "en-US", isContinuousPlayback: Bool = false) {
+        // Only stop if actually playing to avoid putting synthesizer in unstable state
+        if synthesizer.isSpeaking || audioPlayer?.isPlaying == true {
+            stop()
+        } else {
+            // Reset state without calling stopSpeaking
+            currentUtterance = nil
+            audioPlayer = nil
+            isSpeaking = false
+            speakingLanguage = nil
+        }
 
         // Only notify when starting individual playback (not continuous playback)
         // This allows continuous playback views to stop cleanly when user taps individual play buttons
@@ -114,11 +112,17 @@ class SpeechService: NSObject, ObservableObject {
 
         speakingLanguage = language
 
+        // Get the appropriate voice gender based on language
+        let settings = SettingsManager.shared
+        let voiceGender = language == "ja-JP" ? settings.japaneseVoiceGender : settings.englishVoiceGender
+
         if voiceGender == .zundamon {
             isSpeaking = true
             _ = activateAudioSession()
+            let requestID = UUID()
+            voicevoxRequestID = requestID
             Task { [weak self] in
-                await self?.speakWithVoicevox(text)
+                await self?.speakWithVoicevox(text, requestID: requestID)
             }
             return
         }
@@ -127,88 +131,162 @@ class SpeechService: NSObject, ObservableObject {
 
         currentUtterance = utterance
         isSpeaking = true
-        // Activate audio session right before starting local TTS to avoid
-        // preempting other audio until necessary.
-        _ = activateAudioSession()
-        synthesizer.speak(utterance)
+        // Ensure audio session is active for background playback.
+        // During continuous playback, avoid reconfiguring category to prevent interruption.
+        let audioSession = AVAudioSession.sharedInstance()
+        do {
+            // Only set category if we're starting fresh (not during continuous playback)
+            if !isContinuousPlayback || audioSession.category != .playback {
+                try audioSession.setCategory(.playback, mode: .default)
+            }
+            try audioSession.setActive(true)
+        } catch {
+            print("Failed to configure audio session for native TTS: \(error.localizedDescription)")
+        }
+
+        // Small delay to allow audio session to fully activate before speaking
+        // This fixes an issue where speak() fails silently on first call
+        if !isContinuousPlayback {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+                self?.synthesizer.speak(utterance)
+            }
+        } else {
+            synthesizer.speak(utterance)
+        }
     }
 
     /// Synthesizes speech using the VOICEVOX API and plays it via AVAudioPlayer.
     ///
-    /// This method makes two HTTP requests to the VOICEVOX server:
+    /// This method first checks the audio cache for previously synthesized audio.
+    /// On cache miss, it fetches from the VOICEVOX API and caches the result.
+    ///
+    /// - Parameters:
+    ///   - text: The text to be spoken
+    ///   - requestID: The unique identifier for this request, used to invalidate stale tasks
+    private func speakWithVoicevox(_ text: String, requestID: UUID) async {
+        let speakerID = SettingsManager.shared.voicevoxStyle.rawValue
+
+        // Check cache first
+        if let cachedAudio = await AudioCache.shared.get(text: text, speakerID: speakerID) {
+            // Verify request is still valid before playing
+            guard requestID == voicevoxRequestID else { return }
+            playAudioData(cachedAudio, text: text, speakerID: speakerID)
+            return
+        }
+
+        // Cache miss - fetch from API
+        guard let audioData = await fetchVoicevoxAudio(text: text, speakerID: speakerID) else {
+            // Verify request is still valid before handling failure
+            guard requestID == voicevoxRequestID else { return }
+            handleVoicevoxFailure()
+            return
+        }
+
+        // Verify request is still valid before caching and playing
+        guard requestID == voicevoxRequestID else { return }
+
+        // Cache the audio data for future playback
+        await AudioCache.shared.set(audioData, text: text, speakerID: speakerID)
+
+        playAudioData(audioData, text: text, speakerID: speakerID)
+    }
+
+    /// Fetches audio data from VOICEVOX API.
+    ///
+    /// Makes two HTTP requests to the VOICEVOX server:
     /// 1. POST /audio_query to generate query parameters
     /// 2. POST /synthesis to synthesize audio from the query
     ///
-    /// - Parameter text: The Japanese text to be spoken
-    private func speakWithVoicevox(_ text: String) async {
+    /// - Parameters:
+    ///   - text: The text to synthesize
+    ///   - speakerID: The VOICEVOX speaker ID
+    /// - Returns: Audio data on success, nil on failure
+    private func fetchVoicevoxAudio(text: String, speakerID: Int) async -> Data? {
         let baseURL = AppConfig.voicevoxBaseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        guard !baseURL.isEmpty else {
-            handleVoicevoxFailure()
-            return
-        }
-
-        // Ensure API key is configured
-        let apiKey = AppConfig.voicevoxApiKey
-        guard !apiKey.isEmpty else {
+        guard !baseURL.isEmpty else { return nil }
+        guard !AppConfig.voicevoxApiKey.isEmpty else {
             print("VOICEVOX API key not configured in AppConfig")
-            handleVoicevoxFailure()
-            return
+            return nil
         }
-
-        let speakerID = SettingsManager.shared.voicevoxStyle.rawValue
 
         guard let encodedText = text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
               let queryURL = URL(string: "\(baseURL)/audio_query?text=\(encodedText)&speaker=\(speakerID)"),
               let synthURL = URL(string: "\(baseURL)/synthesis?speaker=\(speakerID)") else {
-            handleVoicevoxFailure()
-            return
+            return nil
         }
 
         do {
             let (queryData, queryResponse) = try await performPOSTRequest(to: queryURL)
             guard isSuccessfulResponse(queryResponse) else {
                 print("VOICEVOX audio_query failed: \((queryResponse as? HTTPURLResponse)?.statusCode ?? -1)")
-                handleVoicevoxFailure()
-                return
+                return nil
             }
 
             let (audioData, synthResponse) = try await performPOSTRequest(to: synthURL, body: queryData, contentType: "application/json")
             guard isSuccessfulResponse(synthResponse) else {
                 print("VOICEVOX synthesis failed: \((synthResponse as? HTTPURLResponse)?.statusCode ?? -1)")
-                handleVoicevoxFailure()
-                return
+                return nil
             }
 
-            // Validate audio data before creating AVAudioPlayer to avoid buffer warnings
             guard !audioData.isEmpty else {
                 print("VOICEVOX returned empty audio data")
+                return nil
+            }
+
+            return audioData
+        } catch {
+            print("VOICEVOX error: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    /// Plays audio data using AVAudioPlayer.
+    ///
+    /// If playback fails due to corrupt audio data, the cache entry is evicted
+    /// to allow re-fetching on the next attempt.
+    ///
+    /// - Parameters:
+    ///   - audioData: The audio data to play
+    ///   - text: The original text (used for cache eviction on failure)
+    ///   - speakerID: The VOICEVOX speaker ID (used for cache eviction on failure)
+    private func playAudioData(_ audioData: Data, text: String, speakerID: Int) {
+        // Capture current request ID for eviction validation
+        let currentRequestID = voicevoxRequestID
+
+        do {
+            audioPlayer = try AVAudioPlayer(data: audioData)
+            audioPlayer?.delegate = self
+
+            // Enable background playback and ensure audio session is active
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setCategory(.playback, mode: .default)
+            try audioSession.setActive(true)
+
+            guard let player = audioPlayer, player.play() else {
+                // Playback failed to start - evict potentially corrupt cache entry
+                print("AVAudioPlayer.play() returned false - evicting cache entry")
+                Task { [weak self] in
+                    guard self?.voicevoxRequestID == currentRequestID else { return }
+                    await AudioCache.shared.evict(text: text, speakerID: speakerID)
+                }
                 handleVoicevoxFailure()
                 return
             }
-
-            await MainActor.run {
-                do {
-                    audioPlayer = try AVAudioPlayer(data: audioData)
-                    audioPlayer?.delegate = self
-                    audioPlayer?.play()
-                } catch {
-                    print("AVAudioPlayer error: \(error.localizedDescription)")
-                    isSpeaking = false
-                    speechFinishedPublisher.send()
-                }
-            }
         } catch {
-            print("VOICEVOX error: \(error.localizedDescription)")
+            // Initialization failed - evict potentially corrupt cache entry
+            print("AVAudioPlayer error: \(error.localizedDescription)")
+            Task { [weak self] in
+                guard self?.voicevoxRequestID == currentRequestID else { return }
+                await AudioCache.shared.evict(text: text, speakerID: speakerID)
+            }
             handleVoicevoxFailure()
         }
     }
 
     /// Handles VOICEVOX playback failure by resetting state and notifying listeners.
-    private nonisolated func handleVoicevoxFailure() {
-        Task { @MainActor [weak self] in
-            self?.isSpeaking = false
-            self?.speechFinishedPublisher.send()
-        }
+    private func handleVoicevoxFailure() {
+        isSpeaking = false
+        speechFinishedPublisher.send()
     }
 
     // MARK: - Helper Methods
@@ -281,6 +359,7 @@ class SpeechService: NSObject, ObservableObject {
     /// fully stopping a playback session (e.g., user stops continuous playback or view disappears).
     func stop() {
         currentUtterance = nil
+        voicevoxRequestID = UUID()  // Invalidate in-flight VOICEVOX requests
         synthesizer.stopSpeaking(at: .immediate)
         audioPlayer?.stop()
         audioPlayer = nil
