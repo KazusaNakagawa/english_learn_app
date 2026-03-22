@@ -1,5 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { playTTS, type VoiceType } from '@/services/AudioService'
 import { useNavigate } from 'react-router'
+import { getCacheUsage, clearCache } from '@/services/AudioCacheService'
+import { loadSettings, saveSettings, type AppSettings } from '@/services/SettingsService'
 import {
   ChevronRight, FlaskConical, Volume2,
   Upload, Download, Trash2, FileText, Shield,
@@ -101,93 +104,129 @@ function SegmentedControl<T extends string>({
   )
 }
 
-// ---- Helpers ----
-
-function resolveEnVoice(
-  selection: EnVoice,
-  voices: SpeechSynthesisVoice[],
-): SpeechSynthesisVoice | null {
-  const female = voices.find((v) => /female/i.test(v.name)) ?? null
-  if (selection === 'デフォルト') return female
-  if (selection === '女性') return female
-  if (selection === '男性') return voices.find((v) => /male/i.test(v.name) && !/female/i.test(v.name)) ?? null
-  return null
+function InlineAlert({
+  type, message, className,
+}: {
+  type: 'error' | 'warning' | 'success'
+  message: string
+  className?: string
+}) {
+  const variants = {
+    error:   { color: 'text-[var(--ios-red)]',    Icon: TriangleAlert },
+    warning: { color: 'text-[var(--ios-orange)]', Icon: TriangleAlert },
+    success: { color: 'text-[var(--ios-green)]',  Icon: CheckCircle2  },
+  }
+  const { color, Icon } = variants[type]
+  return (
+    <div className={cn('flex items-center gap-1.5', className)}>
+      <Icon size={13} className={cn('shrink-0', color)} />
+      <p className={cn('text-xs', color)}>{message}</p>
+    </div>
+  )
 }
 
-async function playVoicevoxAudio(
-  text: string,
-  speakerId: string,
-  apiKey: string,
-  onEnd: () => void,
-): Promise<boolean> {
-  const base = import.meta.env.VITE_VOICEVOX_ENDPOINT_POC ?? ''
-  if (!base || !apiKey) return false
-  const headers = { 'Content-Type': 'application/json', 'x-api-key': apiKey }
-  try {
-    const qRes = await fetch(`${base}/audio_query?text=${encodeURIComponent(text)}&speaker=${speakerId}`, { method: 'POST', headers })
-    if (!qRes.ok) return false
-    const sRes = await fetch(`${base}/synthesis?speaker=${speakerId}`, {
-      method: 'POST', headers, body: JSON.stringify(await qRes.json()),
-    })
-    if (!sRes.ok) return false
-    const url = URL.createObjectURL(await sRes.blob())
-    const audio = new Audio(url)
-    audio.onended = () => { URL.revokeObjectURL(url); onEnd() }
-    audio.onerror = () => { URL.revokeObjectURL(url); onEnd() }
-    await audio.play()
-    return true
-  } catch {
-    return false
-  }
+// ---- Helpers ----
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0バイト'
+  if (bytes < 1024) return `${bytes}バイト`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 // ---- Page ----
 
+const EN_VOICE_MAP: Record<string, EnVoice> = {
+  female: '女性', male: '男性', zundamon: 'ずんだもん', default: 'デフォルト',
+}
+const EN_VOICE_RMAP: Record<EnVoice, string> = {
+  '女性': 'female', '男性': 'male', 'ずんだもん': 'zundamon', 'デフォルト': 'default',
+}
+const JA_VOICE_MAP: Record<string, JaVoice> = { zundamon: 'ずんだもん', default: 'デフォルト' }
+const JA_VOICE_RMAP: Record<JaVoice, string> = { 'ずんだもん': 'zundamon', 'デフォルト': 'default' }
+const PATTERN_MAP: Record<string, Pattern> = { bilingual: 'バイリンガル (EN+JA)', 'en-only': '英語のみ (EN+EN)' }
+const PATTERN_RMAP: Record<Pattern, string> = { 'バイリンガル (EN+JA)': 'bilingual', '英語のみ (EN+EN)': 'en-only' }
+
+// Single loadSettings() call to derive all initial state values
+function initFromSettings() {
+  const s = loadSettings()
+  const v = Number(s.intervalSec)
+  return {
+    enVoice:   (EN_VOICE_MAP[s.enVoice]   ?? '女性')                as EnVoice,
+    jaVoice:   (JA_VOICE_MAP[s.jaVoice]   ?? 'ずんだもん')          as JaVoice,
+    pattern:   (PATTERN_MAP[s.playPattern] ?? 'バイリンガル (EN+JA)') as Pattern,
+    interval:  Number.isFinite(v) ? Math.min(5, Math.max(0.5, v)) : 1.5,
+    vvStyle:   s.voicevoxStyle,
+    vvKey:     s.voicevoxApiKey,
+    openAIKey: s.openAIKey,
+    aiModel:   s.openAIModel,
+  }
+}
+
 export default function SettingsPage() {
   const navigate = useNavigate()
 
-  const [enVoice,   setEnVoice]   = useState<EnVoice>('デフォルト')
-  const [jaVoice,   setJaVoice]   = useState<JaVoice>('ずんだもん')
-  const [pattern,   setPattern]   = useState<Pattern>('バイリンガル (EN+JA)')
-  const [interval,  setIntervalS] = useState(1.5)
-  const [vvStyle,   setVvStyle]   = useState('22')
-  const [vvKey,     setVvKey]     = useState('')
-  const [openAIKey, setOpenAIKey] = useState('')
-  const [aiModel,   setAiModel]   = useState('gpt-4o-mini')
-  const [enVoices,  setEnVoices]  = useState<SpeechSynthesisVoice[]>([])
-  const [playing,   setPlaying]   = useState(false)
+  const [init] = useState(initFromSettings)
+  const [enVoice,   setEnVoiceRaw]   = useState<EnVoice>(init.enVoice)
+  const [jaVoice,   setJaVoiceRaw]   = useState<JaVoice>(init.jaVoice)
+  const [pattern,   setPatternRaw]   = useState<Pattern>(init.pattern)
+  const [interval,  setIntervalSRaw] = useState(init.interval)
+  const [vvStyle,   setVvStyleRaw]   = useState(init.vvStyle)
+  const [vvKey,     setVvKeyRaw]     = useState(init.vvKey)
+  const [openAIKey, setOpenAIKeyRaw] = useState(init.openAIKey)
+  const [aiModel,   setAiModelRaw]   = useState(init.aiModel)
+  const [playing,     setPlaying]    = useState(false)
+  const [coldStart,   setColdStart]  = useState(false)
+  const [playError,   setPlayError]  = useState<string | null>(null)
+  const [cacheError,  setCacheError] = useState<string | null>(null)
+  const [cacheBytes,  setCacheBytes] = useState(0)
 
-  useEffect(() => {
-    const load = () =>
-      setEnVoices(window.speechSynthesis.getVoices().filter((v) => v.lang.startsWith('en')))
-    load()
-    window.speechSynthesis.onvoiceschanged = load
+  // Wrappers that also persist to localStorage
+  const setEnVoice   = (v: EnVoice) => { setEnVoiceRaw(v);   saveSettings({ enVoice: EN_VOICE_RMAP[v] as AppSettings['enVoice'] }) }
+  const setJaVoice   = (v: JaVoice) => { setJaVoiceRaw(v);   saveSettings({ jaVoice: JA_VOICE_RMAP[v] as AppSettings['jaVoice'] }) }
+  const setPattern   = (v: Pattern) => { setPatternRaw(v);   saveSettings({ playPattern: PATTERN_RMAP[v] as AppSettings['playPattern'] }) }
+  const setIntervalS = (v: number)  => { setIntervalSRaw(v); saveSettings({ intervalSec: v }) }
+  const setVvStyle   = (v: string)  => { setVvStyleRaw(v);   saveSettings({ voicevoxStyle: v }) }
+  const setVvKey     = (v: string)  => { setVvKeyRaw(v);     saveSettings({ voicevoxApiKey: v }) }
+  const setOpenAIKey = (v: string)  => { setOpenAIKeyRaw(v); saveSettings({ openAIKey: v }) }
+  const setAiModel   = (v: string)  => { setAiModelRaw(v);   saveSettings({ openAIModel: v }) }
+
+  const refreshCacheUsage = useCallback(() => {
+    return getCacheUsage()
+      .then(setCacheBytes)
+      .catch((err) => setCacheError(err instanceof Error ? err.message : 'キャッシュ情報の取得に失敗しました'))
   }, [])
+
+  useEffect(() => { refreshCacheUsage() }, [refreshCacheUsage])
 
   const resolvedVvKey = vvKey || (import.meta.env.VITE_VOICEVOX_API_KEY_POC ?? '')
 
-  async function playSample(text: string, lang: 'en' | 'ja', useZundamon: boolean) {
+  async function playSample(text: string, lang: 'en' | 'ja') {
     if (playing) return
-    window.speechSynthesis.cancel()
     setPlaying(true)
-    const done = () => setPlaying(false)
-
-    if (useZundamon) {
-      const ok = await playVoicevoxAudio(text, vvStyle, resolvedVvKey, done)
-      if (!ok) done()
-      return
+    setPlayError(null)
+    try {
+      const voice = (lang === 'en' ? EN_VOICE_RMAP[enVoice] : JA_VOICE_RMAP[jaVoice]) as VoiceType
+      await playTTS(text, {
+        voice,
+        speakerId: vvStyle,
+        apiKey: resolvedVvKey,
+        lang,
+        onColdStart: () => setColdStart(true),
+        onColdStartEnd: () => setColdStart(false),
+      })
+    } catch (err) {
+      setPlayError(err instanceof Error ? err.message : '再生に失敗しました')
+    } finally {
+      setColdStart(false)
+      setPlaying(false)
+      await refreshCacheUsage()
     }
-
-    const utt = new SpeechSynthesisUtterance(text)
-    utt.lang = lang === 'en' ? 'en-US' : 'ja-JP'
-    if (lang === 'en') {
-      const voice = resolveEnVoice(enVoice, enVoices)
-      if (voice) utt.voice = voice
-    }
-    utt.onend = done
-    utt.onerror = done
-    window.speechSynthesis.speak(utt)
   }
+
+  const coldStartHint = coldStart && (
+    <p className="text-xs text-muted-foreground mt-1.5">ずんだもんを起動中です（初回は30秒ほどかかります）...</p>
+  )
 
   const patternDesc = pattern === 'バイリンガル (EN+JA)'
     ? 'バイリンガル: 英語 → 日本語 → 英語 の順で再生します'
@@ -210,10 +249,12 @@ export default function SettingsPage() {
               <Button
                 className="w-full bg-[var(--ios-blue)] hover:bg-[var(--ios-blue)]/90 text-white"
                 disabled={playing}
-                onClick={() => playSample('This is a sample of the English voice.', 'en', enVoice === 'ずんだもん')}
+                onClick={() => playSample('This is a sample of the English voice.', 'en')}
               >
                 <Volume2 size={16} className="mr-1.5" />英語サンプルを再生
               </Button>
+              {coldStartHint}
+              {playError && <InlineAlert type="error" message={playError} className="mt-1.5" />}
             </Row>
           </GroupCard>
         </div>
@@ -227,10 +268,11 @@ export default function SettingsPage() {
               <Button
                 className="w-full bg-[var(--ios-blue)] hover:bg-[var(--ios-blue)]/90 text-white"
                 disabled={playing}
-                onClick={() => playSample('これは日本語の音声サンプルです。', 'ja', jaVoice === 'ずんだもん')}
+                onClick={() => playSample('これは日本語の音声サンプルです。', 'ja')}
               >
                 <Volume2 size={16} className="mr-1.5" />日本語サンプルを再生
               </Button>
+              {coldStartHint}
             </Row>
           </GroupCard>
         </div>
@@ -280,10 +322,7 @@ export default function SettingsPage() {
                 className="border-0 shadow-none px-0 focus-visible:ring-0 text-sm"
               />
               {!vvKey && (
-                <div className="flex items-center gap-1.5 mt-1.5">
-                  <TriangleAlert size={13} className="text-[var(--ios-orange)] shrink-0" />
-                  <p className="text-xs text-[var(--ios-orange)]">AppConfigのキーを使用中（設定で上書き可）</p>
-                </div>
+                <InlineAlert type="warning" message="AppConfigのキーを使用中（設定で上書き可）" className="mt-1.5" />
               )}
             </Row>
             <Row><p className="text-xs text-muted-foreground">© VOICEVOX:ずんだもん</p></Row>
@@ -301,10 +340,7 @@ export default function SettingsPage() {
                 className="border-0 shadow-none px-0 focus-visible:ring-0 text-sm"
               />
               {openAIKey && (
-                <div className="flex items-center gap-1.5 mt-1.5">
-                  <CheckCircle2 size={13} className="text-[var(--ios-green)] shrink-0" />
-                  <p className="text-xs text-[var(--ios-green)]">APIキーが設定されています</p>
-                </div>
+                <InlineAlert type="success" message="APIキーが設定されています" className="mt-1.5" />
               )}
             </Row>
           </GroupCard>
@@ -343,10 +379,29 @@ export default function SettingsPage() {
             <Row>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">音声キャッシュ</span>
-                <span className="text-sm text-muted-foreground">0バイト</span>
+                <span className="text-sm text-muted-foreground">{formatBytes(cacheBytes)}</span>
               </div>
             </Row>
-            <ListRow icon={Trash2} iconColor="text-[var(--ios-red)]" label="キャッシュをクリア" destructive />
+            <ListRow
+              icon={Trash2}
+              iconColor="text-[var(--ios-red)]"
+              label="キャッシュをクリア"
+              destructive
+              onClick={async () => {
+                setCacheError(null)
+                try {
+                  await clearCache()
+                  await refreshCacheUsage()
+                } catch (err) {
+                  setCacheError(err instanceof Error ? err.message : 'キャッシュのクリアに失敗しました')
+                }
+              }}
+            />
+            {cacheError && (
+              <Row>
+                <InlineAlert type="error" message={cacheError} />
+              </Row>
+            )}
           </GroupCard>
         </div>
 
