@@ -63,7 +63,10 @@ async function fetchVoicevoxWav(
   onColdStartEnd?: () => void,
 ): Promise<Blob> {
   const headers = { 'Content-Type': 'application/json', 'x-api-key': apiKey }
-  const coldStartTimer = onColdStart ? setTimeout(() => onColdStart(), 3000) : null
+  let coldStartTriggered = false
+  const coldStartTimer = onColdStart
+    ? setTimeout(() => { coldStartTriggered = true; onColdStart() }, 3000)
+    : null
   try {
     const qRes = await fetch(
       `${VOICEVOX_BASE}/audio_query?text=${encodeURIComponent(text)}&speaker=${speakerId}`,
@@ -81,7 +84,7 @@ async function fetchVoicevoxWav(
     return await sRes.blob()
   } finally {
     if (coldStartTimer) clearTimeout(coldStartTimer)
-    onColdStartEnd?.()
+    if (coldStartTriggered) onColdStartEnd?.()
   }
 }
 
@@ -110,9 +113,10 @@ export async function playTTS(
   const useVoicevox = voice === 'zundamon' && !!VOICEVOX_BASE && !!apiKey
 
   if (useVoicevox) {
+    const cacheKey = await makeCacheKey(text, speakerId)
+
     // 1. Cache hit
     try {
-      const cacheKey = await makeCacheKey(text, speakerId)
       const cached = await getCache(cacheKey)
       if (cached) {
         console.debug('[AudioService] cache hit:', cacheKey)
@@ -127,7 +131,6 @@ export async function playTTS(
     try {
       console.debug('[AudioService] fetching from VOICEVOX, speaker:', speakerId)
       const blob = await fetchVoicevoxWav(text, speakerId, apiKey, onColdStart, onColdStartEnd)
-      const cacheKey = await makeCacheKey(text, speakerId)
       await putCache(cacheKey, text, speakerId, blob)
       await evictCache(CACHE_MAX_BYTES)
       console.debug('[AudioService] cached and playing, size:', blob.size)

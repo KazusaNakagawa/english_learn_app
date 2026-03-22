@@ -130,15 +130,14 @@ const PATTERN_RMAP: Record<Pattern, string> = { 'バイリンガル (EN+JA)': 'b
 export default function SettingsPage() {
   const navigate = useNavigate()
 
-  const saved = loadSettings()
-  const [enVoice,   setEnVoiceRaw]   = useState<EnVoice>(EN_VOICE_MAP[saved.enVoice] ?? '女性')
-  const [jaVoice,   setJaVoiceRaw]   = useState<JaVoice>(JA_VOICE_MAP[saved.jaVoice] ?? 'ずんだもん')
-  const [pattern,   setPatternRaw]   = useState<Pattern>(PATTERN_MAP[saved.playPattern] ?? 'バイリンガル (EN+JA)')
-  const [interval,  setIntervalS]    = useState(saved.intervalSec)
-  const [vvStyle,   setVvStyleRaw]   = useState(saved.voicevoxStyle)
-  const [vvKey,     setVvKeyRaw]     = useState(saved.voicevoxApiKey)
-  const [openAIKey, setOpenAIKeyRaw] = useState(saved.openAIKey)
-  const [aiModel,   setAiModelRaw]   = useState(saved.openAIModel)
+  const [enVoice,   setEnVoiceRaw]   = useState<EnVoice>(() => { const s = loadSettings(); return EN_VOICE_MAP[s.enVoice] ?? '女性' })
+  const [jaVoice,   setJaVoiceRaw]   = useState<JaVoice>(() => { const s = loadSettings(); return JA_VOICE_MAP[s.jaVoice] ?? 'ずんだもん' })
+  const [pattern,   setPatternRaw]   = useState<Pattern>(() => { const s = loadSettings(); return PATTERN_MAP[s.playPattern] ?? 'バイリンガル (EN+JA)' })
+  const [interval,  setIntervalSRaw] = useState(() => loadSettings().intervalSec)
+  const [vvStyle,   setVvStyleRaw]   = useState(() => loadSettings().voicevoxStyle)
+  const [vvKey,     setVvKeyRaw]     = useState(() => loadSettings().voicevoxApiKey)
+  const [openAIKey, setOpenAIKeyRaw] = useState(() => loadSettings().openAIKey)
+  const [aiModel,   setAiModelRaw]   = useState(() => loadSettings().openAIModel)
   const [playing,   setPlaying]      = useState(false)
   const [cacheBytes, setCacheBytes]  = useState(0)
 
@@ -146,6 +145,7 @@ export default function SettingsPage() {
   const setEnVoice = (v: EnVoice) => { setEnVoiceRaw(v); saveSettings({ enVoice: EN_VOICE_RMAP[v] as AppSettings['enVoice'] }) }
   const setJaVoice = (v: JaVoice) => { setJaVoiceRaw(v); saveSettings({ jaVoice: JA_VOICE_RMAP[v] as AppSettings['jaVoice'] }) }
   const setPattern = (v: Pattern) => { setPatternRaw(v); saveSettings({ playPattern: PATTERN_RMAP[v] as AppSettings['playPattern'] }) }
+  const setIntervalS = (v: number) => { setIntervalSRaw(v); saveSettings({ intervalSec: v }) }
   const setVvStyle = (v: string)  => { setVvStyleRaw(v); saveSettings({ voicevoxStyle: v }) }
   const setVvKey   = (v: string)  => { setVvKeyRaw(v);   saveSettings({ voicevoxApiKey: v }) }
   const setOpenAIKey = (v: string) => { setOpenAIKeyRaw(v); saveSettings({ openAIKey: v }) }
@@ -229,7 +229,7 @@ export default function SettingsPage() {
               </div>
               <input
                 type="range" min={0.5} max={5.0} step={0.5} value={interval}
-                onChange={(e) => { const v = Number(e.target.value); setIntervalS(v); saveSettings({ intervalSec: v }) }}
+                onChange={(e) => setIntervalS(Number(e.target.value))}
                 className="w-full accent-[var(--ios-blue)]"
               />
             </Row>

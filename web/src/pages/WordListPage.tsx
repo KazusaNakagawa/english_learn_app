@@ -50,6 +50,8 @@ export default function WordListPage() {
         apiKey: s.voicevoxApiKey || (import.meta.env.VITE_VOICEVOX_API_KEY_POC ?? ''),
         lang,
       })
+    } catch (err) {
+      console.error('[WordListPage] playback failed:', err)
     } finally {
       setPlayingId(null)
     }

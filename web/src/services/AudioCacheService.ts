@@ -66,9 +66,10 @@ export async function getCache(cacheKey: string): Promise<AudioCacheRecord | nul
       // update last_accessed_at (LRU touch)
       record.last_accessed_at = new Date().toISOString()
       tx.objectStore(STORE).put(record)
-      resolve(record)
     }
     req.onerror = () => reject(req.error)
+    tx.oncomplete = () => resolve(req.result as AudioCacheRecord | null)
+    tx.onerror    = () => reject(tx.error)
   })
 }
 
@@ -123,8 +124,9 @@ export async function clearCache(): Promise<void> {
 /** LRU eviction: remove oldest last_accessed_at records until total < maxBytes */
 export async function evictCache(maxBytes: number): Promise<void> {
   const db = await openDB()
+  const tx = db.transaction(STORE, 'readwrite')
+
   const records: AudioCacheRecord[] = await new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, 'readonly')
     const req = tx.objectStore(STORE).index('last_accessed_at').getAll()
     req.onsuccess = () => resolve(req.result as AudioCacheRecord[])
     req.onerror   = () => reject(req.error)
@@ -136,7 +138,6 @@ export async function evictCache(maxBytes: number): Promise<void> {
   // oldest first
   records.sort((a, b) => a.last_accessed_at.localeCompare(b.last_accessed_at))
 
-  const tx = db.transaction(STORE, 'readwrite')
   for (const r of records) {
     if (total <= maxBytes) break
     tx.objectStore(STORE).delete(r.id)
