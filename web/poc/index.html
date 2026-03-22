@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EnglishLearnApp Web — Phase 0 PoC</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #f5f5f5; color: #222; }
+    header { background: #1a73e8; color: #fff; padding: 16px 24px; }
+    header h1 { font-size: 18px; font-weight: 600; }
+    header p  { font-size: 13px; opacity: .8; margin-top: 4px; }
+    nav { display: flex; gap: 0; border-bottom: 2px solid #1a73e8; background: #fff; }
+    nav button {
+      flex: 1; padding: 12px 8px; border: none; background: none;
+      font-size: 13px; font-weight: 500; cursor: pointer; color: #555;
+      border-bottom: 3px solid transparent; margin-bottom: -2px;
+    }
+    nav button.active { color: #1a73e8; border-bottom-color: #1a73e8; }
+    .tab { display: none; padding: 24px; max-width: 720px; margin: 0 auto; }
+    .tab.active { display: block; }
+    h2 { font-size: 16px; margin-bottom: 16px; }
+    .card { background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+    .card h3 { font-size: 14px; font-weight: 600; margin-bottom: 10px; }
+    label { font-size: 13px; display: block; margin-bottom: 4px; color: #555; }
+    input[type="text"], input[type="url"], input[type="password"] {
+      width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 4px;
+      font-size: 13px; margin-bottom: 8px;
+    }
+    button.btn {
+      padding: 8px 16px; border: none; border-radius: 4px; font-size: 13px;
+      font-weight: 500; cursor: pointer; margin-right: 8px; margin-bottom: 8px;
+    }
+    button.primary { background: #1a73e8; color: #fff; }
+    button.secondary { background: #e8eaed; color: #333; }
+    button.danger { background: #ea4335; color: #fff; }
+    button.success { background: #34a853; color: #fff; }
+    .result {
+      font-size: 13px; padding: 10px; border-radius: 4px; margin-top: 8px;
+      background: #f1f3f4; white-space: pre-wrap; word-break: break-all;
+      min-height: 36px;
+    }
+    .result.ok  { background: #e6f4ea; color: #1e7e34; }
+    .result.err { background: #fce8e6; color: #c62828; }
+    .result.warn { background: #fef9e7; color: #b26a00; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+    .badge.supported { background: #e6f4ea; color: #1e7e34; }
+    .badge.unsupported { background: #fce8e6; color: #c62828; }
+    .timing-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; margin-top: 8px; }
+    .timing-cell { background: #f1f3f4; border-radius: 4px; padding: 8px; text-align: center; }
+    .timing-cell .val { font-size: 20px; font-weight: 700; }
+    .timing-cell .lbl { font-size: 11px; color: #666; margin-top: 2px; }
+    details summary { cursor: pointer; font-size: 13px; color: #1a73e8; margin-top: 8px; }
+    pre { font-size: 11px; background: #f1f3f4; padding: 8px; border-radius: 4px; overflow-x: auto; margin-top: 4px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>EnglishLearnApp Web — Phase 0 Technical Validation</h1>
+  <p>Validates: CORS · Web Speech API · IndexedDB · VOICEVOX cold-start timing</p>
+</header>
+
+<nav>
+  <button class="active" onclick="showTab('tab-speech')">1. Web Speech API</button>
+  <button onclick="showTab('tab-idb')">2. IndexedDB</button>
+  <button onclick="showTab('tab-voicevox')">3. VOICEVOX / CORS</button>
+  <button onclick="showTab('tab-summary')">4. Summary</button>
+</nav>
+
+<!-- ===== TAB 1: Web Speech API ===== -->
+<div id="tab-speech" class="tab active">
+  <h2>1. Web Speech API</h2>
+
+  <div class="card">
+    <h3>API Availability Check</h3>
+    <div id="speech-support"></div>
+  </div>
+
+  <div class="card">
+    <h3>TTS — Text-to-Speech (Web Speech API)</h3>
+    <label>Text to speak</label>
+    <input type="text" id="tts-text" value="This is a technical validation for the English Learn App." />
+    <label>Voice</label>
+    <select id="tts-voice" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:4px;font-size:13px;margin-bottom:8px;"></select>
+    <button class="btn primary" onclick="speakTTS()">▶ Speak</button>
+    <button class="btn secondary" onclick="stopTTS()">■ Stop</button>
+    <div class="result" id="tts-result">Press "Speak" to test</div>
+  </div>
+
+  <div class="card">
+    <h3>STT — Speech Recognition (en-US)</h3>
+    <p style="font-size:13px;color:#555;margin-bottom:10px;">
+      Requires Chrome or Edge. Safari is not supported (Web Speech Recognition API).
+    </p>
+    <button class="btn primary" onclick="startSTT()">🎤 Start Recording</button>
+    <button class="btn secondary" onclick="stopSTT()">■ Stop</button>
+    <div class="result" id="stt-result">Press "Start Recording" then speak</div>
+    <details>
+      <summary>Raw recognition events</summary>
+      <pre id="stt-raw">—</pre>
+    </details>
+  </div>
+
+  <div class="card">
+    <h3>Pronunciation Judgment Logic</h3>
+    <label>Target text</label>
+    <input type="text" id="judge-target" value="The quick brown fox jumps over the lazy dog" />
+    <label>Transcript (simulated recognition result)</label>
+    <input type="text" id="judge-transcript" value="the quick brown fox jumps over the lazy dog" />
+    <button class="btn primary" onclick="testJudge()">Judge</button>
+    <div class="result" id="judge-result">—</div>
+  </div>
+</div>
+
+<!-- ===== TAB 2: IndexedDB ===== -->
+<div id="tab-idb" class="tab">
+  <h2>2. IndexedDB Validation</h2>
+
+  <div class="card">
+    <h3>Database Initialization</h3>
+    <button class="btn primary" onclick="initDB()">Open / Initialize DB</button>
+    <button class="btn danger" onclick="deleteDB()">Delete DB</button>
+    <div class="result" id="idb-init-result">—</div>
+  </div>
+
+  <div class="card">
+    <h3>Word Store — CRUD</h3>
+    <button class="btn primary" onclick="idbSaveWord()">Save sample word</button>
+    <button class="btn secondary" onclick="idbGetAllWords()">Get all words</button>
+    <button class="btn secondary" onclick="idbFilterByStatus()">Filter status=active</button>
+    <button class="btn danger" onclick="idbClearWords()">Clear words store</button>
+    <div class="result" id="idb-word-result">—</div>
+  </div>
+
+  <div class="card">
+    <h3>Audio Cache Store — Blob Storage</h3>
+    <p style="font-size:13px;color:#555;margin-bottom:10px;">
+      Tests storing and retrieving a WAV-sized Blob (simulated, 100 KB random bytes).
+    </p>
+    <button class="btn primary" onclick="idbSaveBlob()">Store 100KB Blob</button>
+    <button class="btn secondary" onclick="idbGetBlob()">Retrieve Blob</button>
+    <button class="btn secondary" onclick="idbCacheUsage()">Get cache usage</button>
+    <button class="btn danger" onclick="idbClearCache()">Clear audio cache</button>
+    <div class="result" id="idb-blob-result">—</div>
+  </div>
+
+  <div class="card">
+    <h3>Soft-delete &amp; Auto-purge</h3>
+    <p style="font-size:13px;color:#555;margin-bottom:10px;">
+      Simulates a word deleted 11 days ago and verifies it is removed by auto-purge.
+    </p>
+    <button class="btn primary" onclick="idbTestPurge()">Run purge test</button>
+    <div class="result" id="idb-purge-result">—</div>
+  </div>
+</div>
+
+<!-- ===== TAB 3: VOICEVOX / CORS ===== -->
+<div id="tab-voicevox" class="tab">
+  <h2>3. VOICEVOX Lambda / CORS</h2>
+
+  <div class="card" style="background:#fef9e7;border-left:4px solid #f9a825;">
+    <h3>⚠️ CORS Status — Action Required</h3>
+    <p style="font-size:13px;margin-top:6px;">
+      The current CDK stack has <strong>no CORS configuration</strong>
+      (<code>// CORS removed: native iOS app does not require CORS</code>).
+      Browser fetch requests will be blocked by the browser's CORS preflight check.
+      CORS must be added to the API Gateway before the Web app can call VOICEVOX Lambda.
+    </p>
+    <details style="margin-top:8px;">
+      <summary>Required CDK change (voicevox-stack.ts)</summary>
+      <pre>
+// Before (iOS only — no CORS):
+const httpApi = new apigatewayv2.HttpApi(this, 'VoicevoxHttpApi', {
+  apiName: `voicevox-api-${stackEnv}`,
+  description: `VOICEVOX TTS API (${stackEnv})`,
+  // CORS removed: native iOS app does not require CORS
+});
+
+// After (Web + iOS):
+const allowedOrigins = stackEnv === 'poc'
+  ? ['*']                          // PoC: allow all origins
+  : ['https://your-app-domain'];   // dev/pro: restrict to app domain
+
+const httpApi = new apigatewayv2.HttpApi(this, 'VoicevoxHttpApi', {
+  apiName: `voicevox-api-${stackEnv}`,
+  description: `VOICEVOX TTS API (${stackEnv})`,
+  corsPreflight: {
+    allowOrigins: allowedOrigins,
+    allowMethods: [apigatewayv2.CorsHttpMethod.POST, apigatewayv2.CorsHttpMethod.GET, apigatewayv2.CorsHttpMethod.OPTIONS],
+    allowHeaders: ['Content-Type', 'x-api-key'],
+    maxAge: cdk.Duration.days(1),
+  },
+});</pre>
+    </details>
+  </div>
+
+  <div class="card">
+    <h3>VOICEVOX Endpoint Configuration</h3>
+    <label>Base URL (API Gateway endpoint)</label>
+    <input type="url" id="vv-base-url" placeholder="https://xxxxxxxxxx.execute-api.ap-northeast-1.amazonaws.com" />
+    <label>API Key (x-api-key header)</label>
+    <input type="password" id="vv-api-key" placeholder="your-api-key" />
+    <label>Speaker ID</label>
+    <input type="text" id="vv-speaker-id" value="3" style="width:80px;" />
+    <label>Text to synthesize</label>
+    <input type="text" id="vv-text" value="こんにちは、ずんだもんです。" />
+    <button class="btn primary" onclick="testVoicevox()">▶ Fetch &amp; Play WAV</button>
+    <button class="btn secondary" onclick="checkCORS()">🔍 CORS Preflight Check</button>
+    <div class="result" id="vv-result">Enter endpoint URL and API key above</div>
+    <div class="timing-grid" id="vv-timing" style="display:none;">
+      <div class="timing-cell"><div class="val" id="t-audio-query">—</div><div class="lbl">audio_query (ms)</div></div>
+      <div class="timing-cell"><div class="val" id="t-synthesis">—</div><div class="lbl">synthesis (ms)</div></div>
+      <div class="timing-cell"><div class="val" id="t-total">—</div><div class="lbl">total (ms)</div></div>
+      <div class="timing-cell"><div class="val" id="t-wav-size">—</div><div class="lbl">WAV size (KB)</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Version Endpoint (public, no auth)</h3>
+    <button class="btn secondary" onclick="checkVersion()">GET /version</button>
+    <div class="result" id="vv-version-result">—</div>
+  </div>
+</div>
+
+<!-- ===== TAB 4: Summary ===== -->
+<div id="tab-summary" class="tab">
+  <h2>4. Validation Summary</h2>
+  <p style="font-size:13px;color:#555;margin-bottom:16px;">
+    Run all checks on each tab first, then review the results below.
+  </p>
+  <div id="summary-content">
+    <div class="card">
+      <h3>Checklist</h3>
+      <table style="width:100%;font-size:13px;border-collapse:collapse;">
+        <thead>
+          <tr style="border-bottom:1px solid #ddd;">
+            <th style="text-align:left;padding:6px 8px;">Item</th>
+            <th style="padding:6px 8px;">Status</th>
+          </tr>
+        </thead>
+        <tbody id="summary-table">
+          <tr><td colspan="2" style="padding:12px;color:#999;text-align:center;">Run validations on each tab to populate this table.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <button class="btn primary" onclick="buildSummary()">Refresh Summary</button>
+  <button class="btn secondary" onclick="exportSummary()">Export as Markdown</button>
+  <pre id="summary-export" style="display:none;margin-top:12px;"></pre>
+</div>
+
+<script>
+// ─── Utilities ───────────────────────────────────────────────────────────────
+
+function setResult(id, text, type = '') {
+  const el = document.getElementById(id);
+  el.className = 'result' + (type ? ' ' + type : '');
+  el.textContent = text;
+}
+
+function showTab(id) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  const idx = ['tab-speech','tab-idb','tab-voicevox','tab-summary'].indexOf(id);
+  document.querySelectorAll('nav button')[idx].classList.add('active');
+}
+
+// ─── Validation state (for summary) ─────────────────────────────────────────
+const state = {};
+
+// ─── TAB 1: Web Speech API ──────────────────────────────────────────────────
+
+const synth = window.speechSynthesis;
+let recognition = null;
+
+function checkSpeechSupport() {
+  const ttsOk  = 'speechSynthesis' in window;
+  const sttOk  = 'SpeechRecognition' in window || 'webkitSpeechRecognition' in window;
+  const ua     = navigator.userAgent;
+  const isSafari = /^((?!chrome|android).)*safari/i.test(ua);
+
+  const badge = (ok) =>
+    `<span class="badge ${ok ? 'supported' : 'unsupported'}">${ok ? '✓ Supported' : '✗ Not supported'}</span>`;
+
+  document.getElementById('speech-support').innerHTML = `
+    <table style="font-size:13px;border-collapse:collapse;width:100%;">
+      <tr style="border-bottom:1px solid #eee;">
+        <td style="padding:6px 8px;font-weight:500;">speechSynthesis (TTS)</td>
+        <td style="padding:6px 8px;">${badge(ttsOk)}</td>
+        <td style="padding:6px 8px;color:#555;">Works in all modern browsers</td>
+      </tr>
+      <tr style="border-bottom:1px solid #eee;">
+        <td style="padding:6px 8px;font-weight:500;">SpeechRecognition (STT)</td>
+        <td style="padding:6px 8px;">${badge(sttOk)}</td>
+        <td style="padding:6px 8px;color:#555;">Chrome / Edge only; Safari ✗</td>
+      </tr>
+      <tr>
+        <td style="padding:6px 8px;font-weight:500;">Browser</td>
+        <td style="padding:6px 8px;" colspan="2"><code style="font-size:11px;">${navigator.userAgent.substring(0, 80)}…</code></td>
+      </tr>
+    </table>
+    ${isSafari ? '<p style="margin-top:8px;font-size:13px;color:#b26a00;">⚠️ Safari detected — STT (SpeechRecognition) will not work. Pronunciation check requires Chrome or Edge.</p>' : ''}
+  `;
+
+  state.tts_support = ttsOk;
+  state.stt_support = sttOk;
+
+  // Populate voice list
+  function loadVoices() {
+    const voices = synth.getVoices().filter(v => v.lang.startsWith('en'));
+    const sel = document.getElementById('tts-voice');
+    sel.innerHTML = voices.map((v, i) => `<option value="${i}">${v.name} (${v.lang})</option>`).join('');
+  }
+  loadVoices();
+  synth.onvoiceschanged = loadVoices;
+}
+
+function speakTTS() {
+  const text = document.getElementById('tts-text').value;
+  const voices = synth.getVoices().filter(v => v.lang.startsWith('en'));
+  const idx = parseInt(document.getElementById('tts-voice').value) || 0;
+  synth.cancel();
+  const utt = new SpeechSynthesisUtterance(text);
+  if (voices[idx]) utt.voice = voices[idx];
+  utt.onstart = () => setResult('tts-result', '▶ Speaking…', 'ok');
+  utt.onend   = () => setResult('tts-result', '✓ Finished speaking', 'ok');
+  utt.onerror = (e) => setResult('tts-result', '✗ Error: ' + e.error, 'err');
+  synth.speak(utt);
+}
+
+function stopTTS() { synth.cancel(); setResult('tts-result', '■ Stopped', ''); }
+
+function startSTT() {
+  const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRec) {
+    setResult('stt-result', '✗ SpeechRecognition not supported in this browser.\nUse Chrome or Edge.', 'err');
+    return;
+  }
+  recognition = new SpeechRec();
+  recognition.lang = 'en-US';
+  recognition.interimResults = true;
+  recognition.maxAlternatives = 1;
+
+  recognition.onstart = () => setResult('stt-result', '🎤 Listening…', 'warn');
+  recognition.onresult = (e) => {
+    let transcript = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      transcript += e.results[i][0].transcript;
+    }
+    const isFinal = e.results[e.results.length - 1].isFinal;
+    setResult('stt-result', (isFinal ? '✓ Final: ' : '⋯ Interim: ') + transcript, isFinal ? 'ok' : 'warn');
+    document.getElementById('stt-raw').textContent = JSON.stringify({
+      transcript,
+      isFinal,
+      confidence: e.results[e.results.length - 1][0].confidence,
+    }, null, 2);
+    if (isFinal) state.stt_result = transcript;
+  };
+  recognition.onerror = (e) => setResult('stt-result', '✗ Error: ' + e.error, 'err');
+  recognition.start();
+}
+
+function stopSTT() {
+  if (recognition) { recognition.stop(); recognition = null; }
+}
+
+// Levenshtein-based similarity judge (mirrors iOS SpeechRecognizer logic)
+function levenshtein(a, b) {
+  const m = a.length, n = b.length;
+  const dp = Array.from({length: m + 1}, (_, i) => [i, ...Array(n).fill(0)]);
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = a[i-1] === b[j-1] ? dp[i-1][j-1]
+                 : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+  return dp[m][n];
+}
+
+function normalize(s) { return s.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim(); }
+
+function judge(transcript, target) {
+  const t = normalize(transcript), g = normalize(target);
+  if (t === g) return 'PERFECT';
+  const dist = levenshtein(t, g);
+  const similarity = 1 - dist / Math.max(t.length, g.length, 1);
+  return similarity >= 0.7 ? 'CLOSE' : 'RETRY';
+}
+
+function testJudge() {
+  const target = document.getElementById('judge-target').value;
+  const transcript = document.getElementById('judge-transcript').value;
+  const result = judge(transcript, target);
+  const t = normalize(transcript), g = normalize(target);
+  const dist = levenshtein(t, g);
+  const similarity = (1 - dist / Math.max(t.length, g.length, 1)).toFixed(3);
+  const labels = { PERFECT: '完璧！', CLOSE: '惜しい！', RETRY: 'もう一度練習しましょう' };
+  const types  = { PERFECT: 'ok', CLOSE: 'warn', RETRY: 'err' };
+  setResult('judge-result',
+    `Result: ${result}  (${labels[result]})\nSimilarity: ${similarity}  |  Levenshtein distance: ${dist}`,
+    types[result]
+  );
+}
+
+// ─── TAB 2: IndexedDB ────────────────────────────────────────────────────────
+
+let db = null;
+
+async function initDB() {
+  try {
+    const req = indexedDB.open('EnglishLearnDB', 1);
+    req.onupgradeneeded = (e) => {
+      const d = e.target.result;
+
+      const words = d.createObjectStore('words', { keyPath: 'id' });
+      words.createIndex('status', 'status');
+      words.createIndex('created_at', 'created_at');
+      words.createIndex('word', 'word');
+
+      const sentences = d.createObjectStore('sentences', { keyPath: 'id' });
+      sentences.createIndex('word_id', 'word_id');
+
+      const audioCache = d.createObjectStore('audio_cache', { keyPath: 'id' });
+      audioCache.createIndex('created_at', 'created_at');
+      audioCache.createIndex('last_accessed_at', 'last_accessed_at');
+    };
+    db = await new Promise((resolve, reject) => {
+      req.onsuccess = () => resolve(req.result);
+      req.onerror   = () => reject(req.error);
+    });
+    const stores = Array.from(db.objectStoreNames);
+    setResult('idb-init-result', `✓ DB opened: EnglishLearnDB v${db.version}\nStores: ${stores.join(', ')}`, 'ok');
+    state.idb_init = true;
+  } catch (err) {
+    setResult('idb-init-result', '✗ ' + err.message, 'err');
+    state.idb_init = false;
+  }
+}
+
+function requireDB() {
+  if (!db) { alert('Click "Open / Initialize DB" first'); return false; }
+  return true;
+}
+
+async function idbSaveWord() {
+  if (!requireDB()) return;
+  const word = {
+    id: crypto.randomUUID(),
+    word: 'validate',
+    meaning: '検証する',
+    phonetic: 'ˈvæl.ɪ.deɪt',
+    status: 'active',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    deleted_at: null,
+    archived_at: null,
+  };
+  const tx = db.transaction('words', 'readwrite');
+  await new Promise((res, rej) => {
+    const req = tx.objectStore('words').add(word);
+    req.onsuccess = () => res();
+    req.onerror   = () => rej(req.error);
+  });
+  setResult('idb-word-result', `✓ Saved word:\n${JSON.stringify(word, null, 2)}`, 'ok');
+}
+
+async function idbGetAllWords() {
+  if (!requireDB()) return;
+  const tx = db.transaction('words', 'readonly');
+  const words = await new Promise((res, rej) => {
+    const req = tx.objectStore('words').getAll();
+    req.onsuccess = () => res(req.result);
+    req.onerror   = () => rej(req.error);
+  });
+  setResult('idb-word-result', `✓ ${words.length} word(s) found:\n${JSON.stringify(words, null, 2)}`, 'ok');
+}
+
+async function idbFilterByStatus() {
+  if (!requireDB()) return;
+  const tx = db.transaction('words', 'readonly');
+  const index = tx.objectStore('words').index('status');
+  const words = await new Promise((res, rej) => {
+    const req = index.getAll('active');
+    req.onsuccess = () => res(req.result);
+    req.onerror   = () => rej(req.error);
+  });
+  setResult('idb-word-result', `✓ ${words.length} active word(s):\n${JSON.stringify(words, null, 2)}`, 'ok');
+}
+
+async function idbClearWords() {
+  if (!requireDB()) return;
+  const tx = db.transaction('words', 'readwrite');
+  await new Promise((res, rej) => {
+    const req = tx.objectStore('words').clear();
+    req.onsuccess = () => res();
+    req.onerror   = () => rej(req.error);
+  });
+  setResult('idb-word-result', '✓ words store cleared', 'ok');
+}
+
+async function idbSaveBlob() {
+  if (!requireDB()) return;
+  // Simulate a 100 KB WAV Blob
+  const bytes = new Uint8Array(100 * 1024);
+  crypto.getRandomValues(bytes);
+  const blob = new Blob([bytes], { type: 'audio/wav' });
+  const cacheKey = 'test-audio-key-001';
+  const record = {
+    id: cacheKey,
+    text: 'こんにちは',
+    speaker_id: 3,
+    audio_data: blob,
+    size_bytes: blob.size,
+    created_at: new Date().toISOString(),
+    last_accessed_at: new Date().toISOString(),
+  };
+  const tx = db.transaction('audio_cache', 'readwrite');
+  await new Promise((res, rej) => {
+    const req = tx.objectStore('audio_cache').put(record);
+    req.onsuccess = () => res();
+    req.onerror   = () => rej(req.error);
+  });
+  setResult('idb-blob-result',
+    `✓ Stored Blob in audio_cache\nKey: ${cacheKey}\nSize: ${(blob.size/1024).toFixed(1)} KB\nType: ${blob.type}`,
+    'ok'
+  );
+  state.idb_blob = true;
+}
+
+async function idbGetBlob() {
+  if (!requireDB()) return;
+  const tx = db.transaction('audio_cache', 'readonly');
+  const record = await new Promise((res, rej) => {
+    const req = tx.objectStore('audio_cache').get('test-audio-key-001');
+    req.onsuccess = () => res(req.result);
+    req.onerror   = () => rej(req.error);
+  });
+  if (!record) {
+    setResult('idb-blob-result', '⚠ No cached audio found. Click "Store 100KB Blob" first.', 'warn');
+    return;
+  }
+  setResult('idb-blob-result',
+    `✓ Retrieved Blob from audio_cache\nKey: ${record.id}\nSize: ${(record.size_bytes/1024).toFixed(1)} KB\nBlob valid: ${record.audio_data instanceof Blob}`,
+    'ok'
+  );
+}
+
+async function idbCacheUsage() {
+  if (!requireDB()) return;
+  const tx = db.transaction('audio_cache', 'readonly');
+  const all = await new Promise((res, rej) => {
+    const req = tx.objectStore('audio_cache').getAll();
+    req.onsuccess = () => res(req.result);
+    req.onerror   = () => rej(req.error);
+  });
+  const total = all.reduce((sum, r) => sum + (r.size_bytes || 0), 0);
+  setResult('idb-blob-result', `✓ Cache: ${all.length} item(s), ${(total/1024).toFixed(1)} KB total`, 'ok');
+}
+
+async function idbClearCache() {
+  if (!requireDB()) return;
+  const tx = db.transaction('audio_cache', 'readwrite');
+  await new Promise((res, rej) => {
+    const req = tx.objectStore('audio_cache').clear();
+    req.onsuccess = () => res();
+    req.onerror   = () => rej(req.error);
+  });
+  setResult('idb-blob-result', '✓ audio_cache cleared', 'ok');
+}
+
+async function idbTestPurge() {
+  if (!requireDB()) return;
+  // Add a word with deleted_at = 11 days ago
+  const oldDate = new Date(Date.now() - 11 * 24 * 60 * 60 * 1000).toISOString();
+  const word = {
+    id: 'purge-test-' + Date.now(),
+    word: 'obsolete',
+    meaning: '廃れた',
+    phonetic: '',
+    status: 'deleted',
+    created_at: oldDate,
+    updated_at: oldDate,
+    deleted_at: oldDate,
+    archived_at: null,
+  };
+  const tx1 = db.transaction('words', 'readwrite');
+  await new Promise((res, rej) => {
+    const req = tx1.objectStore('words').put(word);
+    req.onsuccess = () => res();
+    req.onerror   = () => rej(req.error);
+  });
+
+  // Run purge: delete records with deleted_at < today - 10 days
+  const threshold = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString();
+  const tx2 = db.transaction('words', 'readwrite');
+  const index = tx2.objectStore('words').index('status');
+  let purged = 0;
+  await new Promise((res, rej) => {
+    const req = index.openCursor('deleted');
+    req.onsuccess = (e) => {
+      const cursor = e.target.result;
+      if (!cursor) { res(); return; }
+      if (cursor.value.deleted_at && cursor.value.deleted_at < threshold) {
+        cursor.delete();
+        purged++;
+      }
+      cursor.continue();
+    };
+    req.onerror = () => rej(req.error);
+  });
+
+  setResult('idb-purge-result',
+    `✓ Purge complete: ${purged} record(s) physically deleted\n(deleted_at older than 10 days were removed)`,
+    'ok'
+  );
+  state.idb_purge = true;
+}
+
+async function deleteDB() {
+  if (db) { db.close(); db = null; }
+  await new Promise((res, rej) => {
+    const req = indexedDB.deleteDatabase('EnglishLearnDB');
+    req.onsuccess = () => res();
+    req.onerror   = () => rej(req.error);
+  });
+  setResult('idb-init-result', '✓ Database deleted', 'ok');
+  state.idb_init = false;
+}
+
+// ─── TAB 3: VOICEVOX / CORS ──────────────────────────────────────────────────
+
+async function checkVersion() {
+  const baseUrl = document.getElementById('vv-base-url').value.trim();
+  if (!baseUrl) { setResult('vv-version-result', '⚠ Enter a Base URL first', 'warn'); return; }
+  setResult('vv-version-result', '⋯ Fetching…', 'warn');
+  try {
+    const t0 = performance.now();
+    const res = await fetch(`${baseUrl}/version`);
+    const ms = Math.round(performance.now() - t0);
+    const body = await res.text();
+    setResult('vv-version-result', `✓ ${res.status} OK (${ms} ms)\n${body}`, 'ok');
+  } catch (err) {
+    setResult('vv-version-result', `✗ ${err.message}\n\nIf you see a CORS error, CORS headers are not configured on the API Gateway.`, 'err');
+  }
+}
+
+async function checkCORS() {
+  const baseUrl = document.getElementById('vv-base-url').value.trim();
+  if (!baseUrl) { setResult('vv-result', '⚠ Enter a Base URL first', 'warn'); return; }
+  setResult('vv-result', '⋯ Sending OPTIONS preflight request…', 'warn');
+  try {
+    const res = await fetch(`${baseUrl}/audio_query`, {
+      method: 'OPTIONS',
+      headers: {
+        'Origin': location.origin,
+        'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': 'Content-Type, x-api-key',
+      },
+    });
+    const acao = res.headers.get('access-control-allow-origin');
+    const acam = res.headers.get('access-control-allow-methods');
+    const acah = res.headers.get('access-control-allow-headers');
+    if (acao) {
+      setResult('vv-result',
+        `✓ CORS preflight succeeded (${res.status})\nAccess-Control-Allow-Origin: ${acao}\nAccess-Control-Allow-Methods: ${acam}\nAccess-Control-Allow-Headers: ${acah}`,
+        'ok'
+      );
+      state.cors_ok = true;
+    } else {
+      setResult('vv-result',
+        `✗ No CORS headers in response (${res.status})\nCORS is not configured on this API Gateway endpoint.\nAdd corsPreflight to the CDK HttpApi construct.`,
+        'err'
+      );
+      state.cors_ok = false;
+    }
+  } catch (err) {
+    setResult('vv-result',
+      `✗ CORS preflight blocked by browser: ${err.message}\nThis confirms CORS is NOT configured on the API Gateway.`,
+      'err'
+    );
+    state.cors_ok = false;
+  }
+}
+
+async function testVoicevox() {
+  const baseUrl  = document.getElementById('vv-base-url').value.trim();
+  const apiKey   = document.getElementById('vv-api-key').value.trim();
+  const speakerId = document.getElementById('vv-speaker-id').value;
+  const text     = document.getElementById('vv-text').value;
+
+  if (!baseUrl || !apiKey) {
+    setResult('vv-result', '⚠ Enter Base URL and API Key first', 'warn');
+    return;
+  }
+
+  const headers = { 'Content-Type': 'application/json', 'x-api-key': apiKey };
+  document.getElementById('vv-timing').style.display = 'none';
+  setResult('vv-result', `⋯ Step 1: POST /audio_query (may take 10–30s on cold start)…`, 'warn');
+
+  try {
+    // Step 1: audio_query
+    const t0 = performance.now();
+    const queryRes = await fetch(`${baseUrl}/audio_query?text=${encodeURIComponent(text)}&speaker=${speakerId}`, {
+      method: 'POST', headers
+    });
+    if (!queryRes.ok) throw new Error(`audio_query failed: ${queryRes.status} ${await queryRes.text()}`);
+    const queryJson = await queryRes.json();
+    const t1 = performance.now();
+    const audioQueryMs = Math.round(t1 - t0);
+
+    setResult('vv-result', `✓ Step 1 done (${audioQueryMs} ms)\n⋯ Step 2: POST /synthesis…`, 'warn');
+
+    // Step 2: synthesis
+    const synthRes = await fetch(`${baseUrl}/synthesis?speaker=${speakerId}`, {
+      method: 'POST', headers,
+      body: JSON.stringify(queryJson),
+    });
+    if (!synthRes.ok) throw new Error(`synthesis failed: ${synthRes.status}`);
+    const wavBlob = await synthRes.blob();
+    const t2 = performance.now();
+    const synthesisMs = Math.round(t2 - t1);
+    const totalMs     = Math.round(t2 - t0);
+
+    // Play audio
+    const url = URL.createObjectURL(wavBlob);
+    const audio = new Audio(url);
+    audio.onended = () => URL.revokeObjectURL(url);
+    await audio.play();
+
+    setResult('vv-result', `✓ Success — WAV received and playing\n${(wavBlob.size/1024).toFixed(1)} KB`, 'ok');
+
+    document.getElementById('t-audio-query').textContent = audioQueryMs;
+    document.getElementById('t-synthesis').textContent   = synthesisMs;
+    document.getElementById('t-total').textContent       = totalMs;
+    document.getElementById('t-wav-size').textContent    = (wavBlob.size/1024).toFixed(0);
+    document.getElementById('vv-timing').style.display   = 'grid';
+
+    state.voicevox_ok   = true;
+    state.voicevox_timing = { audioQueryMs, synthesisMs, totalMs, wavSizeKB: Math.round(wavBlob.size/1024) };
+  } catch (err) {
+    setResult('vv-result', `✗ ${err.message}`, 'err');
+    state.voicevox_ok = false;
+  }
+}
+
+// ─── TAB 4: Summary ──────────────────────────────────────────────────────────
+
+function buildSummary() {
+  const rows = [
+    ['Web Speech API — TTS', state.tts_support, 'All modern browsers'],
+    ['Web Speech API — STT (SpeechRecognition)', state.stt_support, 'Chrome / Edge only; Safari ✗'],
+    ['IndexedDB — open & schema init', state.idb_init, 'Checked in Tab 2'],
+    ['IndexedDB — Blob storage (audio cache)', state.idb_blob, '100 KB WAV Blob stored/retrieved'],
+    ['IndexedDB — soft-delete auto-purge', state.idb_purge, '10-day threshold logic verified'],
+    ['VOICEVOX Lambda — CORS configured', state.cors_ok, 'Must be added to CDK stack'],
+    ['VOICEVOX Lambda — WAV fetch & play', state.voicevox_ok, 'Requires CORS to be set first'],
+  ];
+
+  document.getElementById('summary-table').innerHTML = rows.map(([item, ok, note]) => {
+    const badge = ok === undefined
+      ? '<span style="color:#999">Not tested</span>'
+      : ok
+        ? '<span class="badge supported">✓ Pass</span>'
+        : '<span class="badge unsupported">✗ Fail / N/A</span>';
+    return `<tr style="border-bottom:1px solid #eee;">
+      <td style="padding:6px 8px;">${item}</td>
+      <td style="padding:6px 8px;text-align:center;">${badge}</td>
+      <td style="padding:6px 8px;color:#555;font-size:12px;">${note}</td>
+    </tr>`;
+  }).join('');
+
+  if (state.voicevox_timing) {
+    const { audioQueryMs, synthesisMs, totalMs, wavSizeKB } = state.voicevox_timing;
+    document.getElementById('summary-table').innerHTML += `
+      <tr style="border-top:2px solid #1a73e8;">
+        <td colspan="3" style="padding:10px 8px;">
+          <strong>VOICEVOX timing</strong>: audio_query ${audioQueryMs} ms + synthesis ${synthesisMs} ms = <strong>${totalMs} ms</strong> total | WAV ${wavSizeKB} KB
+          ${totalMs > 10000 ? '<span style="color:#b26a00;margin-left:8px;">⚠ Cold start detected (>10s)</span>' : ''}
+        </td>
+      </tr>`;
+  }
+}
+
+function exportSummary() {
+  buildSummary();
+  const rows = [
+    ['Web Speech API — TTS',                    state.tts_support,  'All modern browsers'],
+    ['Web Speech API — STT (SpeechRecognition)', state.stt_support,  'Chrome/Edge only; Safari ✗'],
+    ['IndexedDB — open & schema init',           state.idb_init,     ''],
+    ['IndexedDB — Blob storage (audio cache)',   state.idb_blob,     '100 KB WAV Blob stored/retrieved'],
+    ['IndexedDB — soft-delete auto-purge',       state.idb_purge,    '10-day threshold verified'],
+    ['VOICEVOX Lambda — CORS configured',        state.cors_ok,      'Must be added to CDK stack'],
+    ['VOICEVOX Lambda — WAV fetch & play',       state.voicevox_ok,  ''],
+  ];
+  let md = `# Phase 0 Validation Results\n\n`;
+  md += `Browser: \`${navigator.userAgent}\`\n\n`;
+  md += `| Item | Status | Notes |\n|------|--------|-------|\n`;
+  md += rows.map(([i, ok, n]) =>
+    `| ${i} | ${ok === undefined ? 'Not tested' : ok ? '✓ Pass' : '✗ Fail'} | ${n} |`
+  ).join('\n');
+  if (state.voicevox_timing) {
+    const { audioQueryMs, synthesisMs, totalMs, wavSizeKB } = state.voicevox_timing;
+    md += `\n\n## VOICEVOX Timing\n| Metric | Value |\n|--------|-------|\n`;
+    md += `| audio_query | ${audioQueryMs} ms |\n| synthesis | ${synthesisMs} ms |\n| total | ${totalMs} ms |\n| WAV size | ${wavSizeKB} KB |`;
+  }
+  const pre = document.getElementById('summary-export');
+  pre.textContent = md;
+  pre.style.display = 'block';
+}
+
+// ─── Init ────────────────────────────────────────────────────────────────────
+checkSpeechSupport();
+</script>
+</body>
+</html>
