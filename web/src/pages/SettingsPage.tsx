@@ -104,6 +104,27 @@ function SegmentedControl<T extends string>({
   )
 }
 
+function InlineAlert({
+  type, message, className,
+}: {
+  type: 'error' | 'warning' | 'success'
+  message: string
+  className?: string
+}) {
+  const variants = {
+    error:   { color: 'text-[var(--ios-red)]',    Icon: TriangleAlert },
+    warning: { color: 'text-[var(--ios-orange)]', Icon: TriangleAlert },
+    success: { color: 'text-[var(--ios-green)]',  Icon: CheckCircle2  },
+  }
+  const { color, Icon } = variants[type]
+  return (
+    <div className={cn('flex items-center gap-1.5', className)}>
+      <Icon size={13} className={cn('shrink-0', color)} />
+      <p className={cn('text-xs', color)}>{message}</p>
+    </div>
+  )
+}
+
 // ---- Helpers ----
 
 function formatBytes(bytes: number): string {
@@ -112,7 +133,6 @@ function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
-
 
 // ---- Page ----
 
@@ -127,20 +147,34 @@ const JA_VOICE_RMAP: Record<JaVoice, string> = { 'ずんだもん': 'zundamon', 
 const PATTERN_MAP: Record<string, Pattern> = { bilingual: 'バイリンガル (EN+JA)', 'en-only': '英語のみ (EN+EN)' }
 const PATTERN_RMAP: Record<Pattern, string> = { 'バイリンガル (EN+JA)': 'bilingual', '英語のみ (EN+EN)': 'en-only' }
 
+// Single loadSettings() call to derive all initial state values
+function initFromSettings() {
+  const s = loadSettings()
+  const v = Number(s.intervalSec)
+  return {
+    enVoice:   (EN_VOICE_MAP[s.enVoice]   ?? '女性')                as EnVoice,
+    jaVoice:   (JA_VOICE_MAP[s.jaVoice]   ?? 'ずんだもん')          as JaVoice,
+    pattern:   (PATTERN_MAP[s.playPattern] ?? 'バイリンガル (EN+JA)') as Pattern,
+    interval:  Number.isFinite(v) ? Math.min(5, Math.max(0.5, v)) : 1.5,
+    vvStyle:   s.voicevoxStyle,
+    vvKey:     s.voicevoxApiKey,
+    openAIKey: s.openAIKey,
+    aiModel:   s.openAIModel,
+  }
+}
+
 export default function SettingsPage() {
   const navigate = useNavigate()
 
-  const [enVoice,   setEnVoiceRaw]   = useState<EnVoice>(() => { const s = loadSettings(); return EN_VOICE_MAP[s.enVoice] ?? '女性' })
-  const [jaVoice,   setJaVoiceRaw]   = useState<JaVoice>(() => { const s = loadSettings(); return JA_VOICE_MAP[s.jaVoice] ?? 'ずんだもん' })
-  const [pattern,   setPatternRaw]   = useState<Pattern>(() => { const s = loadSettings(); return PATTERN_MAP[s.playPattern] ?? 'バイリンガル (EN+JA)' })
-  const [interval,  setIntervalSRaw] = useState(() => {
-    const v = Number(loadSettings().intervalSec)
-    return Number.isFinite(v) ? Math.min(5, Math.max(0.5, v)) : 1.5
-  })
-  const [vvStyle,   setVvStyleRaw]   = useState(() => loadSettings().voicevoxStyle)
-  const [vvKey,     setVvKeyRaw]     = useState(() => loadSettings().voicevoxApiKey)
-  const [openAIKey, setOpenAIKeyRaw] = useState(() => loadSettings().openAIKey)
-  const [aiModel,   setAiModelRaw]   = useState(() => loadSettings().openAIModel)
+  const [init] = useState(initFromSettings)
+  const [enVoice,   setEnVoiceRaw]   = useState<EnVoice>(init.enVoice)
+  const [jaVoice,   setJaVoiceRaw]   = useState<JaVoice>(init.jaVoice)
+  const [pattern,   setPatternRaw]   = useState<Pattern>(init.pattern)
+  const [interval,  setIntervalSRaw] = useState(init.interval)
+  const [vvStyle,   setVvStyleRaw]   = useState(init.vvStyle)
+  const [vvKey,     setVvKeyRaw]     = useState(init.vvKey)
+  const [openAIKey, setOpenAIKeyRaw] = useState(init.openAIKey)
+  const [aiModel,   setAiModelRaw]   = useState(init.aiModel)
   const [playing,     setPlaying]    = useState(false)
   const [coldStart,   setColdStart]  = useState(false)
   const [playError,   setPlayError]  = useState<string | null>(null)
@@ -148,14 +182,14 @@ export default function SettingsPage() {
   const [cacheBytes,  setCacheBytes] = useState(0)
 
   // Wrappers that also persist to localStorage
-  const setEnVoice = (v: EnVoice) => { setEnVoiceRaw(v); saveSettings({ enVoice: EN_VOICE_RMAP[v] as AppSettings['enVoice'] }) }
-  const setJaVoice = (v: JaVoice) => { setJaVoiceRaw(v); saveSettings({ jaVoice: JA_VOICE_RMAP[v] as AppSettings['jaVoice'] }) }
-  const setPattern = (v: Pattern) => { setPatternRaw(v); saveSettings({ playPattern: PATTERN_RMAP[v] as AppSettings['playPattern'] }) }
-  const setIntervalS = (v: number) => { setIntervalSRaw(v); saveSettings({ intervalSec: v }) }
-  const setVvStyle = (v: string)  => { setVvStyleRaw(v); saveSettings({ voicevoxStyle: v }) }
-  const setVvKey   = (v: string)  => { setVvKeyRaw(v);   saveSettings({ voicevoxApiKey: v }) }
-  const setOpenAIKey = (v: string) => { setOpenAIKeyRaw(v); saveSettings({ openAIKey: v }) }
-  const setAiModel   = (v: string) => { setAiModelRaw(v);   saveSettings({ openAIModel: v }) }
+  const setEnVoice   = (v: EnVoice) => { setEnVoiceRaw(v);   saveSettings({ enVoice: EN_VOICE_RMAP[v] as AppSettings['enVoice'] }) }
+  const setJaVoice   = (v: JaVoice) => { setJaVoiceRaw(v);   saveSettings({ jaVoice: JA_VOICE_RMAP[v] as AppSettings['jaVoice'] }) }
+  const setPattern   = (v: Pattern) => { setPatternRaw(v);   saveSettings({ playPattern: PATTERN_RMAP[v] as AppSettings['playPattern'] }) }
+  const setIntervalS = (v: number)  => { setIntervalSRaw(v); saveSettings({ intervalSec: v }) }
+  const setVvStyle   = (v: string)  => { setVvStyleRaw(v);   saveSettings({ voicevoxStyle: v }) }
+  const setVvKey     = (v: string)  => { setVvKeyRaw(v);     saveSettings({ voicevoxApiKey: v }) }
+  const setOpenAIKey = (v: string)  => { setOpenAIKeyRaw(v); saveSettings({ openAIKey: v }) }
+  const setAiModel   = (v: string)  => { setAiModelRaw(v);   saveSettings({ openAIModel: v }) }
 
   const refreshCacheUsage = useCallback(() => {
     getCacheUsage()
@@ -190,6 +224,10 @@ export default function SettingsPage() {
     }
   }
 
+  const coldStartHint = coldStart && (
+    <p className="text-xs text-muted-foreground mt-1.5">ずんだもんを起動中です（初回は30秒ほどかかります）...</p>
+  )
+
   const patternDesc = pattern === 'バイリンガル (EN+JA)'
     ? 'バイリンガル: 英語 → 日本語 → 英語 の順で再生します'
     : '英語のみ: 英語のみ 2 回繰り返します'
@@ -215,15 +253,8 @@ export default function SettingsPage() {
               >
                 <Volume2 size={16} className="mr-1.5" />英語サンプルを再生
               </Button>
-              {coldStart && (
-                <p className="text-xs text-muted-foreground mt-1.5">ずんだもんを起動中です（初回は30秒ほどかかります）...</p>
-              )}
-              {playError && (
-                <div className="flex items-center gap-1.5 mt-1.5">
-                  <TriangleAlert size={13} className="text-[var(--ios-red)] shrink-0" />
-                  <p className="text-xs text-[var(--ios-red)]">{playError}</p>
-                </div>
-              )}
+              {coldStartHint}
+              {playError && <InlineAlert type="error" message={playError} className="mt-1.5" />}
             </Row>
           </GroupCard>
         </div>
@@ -241,9 +272,7 @@ export default function SettingsPage() {
               >
                 <Volume2 size={16} className="mr-1.5" />日本語サンプルを再生
               </Button>
-              {coldStart && (
-                <p className="text-xs text-muted-foreground mt-1.5">ずんだもんを起動中です（初回は30秒ほどかかります）...</p>
-              )}
+              {coldStartHint}
             </Row>
           </GroupCard>
         </div>
@@ -293,10 +322,7 @@ export default function SettingsPage() {
                 className="border-0 shadow-none px-0 focus-visible:ring-0 text-sm"
               />
               {!vvKey && (
-                <div className="flex items-center gap-1.5 mt-1.5">
-                  <TriangleAlert size={13} className="text-[var(--ios-orange)] shrink-0" />
-                  <p className="text-xs text-[var(--ios-orange)]">AppConfigのキーを使用中（設定で上書き可）</p>
-                </div>
+                <InlineAlert type="warning" message="AppConfigのキーを使用中（設定で上書き可）" className="mt-1.5" />
               )}
             </Row>
             <Row><p className="text-xs text-muted-foreground">© VOICEVOX:ずんだもん</p></Row>
@@ -314,10 +340,7 @@ export default function SettingsPage() {
                 className="border-0 shadow-none px-0 focus-visible:ring-0 text-sm"
               />
               {openAIKey && (
-                <div className="flex items-center gap-1.5 mt-1.5">
-                  <CheckCircle2 size={13} className="text-[var(--ios-green)] shrink-0" />
-                  <p className="text-xs text-[var(--ios-green)]">APIキーが設定されています</p>
-                </div>
+                <InlineAlert type="success" message="APIキーが設定されています" className="mt-1.5" />
               )}
             </Row>
           </GroupCard>
@@ -373,10 +396,7 @@ export default function SettingsPage() {
             />
             {cacheError && (
               <Row>
-                <div className="flex items-center gap-1.5">
-                  <TriangleAlert size={13} className="text-[var(--ios-red)] shrink-0" />
-                  <p className="text-xs text-[var(--ios-red)]">{cacheError}</p>
-                </div>
+                <InlineAlert type="error" message={cacheError} />
               </Row>
             )}
           </GroupCard>
