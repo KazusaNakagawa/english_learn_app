@@ -138,9 +138,10 @@ export default function SettingsPage() {
   const [vvKey,     setVvKeyRaw]     = useState(() => loadSettings().voicevoxApiKey)
   const [openAIKey, setOpenAIKeyRaw] = useState(() => loadSettings().openAIKey)
   const [aiModel,   setAiModelRaw]   = useState(() => loadSettings().openAIModel)
-  const [playing,    setPlaying]     = useState(false)
-  const [playError,  setPlayError]   = useState<string | null>(null)
-  const [cacheBytes, setCacheBytes]  = useState(0)
+  const [playing,     setPlaying]    = useState(false)
+  const [playError,   setPlayError]  = useState<string | null>(null)
+  const [cacheError,  setCacheError] = useState<string | null>(null)
+  const [cacheBytes,  setCacheBytes] = useState(0)
 
   // Wrappers that also persist to localStorage
   const setEnVoice = (v: EnVoice) => { setEnVoiceRaw(v); saveSettings({ enVoice: EN_VOICE_RMAP[v] as AppSettings['enVoice'] }) }
@@ -344,9 +345,20 @@ export default function SettingsPage() {
               label="キャッシュをクリア"
               destructive
               onClick={() => {
-                clearCache().then(() => refreshCacheUsage()).catch(() => {})
+                setCacheError(null)
+                clearCache()
+                  .then(() => refreshCacheUsage())
+                  .catch((err) => setCacheError(err instanceof Error ? err.message : 'キャッシュのクリアに失敗しました'))
               }}
             />
+            {cacheError && (
+              <Row>
+                <div className="flex items-center gap-1.5">
+                  <TriangleAlert size={13} className="text-[var(--ios-red)] shrink-0" />
+                  <p className="text-xs text-[var(--ios-red)]">{cacheError}</p>
+                </div>
+              </Row>
+            )}
           </GroupCard>
         </div>
 
