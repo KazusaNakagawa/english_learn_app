@@ -192,7 +192,7 @@ export default function SettingsPage() {
   const setAiModel   = (v: string)  => { setAiModelRaw(v);   saveSettings({ openAIModel: v }) }
 
   const refreshCacheUsage = useCallback(() => {
-    getCacheUsage()
+    return getCacheUsage()
       .then(setCacheBytes)
       .catch((err) => setCacheError(err instanceof Error ? err.message : 'キャッシュ情報の取得に失敗しました'))
   }, [])
@@ -220,7 +220,7 @@ export default function SettingsPage() {
     } finally {
       setColdStart(false)
       setPlaying(false)
-      refreshCacheUsage()
+      await refreshCacheUsage()
     }
   }
 
@@ -387,11 +387,14 @@ export default function SettingsPage() {
               iconColor="text-[var(--ios-red)]"
               label="キャッシュをクリア"
               destructive
-              onClick={() => {
+              onClick={async () => {
                 setCacheError(null)
-                clearCache()
-                  .then(() => refreshCacheUsage())
-                  .catch((err) => setCacheError(err instanceof Error ? err.message : 'キャッシュのクリアに失敗しました'))
+                try {
+                  await clearCache()
+                  await refreshCacheUsage()
+                } catch (err) {
+                  setCacheError(err instanceof Error ? err.message : 'キャッシュのクリアに失敗しました')
+                }
               }}
             />
             {cacheError && (
