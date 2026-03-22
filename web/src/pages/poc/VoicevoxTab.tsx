@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 
 const BASE_URL = import.meta.env.VITE_VOICEVOX_ENDPOINT_POC ?? ''
 const API_KEY = import.meta.env.VITE_VOICEVOX_API_KEY_POC ?? ''
@@ -20,6 +22,13 @@ type Timing = {
   wavSizeKB: number
 }
 
+const resultStyle: Record<string, string> = {
+  ok: 'bg-green-50 text-green-800',
+  err: 'bg-red-50 text-red-800',
+  warn: 'bg-yellow-50 text-yellow-800',
+  '': 'bg-muted text-muted-foreground',
+}
+
 export default function VoicevoxTab({
   onResult,
 }: {
@@ -34,7 +43,6 @@ export default function VoicevoxTab({
   const [timing, setTiming] = useState<Timing | null>(null)
   const [versionResult, setVersionResult] = useState('')
   const [versionType, setVersionType] = useState<'ok' | 'err' | ''>('')
-
 
   async function checkVersion() {
     if (!BASE_URL) { setVersionResult('⚠ VITE_VOICEVOX_ENDPOINT_POC not set in .env'); setVersionType('err'); return }
@@ -133,52 +141,38 @@ export default function VoicevoxTab({
     }
   }
 
-  const resultStyle: Record<string, string> = {
-    ok: 'bg-green-50 text-green-800',
-    err: 'bg-red-50 text-red-800',
-    warn: 'bg-yellow-50 text-yellow-800',
-    '': 'bg-gray-50 text-gray-600',
-  }
-
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* Version */}
-      <div className="bg-white rounded-lg p-4 shadow-sm space-y-2">
+      <div className="bg-white rounded-2xl p-4 space-y-2">
         <h3 className="font-semibold text-sm">Version Endpoint (public, no auth)</h3>
-        <button onClick={checkVersion} className="px-3 py-1.5 bg-gray-200 rounded text-sm font-medium">
-          GET /version
-        </button>
+        <Button size="sm" variant="outline" onClick={checkVersion}>GET /version</Button>
         {versionResult && (
-          <pre className={`text-xs px-3 py-2 rounded whitespace-pre-wrap ${resultStyle[versionType]}`}>
+          <pre className={`text-xs px-3 py-2 rounded-lg whitespace-pre-wrap ${resultStyle[versionType]}`}>
             {versionResult}
           </pre>
         )}
       </div>
 
       {/* CORS preflight */}
-      <div className="bg-white rounded-lg p-4 shadow-sm space-y-2">
+      <div className="bg-white rounded-2xl p-4 space-y-2">
         <h3 className="font-semibold text-sm">CORS Preflight Check</h3>
-        <button onClick={checkCORS} className="px-3 py-1.5 bg-gray-200 rounded text-sm font-medium">
-          🔍 OPTIONS /audio_query
-        </button>
+        <Button size="sm" variant="outline" onClick={checkCORS}>🔍 OPTIONS /audio_query</Button>
         {corsResult && (
-          <pre className={`text-xs px-3 py-2 rounded whitespace-pre-wrap ${resultStyle[corsType]}`}>
+          <pre className={`text-xs px-3 py-2 rounded-lg whitespace-pre-wrap ${resultStyle[corsType]}`}>
             {corsResult}
           </pre>
         )}
       </div>
 
       {/* Fetch & Play */}
-      <div className="bg-white rounded-lg p-4 shadow-sm space-y-2">
+      <div className="bg-white rounded-2xl p-4 space-y-2">
         <h3 className="font-semibold text-sm">End-to-end WAV Fetch &amp; Play</h3>
-        <p className="text-xs text-gray-400 flex items-center gap-1">
-          <span>©</span>
-          <span>VOICEVOX:ずんだもん</span>
-        </p>
+        <p className="text-xs text-muted-foreground">© VOICEVOX:ずんだもん</p>
         <div className="flex gap-3 items-center">
-          <label className="text-xs text-gray-500 w-20">スタイル</label>
+          <label className="text-xs text-muted-foreground w-16 shrink-0">スタイル</label>
           <select
-            className="border rounded px-2 py-1 text-sm"
+            className="border rounded-lg px-2 py-1.5 text-sm bg-white flex-1"
             value={speakerId}
             onChange={(e) => setSpeakerId(e.target.value)}
           >
@@ -190,18 +184,18 @@ export default function VoicevoxTab({
           </select>
         </div>
         <div className="flex gap-3 items-center">
-          <label className="text-xs text-gray-500 w-20">Text</label>
-          <input
-            className="border rounded px-2 py-1 text-sm flex-1"
+          <label className="text-xs text-muted-foreground w-16 shrink-0">Text</label>
+          <Input
             value={text}
             onChange={(e) => setText(e.target.value)}
+            className="flex-1"
           />
         </div>
-        <button onClick={testVoicevox} className="px-3 py-1.5 bg-blue-600 text-white rounded text-sm font-medium">
+        <Button size="sm" onClick={testVoicevox} className="bg-[var(--ios-blue)] hover:bg-[var(--ios-blue)]/90">
           ▶ Fetch &amp; Play WAV
-        </button>
+        </Button>
         {vvResult && (
-          <pre className={`text-xs px-3 py-2 rounded whitespace-pre-wrap ${resultStyle[vvType]}`}>
+          <pre className={`text-xs px-3 py-2 rounded-lg whitespace-pre-wrap ${resultStyle[vvType]}`}>
             {vvResult}
           </pre>
         )}
@@ -213,9 +207,9 @@ export default function VoicevoxTab({
               { label: 'total', value: `${timing.totalMs} ms` },
               { label: 'WAV size', value: `${timing.wavSizeKB} KB` },
             ].map(({ label, value }) => (
-              <div key={label} className="bg-gray-100 rounded p-2 text-center">
+              <div key={label} className="bg-muted rounded-lg p-2 text-center">
                 <div className="text-lg font-bold">{value}</div>
-                <div className="text-xs text-gray-500">{label}</div>
+                <div className="text-xs text-muted-foreground">{label}</div>
               </div>
             ))}
             {timing.totalMs > 10000 && (

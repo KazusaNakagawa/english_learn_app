@@ -1,6 +1,22 @@
 import { useRef, useState } from 'react'
+import { Button } from '@/components/ui/button'
 
 type ResultState = { text: string; type: 'ok' | 'err' | 'warn' | '' }
+
+const resultStyle: Record<string, string> = {
+  ok: 'bg-green-50 text-green-800',
+  err: 'bg-red-50 text-red-800',
+  warn: 'bg-yellow-50 text-yellow-800',
+  '': 'bg-muted text-muted-foreground',
+}
+
+function Result({ state }: { state: ResultState }) {
+  return (
+    <pre className={`text-xs px-3 py-2 rounded-lg whitespace-pre-wrap break-all mt-2 ${resultStyle[state.type]}`}>
+      {state.text}
+    </pre>
+  )
+}
 
 export default function IndexedDbTab({
   onResult,
@@ -217,75 +233,41 @@ export default function IndexedDbTab({
     onResult('idb_purge', true)
   }
 
-  const resultStyle: Record<string, string> = {
-    ok: 'bg-green-50 text-green-800',
-    err: 'bg-red-50 text-red-800',
-    warn: 'bg-yellow-50 text-yellow-800',
-    '': 'bg-gray-50 text-gray-600',
-  }
-
-  function Result({ state }: { state: ResultState }) {
-    return (
-      <pre className={`text-xs px-3 py-2 rounded whitespace-pre-wrap break-all mt-2 ${resultStyle[state.type]}`}>
-        {state.text}
-      </pre>
-    )
-  }
-
-  function Btn({ onClick, label, danger }: { onClick: () => void; label: string; danger?: boolean }) {
-    return (
-      <button
-        onClick={onClick}
-        className={`px-3 py-1.5 rounded text-sm font-medium ${danger ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-800'}`}
-      >
-        {label}
-      </button>
-    )
-  }
-
   return (
-    <div className="space-y-4">
-      <div className="bg-white rounded-lg p-4 shadow-sm space-y-2">
+    <div className="space-y-3">
+      <div className="bg-white rounded-2xl p-4 space-y-2">
         <h3 className="font-semibold text-sm">Database Initialization</h3>
         <div className="flex gap-2">
-          <button onClick={initDB} className="px-3 py-1.5 bg-blue-600 text-white rounded text-sm font-medium">
-            Open / Init DB
-          </button>
-          <Btn onClick={deleteDB} label="Delete DB" danger />
+          <Button size="sm" onClick={initDB} className="bg-[var(--ios-blue)] hover:bg-[var(--ios-blue)]/90">Open / Init DB</Button>
+          <Button size="sm" variant="destructive" onClick={deleteDB}>Delete DB</Button>
         </div>
         <Result state={initResult} />
       </div>
 
-      <div className="bg-white rounded-lg p-4 shadow-sm space-y-2">
+      <div className="bg-white rounded-2xl p-4 space-y-2">
         <h3 className="font-semibold text-sm">Word Store — CRUD</h3>
         <div className="flex flex-wrap gap-2">
-          <button onClick={saveWord} className="px-3 py-1.5 bg-blue-600 text-white rounded text-sm font-medium">
-            Save sample word
-          </button>
-          <Btn onClick={getAllWords} label="Get all words" />
-          <Btn onClick={filterActive} label="Filter status=active" />
-          <Btn onClick={clearWords} label="Clear store" danger />
+          <Button size="sm" onClick={saveWord} className="bg-[var(--ios-blue)] hover:bg-[var(--ios-blue)]/90">Save sample word</Button>
+          <Button size="sm" variant="outline" onClick={getAllWords}>Get all words</Button>
+          <Button size="sm" variant="outline" onClick={filterActive}>Filter status=active</Button>
+          <Button size="sm" variant="destructive" onClick={clearWords}>Clear store</Button>
         </div>
         <Result state={wordResult} />
       </div>
 
-      <div className="bg-white rounded-lg p-4 shadow-sm space-y-2">
+      <div className="bg-white rounded-2xl p-4 space-y-2">
         <h3 className="font-semibold text-sm">Audio Cache Store — Blob Storage</h3>
-        <p className="text-xs text-gray-500">Stores a 100 KB simulated WAV Blob.</p>
+        <p className="text-xs text-muted-foreground">Stores a 100 KB simulated WAV Blob.</p>
         <div className="flex flex-wrap gap-2">
-          <button onClick={saveBlob} className="px-3 py-1.5 bg-blue-600 text-white rounded text-sm font-medium">
-            Store 100 KB Blob
-          </button>
-          <Btn onClick={getBlob} label="Retrieve Blob" />
+          <Button size="sm" onClick={saveBlob} className="bg-[var(--ios-blue)] hover:bg-[var(--ios-blue)]/90">Store 100 KB Blob</Button>
+          <Button size="sm" variant="outline" onClick={getBlob}>Retrieve Blob</Button>
         </div>
         <Result state={blobResult} />
       </div>
 
-      <div className="bg-white rounded-lg p-4 shadow-sm space-y-2">
+      <div className="bg-white rounded-2xl p-4 space-y-2">
         <h3 className="font-semibold text-sm">Soft-delete Auto-purge (10-day)</h3>
-        <button onClick={runPurge} className="px-3 py-1.5 bg-blue-600 text-white rounded text-sm font-medium">
-          Run purge test
-        </button>
+        <Button size="sm" onClick={runPurge} className="bg-[var(--ios-blue)] hover:bg-[var(--ios-blue)]/90">Run purge test</Button>
         <Result state={purgeResult} />
       </div>
     </div>

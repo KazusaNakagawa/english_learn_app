@@ -1,3 +1,5 @@
+import { Badge } from '@/components/ui/badge'
+
 type Results = Record<string, boolean>
 
 const ITEMS: { key: string; label: string; note: string }[] = [
@@ -15,19 +17,19 @@ export default function SummaryTab({ results }: { results: Results }) {
   const passed = ITEMS.filter((i) => results[i.key] === true).length
 
   return (
-    <div className="space-y-4">
-      <div className="bg-white rounded-lg p-4 shadow-sm">
+    <div className="space-y-3">
+      <div className="bg-white rounded-2xl p-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-semibold text-sm">Validation Checklist</h3>
           {allTested && (
-            <span className="text-xs font-semibold text-blue-600">
+            <span className="text-xs font-semibold text-[var(--ios-blue)]">
               {passed} / {ITEMS.length} passed
             </span>
           )}
         </div>
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b text-left text-xs text-gray-500">
+            <tr className="border-b text-left text-xs text-muted-foreground">
               <th className="pb-2 font-medium">Item</th>
               <th className="pb-2 font-medium text-center">Status</th>
               <th className="pb-2 font-medium">Notes</th>
@@ -38,21 +40,17 @@ export default function SummaryTab({ results }: { results: Results }) {
               const val = results[key]
               const badge =
                 val === undefined ? (
-                  <span className="text-gray-400 text-xs">Not tested</span>
+                  <span className="text-muted-foreground text-xs">Not tested</span>
                 ) : val ? (
-                  <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-semibold">
-                    ✓ Pass
-                  </span>
+                  <Badge className="bg-green-100 text-green-700 hover:bg-green-100 text-xs">✓ Pass</Badge>
                 ) : (
-                  <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-semibold">
-                    ✗ Fail
-                  </span>
+                  <Badge variant="destructive" className="text-xs">✗ Fail</Badge>
                 )
               return (
                 <tr key={key} className="border-b last:border-0">
                   <td className="py-2 pr-4">{label}</td>
                   <td className="py-2 text-center">{badge}</td>
-                  <td className="py-2 text-xs text-gray-500">{note}</td>
+                  <td className="py-2 text-xs text-muted-foreground">{note}</td>
                 </tr>
               )
             })}
@@ -61,7 +59,7 @@ export default function SummaryTab({ results }: { results: Results }) {
       </div>
 
       {!allTested && (
-        <p className="text-sm text-gray-500 text-center">
+        <p className="text-sm text-muted-foreground text-center">
           Run validations on each tab to populate this table.
         </p>
       )}
