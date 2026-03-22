@@ -1,6 +1,7 @@
 import { Routes, Route } from 'react-router'
 import AppLayout from '@/components/layout/AppLayout'
 import WordListPage from '@/pages/WordListPage'
+import SentenceListPage from '@/pages/SentenceListPage'
 import ArchivePage from '@/pages/ArchivePage'
 import AddPage from '@/pages/AddPage'
 import TrashPage from '@/pages/TrashPage'
@@ -12,6 +13,7 @@ function App() {
     <Routes>
       <Route element={<AppLayout />}>
         <Route path="/" element={<WordListPage />} />
+        <Route path="/words/:id/sentences" element={<SentenceListPage />} />
         <Route path="/archive" element={<ArchivePage />} />
         <Route path="/add" element={<AddPage />} />
         <Route path="/trash" element={<TrashPage />} />
