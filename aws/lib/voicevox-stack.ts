@@ -154,12 +154,29 @@ export class VoicevoxStack extends cdk.Stack {
     });
 
     // ----------------------------------------------------------------
-    // API Gateway: HTTP API (CORS disabled for native iOS app)
+    // API Gateway: HTTP API
+    // CORS is required for the Web SPA (browser fetch).
+    // iOS native app is unaffected by CORS headers.
+    // poc: wildcard origin for PoC validation
+    // dev/pro: restrict to the deployed CloudFront domain once known
     // ----------------------------------------------------------------
+    const corsAllowOrigins = stackEnv === 'poc'
+      ? ['*']
+      : [`https://voicevox-${stackEnv}.example.com`]; // Replace with actual CloudFront domain
+
     const httpApi = new apigatewayv2.HttpApi(this, 'VoicevoxHttpApi', {
       apiName: `voicevox-api-${stackEnv}`,
       description: `VOICEVOX TTS API (${stackEnv})`,
-      // CORS removed: native iOS app does not require CORS
+      corsPreflight: {
+        allowOrigins: corsAllowOrigins,
+        allowMethods: [
+          apigatewayv2.CorsHttpMethod.POST,
+          apigatewayv2.CorsHttpMethod.GET,
+          apigatewayv2.CorsHttpMethod.OPTIONS,
+        ],
+        allowHeaders: ['Content-Type', 'x-api-key'],
+        maxAge: cdk.Duration.days(1),
+      },
     });
 
     // Apply per-environment throttling to the $default stage
