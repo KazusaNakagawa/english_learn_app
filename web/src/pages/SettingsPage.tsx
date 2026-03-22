@@ -138,7 +138,8 @@ export default function SettingsPage() {
   const [vvKey,     setVvKeyRaw]     = useState(() => loadSettings().voicevoxApiKey)
   const [openAIKey, setOpenAIKeyRaw] = useState(() => loadSettings().openAIKey)
   const [aiModel,   setAiModelRaw]   = useState(() => loadSettings().openAIModel)
-  const [playing,   setPlaying]      = useState(false)
+  const [playing,    setPlaying]     = useState(false)
+  const [playError,  setPlayError]   = useState<string | null>(null)
   const [cacheBytes, setCacheBytes]  = useState(0)
 
   // Wrappers that also persist to localStorage
@@ -162,9 +163,12 @@ export default function SettingsPage() {
   async function playSample(text: string, lang: 'en' | 'ja') {
     if (playing) return
     setPlaying(true)
+    setPlayError(null)
     try {
       const voice = (lang === 'en' ? EN_VOICE_RMAP[enVoice] : JA_VOICE_RMAP[jaVoice]) as VoiceType
       await playTTS(text, { voice, speakerId: vvStyle, apiKey: resolvedVvKey, lang })
+    } catch (err) {
+      setPlayError(err instanceof Error ? err.message : '再生に失敗しました')
     } finally {
       setPlaying(false)
       refreshCacheUsage()
@@ -196,6 +200,12 @@ export default function SettingsPage() {
               >
                 <Volume2 size={16} className="mr-1.5" />英語サンプルを再生
               </Button>
+              {playError && (
+                <div className="flex items-center gap-1.5 mt-1.5">
+                  <TriangleAlert size={13} className="text-[var(--ios-red)] shrink-0" />
+                  <p className="text-xs text-[var(--ios-red)]">{playError}</p>
+                </div>
+              )}
             </Row>
           </GroupCard>
         </div>
@@ -333,9 +343,8 @@ export default function SettingsPage() {
               iconColor="text-[var(--ios-red)]"
               label="キャッシュをクリア"
               destructive
-              onClick={async () => {
-                await clearCache()
-                refreshCacheUsage()
+              onClick={() => {
+                clearCache().then(() => refreshCacheUsage()).catch(() => {})
               }}
             />
           </GroupCard>
