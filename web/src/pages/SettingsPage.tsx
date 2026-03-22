@@ -133,12 +133,16 @@ export default function SettingsPage() {
   const [enVoice,   setEnVoiceRaw]   = useState<EnVoice>(() => { const s = loadSettings(); return EN_VOICE_MAP[s.enVoice] ?? '女性' })
   const [jaVoice,   setJaVoiceRaw]   = useState<JaVoice>(() => { const s = loadSettings(); return JA_VOICE_MAP[s.jaVoice] ?? 'ずんだもん' })
   const [pattern,   setPatternRaw]   = useState<Pattern>(() => { const s = loadSettings(); return PATTERN_MAP[s.playPattern] ?? 'バイリンガル (EN+JA)' })
-  const [interval,  setIntervalSRaw] = useState(() => loadSettings().intervalSec)
+  const [interval,  setIntervalSRaw] = useState(() => {
+    const v = Number(loadSettings().intervalSec)
+    return Number.isFinite(v) ? Math.min(5, Math.max(0.5, v)) : 1.5
+  })
   const [vvStyle,   setVvStyleRaw]   = useState(() => loadSettings().voicevoxStyle)
   const [vvKey,     setVvKeyRaw]     = useState(() => loadSettings().voicevoxApiKey)
   const [openAIKey, setOpenAIKeyRaw] = useState(() => loadSettings().openAIKey)
   const [aiModel,   setAiModelRaw]   = useState(() => loadSettings().openAIModel)
   const [playing,     setPlaying]    = useState(false)
+  const [coldStart,   setColdStart]  = useState(false)
   const [playError,   setPlayError]  = useState<string | null>(null)
   const [cacheError,  setCacheError] = useState<string | null>(null)
   const [cacheBytes,  setCacheBytes] = useState(0)
@@ -154,7 +158,9 @@ export default function SettingsPage() {
   const setAiModel   = (v: string) => { setAiModelRaw(v);   saveSettings({ openAIModel: v }) }
 
   const refreshCacheUsage = useCallback(() => {
-    getCacheUsage().then(setCacheBytes).catch(() => {})
+    getCacheUsage()
+      .then(setCacheBytes)
+      .catch((err) => setCacheError(err instanceof Error ? err.message : 'キャッシュ情報の取得に失敗しました'))
   }, [])
 
   useEffect(() => { refreshCacheUsage() }, [refreshCacheUsage])
@@ -167,10 +173,18 @@ export default function SettingsPage() {
     setPlayError(null)
     try {
       const voice = (lang === 'en' ? EN_VOICE_RMAP[enVoice] : JA_VOICE_RMAP[jaVoice]) as VoiceType
-      await playTTS(text, { voice, speakerId: vvStyle, apiKey: resolvedVvKey, lang })
+      await playTTS(text, {
+        voice,
+        speakerId: vvStyle,
+        apiKey: resolvedVvKey,
+        lang,
+        onColdStart: () => setColdStart(true),
+        onColdStartEnd: () => setColdStart(false),
+      })
     } catch (err) {
       setPlayError(err instanceof Error ? err.message : '再生に失敗しました')
     } finally {
+      setColdStart(false)
       setPlaying(false)
       refreshCacheUsage()
     }
@@ -201,6 +215,9 @@ export default function SettingsPage() {
               >
                 <Volume2 size={16} className="mr-1.5" />英語サンプルを再生
               </Button>
+              {coldStart && (
+                <p className="text-xs text-muted-foreground mt-1.5">ずんだもんを起動中です（初回は30秒ほどかかります）...</p>
+              )}
               {playError && (
                 <div className="flex items-center gap-1.5 mt-1.5">
                   <TriangleAlert size={13} className="text-[var(--ios-red)] shrink-0" />
@@ -224,6 +241,9 @@ export default function SettingsPage() {
               >
                 <Volume2 size={16} className="mr-1.5" />日本語サンプルを再生
               </Button>
+              {coldStart && (
+                <p className="text-xs text-muted-foreground mt-1.5">ずんだもんを起動中です（初回は30秒ほどかかります）...</p>
+              )}
             </Row>
           </GroupCard>
         </div>
