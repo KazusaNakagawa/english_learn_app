@@ -80,6 +80,10 @@ export default function SentenceListPage() {
     }
   }
 
+  function sleep(sec: number) {
+    return new Promise<void>((resolve) => setTimeout(resolve, sec * 1000))
+  }
+
   async function startPlaybackFrom(startIndex: number) {
     if (playingId) { doStop(); return }
     cancelRef.current = false
@@ -94,6 +98,17 @@ export default function SentenceListPage() {
           apiKey: resolvedVvKey,
           lang: 'en',
         })
+        if (s.playPattern === 'bilingual' && !cancelRef.current) {
+          await sleep(s.intervalSec)
+          if (!cancelRef.current) {
+            await playTTS(sentence.japanese, {
+              voice: s.jaVoice as VoiceType,
+              speakerId: s.voicevoxStyle,
+              apiKey: resolvedVvKey,
+              lang: 'ja',
+            })
+          }
+        }
       } catch (err) {
         if (!cancelRef.current) console.error('[SentenceListPage] sentence playback failed:', err)
         break
