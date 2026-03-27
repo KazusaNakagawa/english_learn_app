@@ -55,10 +55,7 @@ AI による例文生成と音声合成を組み合わせた、発音練習に�
 
 **連続再生モード** での実際の使用例です：
 
-<video width="280" controls>
-  <source src="EnglishLearnApp/docs/08_audio_demo.mp4" type="video/mp4">
-  お使いのブラウザは video タグをサポートしていません。
-</video>
+https://github.com/user-attachments/assets/c3b27a16-7429-4013-9d7c-2de9c0098a28
 
 > **前半：** © VOICEVOX: ずんだもん での連続再生  
 > **後半：** デフォルト音声での連続再生
