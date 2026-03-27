@@ -4,7 +4,7 @@ import { ChevronLeft, Volume2, Loader2, Play, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-import { playTTS, type VoiceType } from '@/services/AudioService'
+import { playTTS, stopTTS, type VoiceType } from '@/services/AudioService'
 import { loadSettings } from '@/services/SettingsService'
 import { SAMPLE_WORDS, type Sentence } from '@/data/sampleWords'
 
@@ -28,8 +28,9 @@ export default function SentenceListPage() {
   const navigate = useNavigate()
   const word = SAMPLE_WORDS.find((w) => w.id === id)
 
-  const [playingId, setPlayingId]   = useState<string | null>(null) // sentence id or `word-en` / `word-ja`
+  const [playingId, setPlayingId] = useState<string | null>(null) // sentence id or `word-en` / `word-ja`
   const sentenceRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const cancelRef = useRef(false)
 
   // Scroll active sentence into view
   useEffect(() => {
@@ -49,12 +50,21 @@ export default function SentenceListPage() {
   }
 
   const grouped = groupByCategory(word.sentences)
+  const flatSentences = grouped.flatMap(([, sents]) => sents)
   const s = loadSettings()
   const resolvedVvKey = s.voicevoxApiKey || (import.meta.env.VITE_VOICEVOX_API_KEY_POC ?? '')
 
+  function doStop() {
+    cancelRef.current = true
+    stopTTS()
+    setPlayingId(null)
+  }
+
   async function playWord(lang: 'en' | 'ja') {
     const key = `word-${lang}`
+    if (playingId === key) { doStop(); return }
     if (playingId) return
+    cancelRef.current = false
     setPlayingId(key)
     try {
       await playTTS(lang === 'en' ? word!.word : word!.meaning, {
@@ -64,28 +74,35 @@ export default function SentenceListPage() {
         lang,
       })
     } catch (err) {
-      console.error('[SentenceListPage] word playback failed:', err)
+      if (!cancelRef.current) console.error('[SentenceListPage] word playback failed:', err)
     } finally {
-      setPlayingId(null)
+      setPlayingId((prev) => (prev === key ? null : prev))
     }
   }
 
-  async function playSentence(sentence: Sentence) {
-    if (playingId) return
-    setPlayingId(sentence.id)
-    try {
-      await playTTS(sentence.english, {
-        voice: s.enVoice as VoiceType,
-        speakerId: s.voicevoxStyle,
-        apiKey: resolvedVvKey,
-        lang: 'en',
-      })
-    } catch (err) {
-      console.error('[SentenceListPage] sentence playback failed:', err)
-    } finally {
-      setPlayingId(null)
+  async function startPlaybackFrom(startIndex: number) {
+    if (playingId) { doStop(); return }
+    cancelRef.current = false
+    for (let i = startIndex; i < flatSentences.length; i++) {
+      if (cancelRef.current) break
+      const sentence = flatSentences[i]
+      setPlayingId(sentence.id)
+      try {
+        await playTTS(sentence.english, {
+          voice: s.enVoice as VoiceType,
+          speakerId: s.voicevoxStyle,
+          apiKey: resolvedVvKey,
+          lang: 'en',
+        })
+      } catch (err) {
+        if (!cancelRef.current) console.error('[SentenceListPage] sentence playback failed:', err)
+        break
+      }
     }
+    if (!cancelRef.current) setPlayingId(null)
   }
+
+  const isAnyPlaying = !!playingId
 
   return (
     <div className="min-h-screen bg-[var(--ios-grouped-bg)]">
@@ -117,8 +134,13 @@ export default function SentenceListPage() {
                 <Button
                   key={lang}
                   size="sm"
-                  disabled={!!playingId}
+                  disabled={isAnyPlaying && !isPlaying}
                   onClick={() => playWord(lang)}
+                  aria-label={
+                    isPlaying
+                      ? `「${lang === 'en' ? word.word : word.meaning}」の再生を停止`
+                      : lang === 'en' ? '英語を聞く' : '日本語を聞く'
+                  }
                   className={cn(
                     'rounded-full px-4 text-white',
                     lang === 'en'
@@ -133,6 +155,21 @@ export default function SentenceListPage() {
                 </Button>
               )
             })}
+            {/* Play all sentences button */}
+            <Button
+              size="sm"
+              disabled={isAnyPlaying && !playingId}
+              onClick={() => {
+                if (isAnyPlaying) { doStop(); return }
+                startPlaybackFrom(0)
+              }}
+              aria-label={isAnyPlaying ? '再生を停止' : '全例文を再生'}
+              className="rounded-full px-4 bg-[var(--ios-teal)] hover:bg-[var(--ios-teal)]/90 text-white"
+            >
+              {isAnyPlaying && !playingId?.startsWith('word-')
+                ? <><Square size={14} className="mr-1" fill="currentColor" />停止</>
+                : <><Play size={14} className="mr-1" fill="currentColor" />全て再生</>}
+            </Button>
           </div>
         </div>
 
@@ -145,12 +182,23 @@ export default function SentenceListPage() {
             <div className="bg-white rounded-2xl divide-y divide-border overflow-hidden">
               {sentences.map((sentence) => {
                 const isPlaying = playingId === sentence.id
+                const sentenceIndex = flatSentences.indexOf(sentence)
                 return (
                   <div
                     key={sentence.id}
                     ref={(el) => { sentenceRefs.current[sentence.id] = el }}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`${sentence.english} — 発音練習へ`}
+                    onClick={() => navigate(`/words/${id}/pronunciation/${sentence.id}`)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        navigate(`/words/${id}/pronunciation/${sentence.id}`)
+                      }
+                    }}
                     className={cn(
-                      'flex items-start gap-3 px-4 py-3 transition-colors',
+                      'flex items-start gap-3 px-4 py-3 transition-colors cursor-pointer hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ios-blue)] focus-visible:ring-inset',
                       isPlaying && 'bg-[var(--ios-blue)]/8',
                     )}
                   >
@@ -170,10 +218,22 @@ export default function SentenceListPage() {
                       </Badge>
                     </div>
 
-                    {/* Play button */}
+                    {/* Play/Stop button */}
                     <button
-                      disabled={!!playingId && !isPlaying}
-                      onClick={() => playSentence(sentence)}
+                      aria-label={
+                        isPlaying
+                          ? `「${sentence.english}」の再生を停止`
+                          : `「${sentence.english}」を再生`
+                      }
+                      disabled={isAnyPlaying && !isPlaying}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (isPlaying) {
+                          doStop()
+                        } else {
+                          startPlaybackFrom(sentenceIndex)
+                        }
+                      }}
                       className={cn(
                         'shrink-0 mt-0.5 w-8 h-8 flex items-center justify-center rounded-full transition-colors',
                         isPlaying

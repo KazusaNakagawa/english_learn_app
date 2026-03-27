@@ -104,8 +104,17 @@ export default function WordListPage() {
           filtered.map((word) => (
             <div
               key={word.id}
+              role="button"
+              tabIndex={0}
+              aria-label={`${word.word} — 例文一覧へ`}
               onClick={() => navigate(`/words/${word.id}/sentences`)}
-              className="bg-white rounded-2xl px-4 py-3 flex items-center gap-3 cursor-pointer active:opacity-70 transition-opacity"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  navigate(`/words/${word.id}/sentences`)
+                }
+              }}
+              className="bg-white rounded-2xl px-4 py-3 flex items-center gap-3 cursor-pointer active:opacity-70 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ios-blue)]"
             >
               {/* Left: text info */}
               <div className="flex-1 min-w-0">

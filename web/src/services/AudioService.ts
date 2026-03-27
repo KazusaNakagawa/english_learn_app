@@ -88,14 +88,27 @@ async function fetchVoicevoxWav(
   }
 }
 
+let _currentAudio: HTMLAudioElement | null = null
+
 function playBlob(blob: Blob): Promise<void> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(blob)
     const audio = new Audio(url)
-    audio.onended = () => { URL.revokeObjectURL(url); resolve() }
-    audio.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Audio playback failed')) }
+    _currentAudio = audio
+    audio.onended = () => { _currentAudio = null; URL.revokeObjectURL(url); resolve() }
+    audio.onerror = () => { _currentAudio = null; URL.revokeObjectURL(url); reject(new Error('Audio playback failed')) }
     audio.play().catch(reject)
   })
+}
+
+/** Stop any currently playing TTS audio immediately. */
+export function stopTTS(): void {
+  window.speechSynthesis.cancel()
+  if (_currentAudio) {
+    _currentAudio.pause()
+    _currentAudio.src = ''
+    _currentAudio = null
+  }
 }
 
 // ---- Public API ----
