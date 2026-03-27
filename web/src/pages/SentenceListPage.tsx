@@ -92,22 +92,42 @@ export default function SentenceListPage() {
       const sentence = flatSentences[i]
       setPlayingId(sentence.id)
       try {
+        // 1st EN
         await playTTS(sentence.english, {
           voice: s.enVoice as VoiceType,
           speakerId: s.voicevoxStyle,
           apiKey: resolvedVvKey,
           lang: 'en',
         })
-        if (s.playPattern === 'bilingual' && !cancelRef.current) {
+        if (cancelRef.current) break
+        await sleep(s.intervalSec)
+        if (cancelRef.current) break
+
+        if (s.playPattern === 'bilingual') {
+          // EN → JA → EN
+          await playTTS(sentence.japanese, {
+            voice: s.jaVoice as VoiceType,
+            speakerId: s.voicevoxStyle,
+            apiKey: resolvedVvKey,
+            lang: 'ja',
+          })
+          if (cancelRef.current) break
           await sleep(s.intervalSec)
-          if (!cancelRef.current) {
-            await playTTS(sentence.japanese, {
-              voice: s.jaVoice as VoiceType,
-              speakerId: s.voicevoxStyle,
-              apiKey: resolvedVvKey,
-              lang: 'ja',
-            })
-          }
+          if (cancelRef.current) break
+          await playTTS(sentence.english, {
+            voice: s.enVoice as VoiceType,
+            speakerId: s.voicevoxStyle,
+            apiKey: resolvedVvKey,
+            lang: 'en',
+          })
+        } else {
+          // EN → EN
+          await playTTS(sentence.english, {
+            voice: s.enVoice as VoiceType,
+            speakerId: s.voicevoxStyle,
+            apiKey: resolvedVvKey,
+            lang: 'en',
+          })
         }
       } catch (err) {
         if (!cancelRef.current) console.error('[SentenceListPage] sentence playback failed:', err)
