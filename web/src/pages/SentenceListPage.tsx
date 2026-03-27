@@ -38,6 +38,14 @@ export default function SentenceListPage() {
     sentenceRefs.current[playingId]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }, [playingId])
 
+  // Stop audio on unmount
+  useEffect(() => {
+    return () => {
+      cancelRef.current = true
+      stopTTS()
+    }
+  }, [])
+
   if (!word) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-muted-foreground">

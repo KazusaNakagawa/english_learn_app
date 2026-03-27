@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router'
 import { ChevronLeft, Volume2, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { playTTS, type VoiceType } from '@/services/AudioService'
+import { playTTS, stopTTS, type VoiceType } from '@/services/AudioService'
 import { loadSettings } from '@/services/SettingsService'
 import { SAMPLE_WORDS } from '@/data/sampleWords'
 
@@ -15,6 +15,11 @@ export default function PronunciationPage() {
   const sentence = word?.sentences.find((s) => s.id === sentenceId)
 
   const [playingLang, setPlayingLang] = useState<'en' | 'ja' | null>(null)
+
+  // Stop audio on unmount
+  useEffect(() => {
+    return () => { stopTTS() }
+  }, [])
 
   if (!word || !sentence) {
     return (
@@ -79,13 +84,9 @@ export default function PronunciationPage() {
                 <Button
                   key={lang}
                   size="sm"
-                  disabled={!!playingLang && !isPlaying}
+                  disabled={!!playingLang}
                   onClick={() => play(lang)}
-                  aria-label={
-                    isPlaying
-                      ? `再生を停止`
-                      : lang === 'en' ? '英語を聞く' : '日本語を聞く'
-                  }
+                  aria-label={lang === 'en' ? '英語を聞く' : '日本語を聞く'}
                   className={cn(
                     'rounded-full px-4 text-white',
                     lang === 'en'

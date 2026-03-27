@@ -97,7 +97,11 @@ function playBlob(blob: Blob): Promise<void> {
     _currentAudio = audio
     audio.onended = () => { _currentAudio = null; URL.revokeObjectURL(url); resolve() }
     audio.onerror = () => { _currentAudio = null; URL.revokeObjectURL(url); reject(new Error('Audio playback failed')) }
-    audio.play().catch(reject)
+    audio.play().catch((err) => {
+      _currentAudio = null
+      URL.revokeObjectURL(url)
+      reject(err)
+    })
   })
 }
 
