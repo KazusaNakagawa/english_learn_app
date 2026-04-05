@@ -257,7 +257,7 @@ export default function SentenceListPage() {
                         variant="secondary"
                         className="text-[10px] px-1.5 py-0 bg-[var(--ios-teal)]/15 text-[var(--ios-teal)] border-0"
                       >
-                        {sentence.category}
+                        {sentence.category || 'その他'}
                       </Badge>
                     </div>
 
@@ -269,6 +269,17 @@ export default function SentenceListPage() {
                           : `「${sentence.english}」を再生`
                       }
                       disabled={isAnyPlaying && !isPlaying}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          if (isPlaying) {
+                            doStop()
+                          } else {
+                            startPlaybackFrom(sentenceIndex)
+                          }
+                        }
+                      }}
                       onClick={(e) => {
                         e.stopPropagation()
                         if (isPlaying) {
