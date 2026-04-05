@@ -118,7 +118,19 @@ class SpeechService: NSObject, ObservableObject {
 
         if voiceGender == .zundamon {
             isSpeaking = true
-            _ = activateAudioSession()
+            // Configure audio session on the main thread before launching the async
+            // VOICEVOX request. activateAudioSession() only calls setActive(true) and
+            // skips setCategory, which can cause AVAudioPlayer.play() to fail silently
+            // when the session category is not .playback (e.g. after deactivation).
+            let audioSession = AVAudioSession.sharedInstance()
+            do {
+                if !isContinuousPlayback || audioSession.category != .playback {
+                    try audioSession.setCategory(.playback, mode: .default)
+                }
+                try audioSession.setActive(true)
+            } catch {
+                print("Failed to configure audio session for VOICEVOX: \(error.localizedDescription)")
+            }
             let requestID = UUID()
             voicevoxRequestID = requestID
             Task { [weak self] in
@@ -257,10 +269,9 @@ class SpeechService: NSObject, ObservableObject {
             audioPlayer = try AVAudioPlayer(data: audioData)
             audioPlayer?.delegate = self
 
-            // Enable background playback and ensure audio session is active
-            let audioSession = AVAudioSession.sharedInstance()
-            try audioSession.setCategory(.playback, mode: .default)
-            try audioSession.setActive(true)
+            // Audio session category is already set to .playback in speak() on the
+            // main thread before the async Task is launched. Just ensure it is active.
+            try AVAudioSession.sharedInstance().setActive(true)
 
             guard let player = audioPlayer, player.play() else {
                 // Playback failed to start - evict potentially corrupt cache entry
