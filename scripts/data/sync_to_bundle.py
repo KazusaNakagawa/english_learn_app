@@ -20,18 +20,34 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 SRC = REPO_ROOT / "EnglishLearnApp" / "data" / "word_set.json"
 DST = REPO_ROOT / "EnglishLearnApp" / "EnglishLearnApp" / "Resources" / "words.json"
 
+REQUIRED_KEYS = {"id", "word", "meaning", "phonetic", "sentences"}
+
 with SRC.open(encoding="utf-8") as f:
     data = json.load(f)
 
+if not isinstance(data, dict) or "words" not in data or not isinstance(data["words"], list):
+    raise ValueError("Invalid source format: expected {'words': [...]} at root")
+
 # createdAt は Swift モデルで optional なので除去して軽量化する（なくても動く）
 words = []
-for w in data["words"]:
+for idx, w in enumerate(data["words"]):
+    missing = REQUIRED_KEYS - set(w.keys())
+    if missing:
+        raise ValueError(f"words[{idx}] missing keys: {sorted(missing)}")
     entry = {k: v for k, v in w.items() if k != "createdAt"}
     words.append(entry)
 
 output = {"words": words}
 
-with DST.open("w", encoding="utf-8") as f:
-    json.dump(output, f, ensure_ascii=False, indent=2)
+# アトミック書き込み: 一時ファイルに書き出してからリネームすることで
+# 部分書き込みによる Resources/words.json の破損を防ぐ
+tmp = DST.with_suffix(".json.tmp")
+try:
+    with tmp.open("w", encoding="utf-8") as f:
+        json.dump(output, f, ensure_ascii=False, indent=2)
+    tmp.replace(DST)
+except Exception:
+    tmp.unlink(missing_ok=True)
+    raise
 
 print(f"Synced {len(words)} words → {DST.relative_to(REPO_ROOT)}")

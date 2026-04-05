@@ -1,7 +1,14 @@
 #!/usr/bin/env python3
+"""Generate a second batch of new words and merge into word_set.json."""
 import json
+import pathlib
+import sys
 
-EXISTING_FILE = "/Users/nakagawakazusa/work/english_learn_app/EnglishLearnApp/data/word_set.json"
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
+EXISTING_FILE = REPO_ROOT / "EnglishLearnApp" / "data" / "word_set.json"
+
+# Base epoch for createdAt field (1995-02-22 UTC — arbitrary but deterministic)
+BASE_TIMESTAMP = 793378800.0
 
 VERB_TMPL = [
     ("It is important to {b} in the right way.", "{m}ことが重要だ。", "一般的な使い方"),
@@ -285,8 +292,15 @@ for w, ja, ipa, ja_sent in extra_adjs:
 for w, ja, ipa, ja_sent in extra_nouns:
     NEW_WORDS.append(make_noun(w, ja, ipa, ja_sent))
 
-with open(EXISTING_FILE, 'r', encoding='utf-8') as f:
-    data = json.load(f)
+try:
+    with EXISTING_FILE.open('r', encoding='utf-8') as f:
+        data = json.load(f)
+except FileNotFoundError:
+    print(f"Error: {EXISTING_FILE} not found")
+    sys.exit(1)
+except json.JSONDecodeError as e:
+    print(f"Error: Invalid JSON in {EXISTING_FILE}: {e}")
+    sys.exit(1)
 
 existing_count = len(data['words'])
 existing_words_set = {w['word'] for w in data['words']}
@@ -319,11 +333,11 @@ for i, (word, meaning, phonetic, sentences) in enumerate(unique_new):
         "meaning": meaning,
         "phonetic": phonetic,
         "sentences": sentence_entries,
-        "createdAt": 793378800.0 + (existing_count + i + 1) * 3600
+        "createdAt": BASE_TIMESTAMP + (existing_count + i + 1) * 3600
     })
 
 total = len(data['words'])
-with open(EXISTING_FILE, 'w', encoding='utf-8') as f:
+with EXISTING_FILE.open('w', encoding='utf-8') as f:
     json.dump(data, f, ensure_ascii=False, indent=2)
 
 print(f"Done. Total words: {total}")
