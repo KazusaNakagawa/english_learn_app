@@ -330,7 +330,6 @@ verbs = [
     ("empower","力を与える","ɪmˈpaʊər",{"3p":"empowers","past":"empowered","ing":"empowering"},"力を与える"),
     ("evaluate","評価する","ɪˈvæljʊeɪt",{"3p":"evaluates","past":"evaluated","ing":"evaluating"},"評価する"),
     ("execute","実行する","ˈeksɪkjuːt",{"3p":"executes","past":"executed","ing":"executing"},"実行する"),
-    ("expand","展開する","ɪkˈspænd",{"3p":"expands","past":"expanded","ing":"expanding"},"展開する"),
     ("express","表現する","ɪkˈspres",{"3p":"expresses","past":"expressed","ing":"expressing"},"表現する"),
     ("focus","集中する","ˈfoʊkəs",{"3p":"focuses","past":"focused","ing":"focusing"},"集中する"),
     ("improve","改善する","ɪmˈpruːv",{"3p":"improves","past":"improved","ing":"improving"},"改善する"),
@@ -339,7 +338,6 @@ verbs = [
     ("manage","管理する","ˈmænɪdʒ",{"3p":"manages","past":"managed","ing":"managing"},"管理する"),
     ("measure","測定する","ˈmeʒər",{"3p":"measures","past":"measured","ing":"measuring"},"測定する"),
     ("navigate","舵を取る","ˈnævɪɡeɪt",{"3p":"navigates","past":"navigated","ing":"navigating"},"舵を取る"),
-    ("overcome","乗り越える","ˌoʊvərˈkʌm",{"3p":"overcomes","past":"overcame","ing":"overcoming"},"乗り越える"),
     ("recognize","認識する","ˈrekəɡnaɪz",{"3p":"recognizes","past":"recognized","ing":"recognizing"},"認識する"),
     ("reduce","減らす","rɪˈduːs",{"3p":"reduces","past":"reduced","ing":"reducing"},"減らす"),
     ("set","設定する","set",{"3p":"sets","past":"set","ing":"setting"},"設定する"),
@@ -542,7 +540,6 @@ adjs = [
     ("reliable","信頼できる","rɪˈlaɪəbəl","信頼できる"),
     ("relevant","適切な","ˈreləvənt","関連した"),
     ("responsible","責任感のある","rɪˈspɑːnsɪbəl","責任ある"),
-    ("transparent","透明な","trænsˈpærənt","透明な"),
 ]
 
 for w, ja, ipa, ja_sent in adjs:

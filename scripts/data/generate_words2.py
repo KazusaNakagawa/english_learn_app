@@ -177,7 +177,6 @@ extra_verbs = [
     ("recognize","認める","ˈrekəɡnaɪz",{"3p":"recognizes","past":"recognized","ing":"recognizing"},"認める"),
     ("suggest","提案する","səˈdʒest",{"3p":"suggests","past":"suggested","ing":"suggesting"},"提案する"),
     ("support","支援する","səˈpɔːrt",{"3p":"supports","past":"supported","ing":"supporting"},"支援する"),
-    ("transfer","移転する","trænsˈfɜːr",{"3p":"transfers","past":"transferred","ing":"transferring"},"移転する"),
 ]
 
 # Additional adjectives
@@ -254,7 +253,6 @@ extra_nouns = [
     ("accuracy","正確さ","ˈækjərəsi","正確さ"),
     ("achievement","業績","əˈtʃiːvmənt","業績"),
     ("barrier","障壁","ˈbæriər","障壁"),
-    ("challenge","課題","ˈtʃælɪndʒ","課題"),
     ("clarity","明瞭さ","ˈklærɪti","明瞭さ"),
     ("competence","能力","ˈkɑːmpɪtəns","能力"),
     ("complexity","複雑性","kəmˈpleksɪti","複雑性"),
