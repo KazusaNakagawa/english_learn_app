@@ -138,9 +138,12 @@ struct SentenceListView: View {
         }
         .navigationTitle("例文一覧")
         .navigationBarTitleDisplayMode(.inline)
-        // When individual playback starts, always stop continuous playback
-        // to prevent stale queues from advancing via delayed completion handlers
+        // When individual playback starts, stop continuous playback only if it is
+        // currently active. Calling stop() unconditionally would rotate voicevoxRequestID
+        // and cancel in-flight VOICEVOX requests for individual playback (e.g. from
+        // SettingsView sample button or single-play buttons).
         .onReceive(NotificationCenter.default.publisher(for: .speechServiceDidStartNewPlayback)) { _ in
+            guard globalPlaybackManager.isPlaying else { return }
             globalPlaybackManager.stop()
         }
         .onAppear {
