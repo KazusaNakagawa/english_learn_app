@@ -112,17 +112,24 @@ export default function SentenceListPage() {
         if (cancelRef.current) break
 
         if (s.playPattern === 'bilingual') {
-          // EN → JA
+          // EN → JA → EN
           await playTTS(sentence.japanese, {
             voice: s.jaVoice as VoiceType,
             speakerId: s.voicevoxStyle,
             apiKey: resolvedVvKey,
             lang: 'ja',
           })
-        } else {
-          // EN → EN
+          if (cancelRef.current) break
           await sleep(s.intervalSec)
           if (cancelRef.current) break
+          await playTTS(sentence.english, {
+            voice: s.enVoice as VoiceType,
+            speakerId: s.voicevoxStyle,
+            apiKey: resolvedVvKey,
+            lang: 'en',
+          })
+        } else {
+          // EN → EN
           await playTTS(sentence.english, {
             voice: s.enVoice as VoiceType,
             speakerId: s.voicevoxStyle,
