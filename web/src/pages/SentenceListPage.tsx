@@ -112,24 +112,17 @@ export default function SentenceListPage() {
         if (cancelRef.current) break
 
         if (s.playPattern === 'bilingual') {
-          // EN → JA → EN
+          // EN → JA
           await playTTS(sentence.japanese, {
             voice: s.jaVoice as VoiceType,
             speakerId: s.voicevoxStyle,
             apiKey: resolvedVvKey,
             lang: 'ja',
           })
-          if (cancelRef.current) break
-          await sleep(s.intervalSec)
-          if (cancelRef.current) break
-          await playTTS(sentence.english, {
-            voice: s.enVoice as VoiceType,
-            speakerId: s.voicevoxStyle,
-            apiKey: resolvedVvKey,
-            lang: 'en',
-          })
         } else {
           // EN → EN
+          await sleep(s.intervalSec)
+          if (cancelRef.current) break
           await playTTS(sentence.english, {
             voice: s.enVoice as VoiceType,
             speakerId: s.voicevoxStyle,
@@ -209,7 +202,7 @@ export default function SentenceListPage() {
               aria-label={isAnyPlaying ? '再生を停止' : '全例文を再生'}
               className="rounded-full px-4 bg-[var(--ios-teal)] hover:bg-[var(--ios-teal)]/90 text-white"
             >
-              {isAnyPlaying && !playingId?.startsWith('word-')
+              {isAnyPlaying
                 ? <><Square size={14} className="mr-1" fill="currentColor" />停止</>
                 : <><Play size={14} className="mr-1" fill="currentColor" />全て再生</>}
             </Button>
