@@ -27,24 +27,37 @@ export type PlaySource = 'cache' | 'voicevox' | 'webspeech'
 
 // ---- Web Speech API helpers ----
 
-function getEnVoice(type: VoiceType): SpeechSynthesisVoice | null {
-  const voices = window.speechSynthesis.getVoices().filter((v) => v.lang.startsWith('en'))
+function loadVoices(): Promise<SpeechSynthesisVoice[]> {
+  return new Promise((resolve) => {
+    const voices = window.speechSynthesis.getVoices()
+    if (voices.length > 0) { resolve(voices); return }
+    window.speechSynthesis.addEventListener(
+      'voiceschanged',
+      () => resolve(window.speechSynthesis.getVoices()),
+      { once: true },
+    )
+  })
+}
+
+function pickEnVoice(voices: SpeechSynthesisVoice[], type: VoiceType): SpeechSynthesisVoice | null {
+  const en = voices.filter((v) => v.lang.startsWith('en'))
   if (type === 'female' || type === 'default') {
-    return voices.find((v) => /female/i.test(v.name)) ?? null
+    return en.find((v) => /female/i.test(v.name)) ?? null
   }
   if (type === 'male') {
-    return voices.find((v) => /male/i.test(v.name) && !/female/i.test(v.name)) ?? null
+    return en.find((v) => /male/i.test(v.name) && !/female/i.test(v.name)) ?? null
   }
   return null
 }
 
-function speakWebSpeech(text: string, lang: 'en' | 'ja', voice: VoiceType): Promise<void> {
+async function speakWebSpeech(text: string, lang: 'en' | 'ja', voice: VoiceType): Promise<void> {
+  const voices = await loadVoices()
   return new Promise((resolve, reject) => {
     window.speechSynthesis.cancel()
     const utt = new SpeechSynthesisUtterance(text)
     utt.lang = lang === 'en' ? 'en-US' : 'ja-JP'
     if (lang === 'en') {
-      const v = getEnVoice(voice)
+      const v = pickEnVoice(voices, voice)
       if (v) utt.voice = v
     }
     utt.onend = () => resolve()
