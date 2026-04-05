@@ -1,7 +1,12 @@
 import { render, screen } from '@testing-library/react'
 import { HashRouter } from 'react-router'
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import App from '@/App'
+
+vi.mock('@/services/AudioService', () => ({
+  playTTS: vi.fn().mockResolvedValue('webspeech'),
+  stopTTS: vi.fn(),
+}))
 
 describe('App', () => {
   it('renders the word list page heading', () => {
@@ -10,6 +15,6 @@ describe('App', () => {
         <App />
       </HashRouter>,
     )
-    expect(screen.getByText('English Learn App')).toBeInTheDocument()
+    expect(screen.getByText('単語一覧')).toBeInTheDocument()
   })
 })
