@@ -128966,6 +128966,522 @@
         }
       ],
       "createdAt": 793022394.88979
+    },
+    {
+      "id": "70001001-1001-1001-1001-000000001001",
+      "word": "real",
+      "meaning": "本物の、現実の",
+      "phonetic": "ˈriː.əl",
+      "sentences": [
+        {
+          "id": "70001001-1001-1001-1001-000000000001",
+          "english": "Is this a real diamond?",
+          "japanese": "これは本物のダイヤモンドですか？",
+          "category": "日常会話"
+        },
+        {
+          "id": "70001001-1001-1001-1001-000000000002",
+          "english": "I need some real help here.",
+          "japanese": "ここで本当の助けが必要だ。",
+          "category": "日常会話"
+        },
+        {
+          "id": "70001001-1001-1001-1001-000000000003",
+          "english": "The real issue is lack of communication.",
+          "japanese": "本当の問題はコミュニケーション不足だ。",
+          "category": "ビジネス"
+        },
+        {
+          "id": "70001001-1001-1001-1001-000000000004",
+          "english": "She showed real courage during the crisis.",
+          "japanese": "彼女は危機の際に本物の勇気を見せた。",
+          "category": "人生の教訓"
+        },
+        {
+          "id": "70001001-1001-1001-1001-000000000005",
+          "english": "The real estate market is booming.",
+          "japanese": "不動産市場は活況を呈している。",
+          "category": "経済"
+        },
+        {
+          "id": "70001001-1001-1001-1001-000000000006",
+          "english": "He made a real effort to improve.",
+          "japanese": "彼は改善するために真剣な努力をした。",
+          "category": "仕事"
+        },
+        {
+          "id": "70001001-1001-1001-1001-000000000007",
+          "english": "This is a real opportunity you shouldn't miss.",
+          "japanese": "これは逃すべきではない本物のチャンスだ。",
+          "category": "ビジネス"
+        },
+        {
+          "id": "70001001-1001-1001-1001-000000000008",
+          "english": "The pain felt very real to her.",
+          "japanese": "その痛みは彼女にとってとても現実的に感じられた。",
+          "category": "感情"
+        },
+        {
+          "id": "70001001-1001-1001-1001-000000000009",
+          "english": "Real change takes time and patience.",
+          "japanese": "本当の変化には時間と忍耐が必要だ。",
+          "category": "人生の教訓"
+        },
+        {
+          "id": "70001001-1001-1001-1001-000000000010",
+          "english": "Are those real flowers or artificial?",
+          "japanese": "それらは本物の花ですか、それとも造花ですか？",
+          "category": "日常会話"
+        },
+        {
+          "id": "70001001-1001-1001-1001-000000000011",
+          "english": "Real friendship is hard to find.",
+          "japanese": "本物の友情は見つけにくい。",
+          "category": "人間関係"
+        },
+        {
+          "id": "70001001-1001-1001-1001-000000000012",
+          "english": "The real value of education goes beyond grades.",
+          "japanese": "教育の本当の価値は成績を超えている。",
+          "category": "教育"
+        },
+        {
+          "id": "70001001-1001-1001-1001-000000000013",
+          "english": "I had a real conversation with my boss.",
+          "japanese": "上司と本音の会話をした。",
+          "category": "ビジネス"
+        },
+        {
+          "id": "70001001-1001-1001-1001-000000000014",
+          "english": "Is the threat real or just imagined?",
+          "japanese": "その脅威は現実のものか、それとも想像上のものか？",
+          "category": "一般的な使い方"
+        },
+        {
+          "id": "70001001-1001-1001-1001-000000000015",
+          "english": "Real progress requires consistent effort.",
+          "japanese": "本当の進歩には一貫した努力が必要だ。",
+          "category": "自己啓発"
+        },
+        {
+          "id": "70001001-1001-1001-1001-000000000016",
+          "english": "The real cause of the accident was fatigue.",
+          "japanese": "事故の本当の原因は疲労だった。",
+          "category": "一般的な使い方"
+        },
+        {
+          "id": "70001001-1001-1001-1001-000000000017",
+          "english": "She has real talent for music.",
+          "japanese": "彼女は音楽に本物の才能がある。",
+          "category": "芸術"
+        },
+        {
+          "id": "70001001-1001-1001-1001-000000000018",
+          "english": "Let's talk about the real problem.",
+          "japanese": "本当の問題について話しましょう。",
+          "category": "日常会話"
+        },
+        {
+          "id": "70001001-1001-1001-1001-000000000019",
+          "english": "The real test of character comes in adversity.",
+          "japanese": "人格の本当の試練は逆境の中に来る。",
+          "category": "人生の教訓"
+        },
+        {
+          "id": "70001001-1001-1001-1001-000000000020",
+          "english": "Real love means accepting someone's flaws.",
+          "japanese": "本物の愛とは誰かの欠点を受け入れることだ。",
+          "category": "人間関係"
+        }
+      ],
+      "createdAt": 793022394.88979
+    },
+    {
+      "id": "70001002-1002-1002-1002-000000001002",
+      "word": "estate",
+      "meaning": "不動産、財産",
+      "phonetic": "ɪˈsteɪt",
+      "sentences": [
+        {
+          "id": "70001002-1002-1002-1002-000000000001",
+          "english": "The estate was passed down through generations.",
+          "japanese": "その財産は世代を超えて受け継がれた。",
+          "category": "家族"
+        },
+        {
+          "id": "70001002-1002-1002-1002-000000000002",
+          "english": "She inherited a large estate from her grandparents.",
+          "japanese": "彼女は祖父母から大きな財産を相続した。",
+          "category": "家族"
+        },
+        {
+          "id": "70001002-1002-1002-1002-000000000003",
+          "english": "The estate agent helped them find a home.",
+          "japanese": "不動産業者が彼らの家探しを手伝った。",
+          "category": "日常会話"
+        },
+        {
+          "id": "70001002-1002-1002-1002-000000000004",
+          "english": "The real estate market fluctuates with the economy.",
+          "japanese": "不動産市場は経済と共に変動する。",
+          "category": "経済"
+        },
+        {
+          "id": "70001002-1002-1002-1002-000000000005",
+          "english": "He managed the estate after his father's death.",
+          "japanese": "彼は父の死後、財産を管理した。",
+          "category": "家族"
+        },
+        {
+          "id": "70001002-1002-1002-1002-000000000006",
+          "english": "The estate covers hundreds of acres of land.",
+          "japanese": "その地所は何百エーカーもの土地を占めている。",
+          "category": "一般的な使い方"
+        },
+        {
+          "id": "70001002-1002-1002-1002-000000000007",
+          "english": "Buying real estate is a common investment strategy.",
+          "japanese": "不動産購入は一般的な投資戦略だ。",
+          "category": "投資"
+        },
+        {
+          "id": "70001002-1002-1002-1002-000000000008",
+          "english": "The estate included a mansion and gardens.",
+          "japanese": "その地所には邸宅と庭園が含まれていた。",
+          "category": "一般的な使い方"
+        },
+        {
+          "id": "70001002-1002-1002-1002-000000000009",
+          "english": "Estate taxes can be quite significant.",
+          "japanese": "相続税はかなり大きな額になることがある。",
+          "category": "経済"
+        },
+        {
+          "id": "70001002-1002-1002-1002-000000000010",
+          "english": "The estate was divided among the heirs.",
+          "japanese": "財産は相続人に分割された。",
+          "category": "法律"
+        },
+        {
+          "id": "70001002-1002-1002-1002-000000000011",
+          "english": "Investing in commercial estate can be profitable.",
+          "japanese": "商業不動産への投資は収益性が高い。",
+          "category": "投資"
+        },
+        {
+          "id": "70001002-1002-1002-1002-000000000012",
+          "english": "The estate planning attorney reviewed the will.",
+          "japanese": "遺産計画の弁護士が遺言を確認した。",
+          "category": "法律"
+        },
+        {
+          "id": "70001002-1002-1002-1002-000000000013",
+          "english": "A well-maintained estate holds its value over time.",
+          "japanese": "よく整備された地所は時間が経っても価値を保つ。",
+          "category": "投資"
+        },
+        {
+          "id": "70001002-1002-1002-1002-000000000014",
+          "english": "The estate sale attracted many buyers.",
+          "japanese": "遺産品のセールには多くの買い手が集まった。",
+          "category": "一般的な使い方"
+        },
+        {
+          "id": "70001002-1002-1002-1002-000000000015",
+          "english": "Real estate is often seen as a safe investment.",
+          "japanese": "不動産はしばしば安全な投資と見なされる。",
+          "category": "投資"
+        },
+        {
+          "id": "70001002-1002-1002-1002-000000000016",
+          "english": "The estate had been in the family for centuries.",
+          "japanese": "その地所は何世紀にもわたって一族の所有だった。",
+          "category": "歴史"
+        },
+        {
+          "id": "70001002-1002-1002-1002-000000000017",
+          "english": "She works as a real estate consultant.",
+          "japanese": "彼女は不動産コンサルタントとして働いている。",
+          "category": "仕事"
+        },
+        {
+          "id": "70001002-1002-1002-1002-000000000018",
+          "english": "The estate was transformed into a hotel.",
+          "japanese": "その地所はホテルに生まれ変わった。",
+          "category": "ビジネス"
+        },
+        {
+          "id": "70001002-1002-1002-1002-000000000019",
+          "english": "Managing an estate requires careful financial planning.",
+          "japanese": "財産の管理には慎重な財務計画が必要だ。",
+          "category": "経済"
+        },
+        {
+          "id": "70001002-1002-1002-1002-000000000020",
+          "english": "The estate auction drew international interest.",
+          "japanese": "その地所のオークションは国際的な関心を集めた。",
+          "category": "ビジネス"
+        }
+      ],
+      "createdAt": 793022394.88979
+    },
+    {
+      "id": "70001003-1003-1003-1003-000000001003",
+      "word": "investment",
+      "meaning": "投資",
+      "phonetic": "ɪnˈvest.mənt",
+      "sentences": [
+        {
+          "id": "70001003-1003-1003-1003-000000000001",
+          "english": "Education is the best investment you can make.",
+          "japanese": "教育はあなたができる最良の投資だ。",
+          "category": "教育"
+        },
+        {
+          "id": "70001003-1003-1003-1003-000000000002",
+          "english": "She made a wise investment in the stock market.",
+          "japanese": "彼女は株式市場で賢明な投資をした。",
+          "category": "経済"
+        },
+        {
+          "id": "70001003-1003-1003-1003-000000000003",
+          "english": "The investment paid off after several years.",
+          "japanese": "その投資は数年後に実を結んだ。",
+          "category": "経済"
+        },
+        {
+          "id": "70001003-1003-1003-1003-000000000004",
+          "english": "A good investment requires research and patience.",
+          "japanese": "良い投資には調査と忍耐が必要だ。",
+          "category": "経済"
+        },
+        {
+          "id": "70001003-1003-1003-1003-000000000005",
+          "english": "He lost a significant amount of money on bad investments.",
+          "japanese": "彼は悪い投資で多額のお金を失った。",
+          "category": "経済"
+        },
+        {
+          "id": "70001003-1003-1003-1003-000000000006",
+          "english": "The company announced a major investment in technology.",
+          "japanese": "会社はテクノロジーへの大規模投資を発表した。",
+          "category": "ビジネス"
+        },
+        {
+          "id": "70001003-1003-1003-1003-000000000007",
+          "english": "Investment in renewable energy is growing rapidly.",
+          "japanese": "再生可能エネルギーへの投資は急速に成長している。",
+          "category": "環境"
+        },
+        {
+          "id": "70001003-1003-1003-1003-000000000008",
+          "english": "She diversified her investment portfolio.",
+          "japanese": "彼女は投資ポートフォリオを分散させた。",
+          "category": "経済"
+        },
+        {
+          "id": "70001003-1003-1003-1003-000000000009",
+          "english": "Long-term investments tend to yield higher returns.",
+          "japanese": "長期投資はより高いリターンをもたらす傾向がある。",
+          "category": "経済"
+        },
+        {
+          "id": "70001003-1003-1003-1003-000000000010",
+          "english": "The government increased investment in healthcare.",
+          "japanese": "政府は医療への投資を増やした。",
+          "category": "社会"
+        },
+        {
+          "id": "70001003-1003-1003-1003-000000000011",
+          "english": "Investment risk should be carefully evaluated.",
+          "japanese": "投資リスクは慎重に評価されるべきだ。",
+          "category": "経済"
+        },
+        {
+          "id": "70001003-1003-1003-1003-000000000012",
+          "english": "Her investment in self-improvement paid dividends.",
+          "japanese": "自己啓発への投資は多くの利益をもたらした。",
+          "category": "自己啓発"
+        },
+        {
+          "id": "70001003-1003-1003-1003-000000000013",
+          "english": "The startup attracted significant foreign investment.",
+          "japanese": "そのスタートアップは多くの外国投資を引きつけた。",
+          "category": "ビジネス"
+        },
+        {
+          "id": "70001003-1003-1003-1003-000000000014",
+          "english": "Investment in infrastructure is crucial for development.",
+          "japanese": "インフラへの投資は開発に不可欠だ。",
+          "category": "社会"
+        },
+        {
+          "id": "70001003-1003-1003-1003-000000000015",
+          "english": "He consulted a financial advisor about his investments.",
+          "japanese": "彼は投資について財務アドバイザーに相談した。",
+          "category": "経済"
+        },
+        {
+          "id": "70001003-1003-1003-1003-000000000016",
+          "english": "Time is also a valuable form of investment.",
+          "japanese": "時間も価値ある投資の一形態だ。",
+          "category": "人生の教訓"
+        },
+        {
+          "id": "70001003-1003-1003-1003-000000000017",
+          "english": "Mutual funds allow small investors to diversify.",
+          "japanese": "投資信託により小規模投資家も分散投資が可能だ。",
+          "category": "経済"
+        },
+        {
+          "id": "70001003-1003-1003-1003-000000000018",
+          "english": "The return on investment exceeded expectations.",
+          "japanese": "投資収益率は期待を上回った。",
+          "category": "ビジネス"
+        },
+        {
+          "id": "70001003-1003-1003-1003-000000000019",
+          "english": "Investment in early childhood education yields long-term benefits.",
+          "japanese": "幼児教育への投資は長期的な恩恵をもたらす。",
+          "category": "教育"
+        },
+        {
+          "id": "70001003-1003-1003-1003-000000000020",
+          "english": "A poor investment can take years to recover from.",
+          "japanese": "悪い投資から回復するには何年もかかることがある。",
+          "category": "経済"
+        }
+      ],
+      "createdAt": 793022394.88979
+    },
+    {
+      "id": "70001004-1004-1004-1004-000000001004",
+      "word": "trust",
+      "meaning": "信頼、信用",
+      "phonetic": "trʌst",
+      "sentences": [
+        {
+          "id": "70001004-1004-1004-1004-000000000001",
+          "english": "Trust is the foundation of any relationship.",
+          "japanese": "信頼はあらゆる関係の基盤だ。",
+          "category": "人間関係"
+        },
+        {
+          "id": "70001004-1004-1004-1004-000000000002",
+          "english": "She earned his trust over many years.",
+          "japanese": "彼女は長年かけて彼の信頼を得た。",
+          "category": "人間関係"
+        },
+        {
+          "id": "70001004-1004-1004-1004-000000000003",
+          "english": "Once broken, trust is hard to rebuild.",
+          "japanese": "一度壊れた信頼は再構築が難しい。",
+          "category": "人間関係"
+        },
+        {
+          "id": "70001004-1004-1004-1004-000000000004",
+          "english": "I trust you to handle this situation.",
+          "japanese": "あなたがこの状況を処理すると信頼しています。",
+          "category": "日常会話"
+        },
+        {
+          "id": "70001004-1004-1004-1004-000000000005",
+          "english": "The trust between colleagues boosts productivity.",
+          "japanese": "同僚間の信頼は生産性を高める。",
+          "category": "ビジネス"
+        },
+        {
+          "id": "70001004-1004-1004-1004-000000000006",
+          "english": "He set up a trust fund for his children.",
+          "japanese": "彼は子どもたちのために信託基金を設立した。",
+          "category": "経済"
+        },
+        {
+          "id": "70001004-1004-1004-1004-000000000007",
+          "english": "Trust your instincts when making decisions.",
+          "japanese": "決断を下す際は本能を信頼しなさい。",
+          "category": "人生の教訓"
+        },
+        {
+          "id": "70001004-1004-1004-1004-000000000008",
+          "english": "The trust fund will support her education.",
+          "japanese": "その信託基金は彼女の教育を支援する。",
+          "category": "教育"
+        },
+        {
+          "id": "70001004-1004-1004-1004-000000000009",
+          "english": "Building trust takes time but losing it is instant.",
+          "japanese": "信頼を築くには時間がかかるが、失うのは一瞬だ。",
+          "category": "人生の教訓"
+        },
+        {
+          "id": "70001004-1004-1004-1004-000000000010",
+          "english": "She placed her trust in the medical team.",
+          "japanese": "彼女は医療チームに信頼を置いた。",
+          "category": "健康"
+        },
+        {
+          "id": "70001004-1004-1004-1004-000000000011",
+          "english": "Trust is essential in business partnerships.",
+          "japanese": "信頼はビジネスパートナーシップに不可欠だ。",
+          "category": "ビジネス"
+        },
+        {
+          "id": "70001004-1004-1004-1004-000000000012",
+          "english": "He managed the charitable trust with integrity.",
+          "japanese": "彼は誠実さをもって慈善信託を管理した。",
+          "category": "社会"
+        },
+        {
+          "id": "70001004-1004-1004-1004-000000000013",
+          "english": "Do you trust this source of information?",
+          "japanese": "この情報源を信頼していますか？",
+          "category": "一般的な使い方"
+        },
+        {
+          "id": "70001004-1004-1004-1004-000000000014",
+          "english": "A breach of trust can damage relationships permanently.",
+          "japanese": "信頼の侵害は関係を永久に損なうことがある。",
+          "category": "人間関係"
+        },
+        {
+          "id": "70001004-1004-1004-1004-000000000015",
+          "english": "The new employee quickly gained the team's trust.",
+          "japanese": "新入社員はすぐにチームの信頼を得た。",
+          "category": "ビジネス"
+        },
+        {
+          "id": "70001004-1004-1004-1004-000000000016",
+          "english": "Trust in government institutions has declined.",
+          "japanese": "政府機関への信頼が低下している。",
+          "category": "社会"
+        },
+        {
+          "id": "70001004-1004-1004-1004-000000000017",
+          "english": "She learned to trust herself more over time.",
+          "japanese": "彼女は時間をかけて自分をより信頼することを学んだ。",
+          "category": "自己啓発"
+        },
+        {
+          "id": "70001004-1004-1004-1004-000000000018",
+          "english": "A real estate investment trust diversifies property holdings.",
+          "japanese": "不動産投資信託は不動産保有を分散させる。",
+          "category": "投資"
+        },
+        {
+          "id": "70001004-1004-1004-1004-000000000019",
+          "english": "Parents must trust their children to make good choices.",
+          "japanese": "親は子どもが良い選択をすると信頼しなければならない。",
+          "category": "家族"
+        },
+        {
+          "id": "70001004-1004-1004-1004-000000000020",
+          "english": "Trust is built through consistent and honest actions.",
+          "japanese": "信頼は一貫した誠実な行動を通じて築かれる。",
+          "category": "人生の教訓"
+        }
+      ],
+      "createdAt": 793022394.88979
     }
   ]
 }
