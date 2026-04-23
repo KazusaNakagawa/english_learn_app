@@ -286,7 +286,7 @@ export class VoicevoxStack extends cdk.Stack {
 
     // 4xx アラーム: 5分間で10件超えたら通知
     // （認証エラーなどのノイズを除くため閾値を10に設定）
-    new cloudwatch.Alarm(this, 'Api4xxAlarm', {
+    const api4xxAlarm = new cloudwatch.Alarm(this, 'Api4xxAlarm', {
       alarmName: `voicevox-api-4xx-${stackEnv}`,
       alarmDescription: 'API Gateway 4xx errors exceeded threshold (5min / >10)',
       metric: new cloudwatch.Metric({
@@ -301,10 +301,12 @@ export class VoicevoxStack extends cdk.Stack {
       comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
       // データなし = 問題なし（夜間などのトラフィックゼロ時に誤発報しない）
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    }).addAlarmAction(alarmAction);
+    });
+    api4xxAlarm.addAlarmAction(alarmAction);
+    api4xxAlarm.addOkAction(alarmAction);  // 回復時も通知
 
     // 5xx アラーム: 5分間で1件でも通知（サーバーエラーは即時検知）
-    new cloudwatch.Alarm(this, 'Api5xxAlarm', {
+    const api5xxAlarm = new cloudwatch.Alarm(this, 'Api5xxAlarm', {
       alarmName: `voicevox-api-5xx-${stackEnv}`,
       alarmDescription: 'API Gateway 5xx errors exceeded threshold (5min / >=1)',
       metric: new cloudwatch.Metric({
@@ -318,7 +320,9 @@ export class VoicevoxStack extends cdk.Stack {
       evaluationPeriods: 1,
       comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    }).addAlarmAction(alarmAction);
+    });
+    api5xxAlarm.addAlarmAction(alarmAction);
+    api5xxAlarm.addOkAction(alarmAction);  // 回復時も通知
 
     // ----------------------------------------------------------------
     // Outputs
