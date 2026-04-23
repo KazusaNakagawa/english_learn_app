@@ -261,7 +261,13 @@ export class VoicevoxStack extends cdk.Stack {
 
     // Slack Webhook URL は環境変数から取得
     // Example: export VOICEVOX_SLACK_WEBHOOK_POC="https://hooks.slack.com/services/..."
-    const slackWebhookUrl = process.env[`VOICEVOX_SLACK_WEBHOOK_${stackEnv.toUpperCase()}`];
+    const slackWebhookEnvVar = `VOICEVOX_SLACK_WEBHOOK_${stackEnv.toUpperCase()}`;
+    const slackWebhookUrl = process.env[slackWebhookEnvVar];
+    if (!slackWebhookUrl) {
+      cdk.Annotations.of(this).addWarning(
+        `${slackWebhookEnvVar} is not set. Slack notifications will be skipped.`
+      );
+    }
 
     const slackAlertFn = new lambda.Function(this, 'SlackAlertFunction', {
       functionName: `voicevox-slack-alert-${stackEnv}`,

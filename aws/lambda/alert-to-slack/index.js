@@ -89,6 +89,9 @@ function postToSlack(webhookUrl, payload) {
     const body    = JSON.stringify(payload);
     const parsed  = url.parse(webhookUrl);
 
+    let settled = false;
+    const done = (fn, val) => { if (!settled) { settled = true; fn(val); } };
+
     const req = https.request(
       {
         hostname: parsed.hostname,
@@ -104,15 +107,21 @@ function postToSlack(webhookUrl, payload) {
         res.on('data', (chunk) => { data += chunk; });
         res.on('end', () => {
           if (res.statusCode !== 200) {
-            reject(new Error(`Slack returned ${res.statusCode}: ${data}`));
+            done(reject, new Error(`Slack returned ${res.statusCode}: ${data}`));
           } else {
-            resolve(data);
+            done(resolve, data);
           }
         });
       }
     );
 
-    req.on('error', reject);
+    // 5秒でタイムアウト — Slack が無応答のまま Lambda が止まるのを防ぐ
+    req.setTimeout(5000, () => {
+      req.destroy();
+      done(reject, new Error('Slack webhook request timed out after 5s'));
+    });
+
+    req.on('error', (err) => done(reject, err));
     req.write(body);
     req.end();
   });
