@@ -1,5 +1,34 @@
 import Foundation
 
+// MARK: - Codable helpers
+
+/// Property wrapper that decodes a Bool, defaulting to false when the key is absent.
+/// Keeps Word's synthesized Codable intact without a full manual decoder.
+@propertyWrapper
+struct DefaultFalse: Codable {
+    var wrappedValue: Bool
+
+    init(wrappedValue: Bool = false) { self.wrappedValue = wrappedValue }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        wrappedValue = (try? container.decode(Bool.self)) ?? false
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(wrappedValue)
+    }
+}
+
+extension KeyedDecodingContainer {
+    /// Returns a default `DefaultFalse()` when the key is missing, so synthesized
+    /// Codable for `Word` never throws on JSON that predates the `isFavorite` field.
+    func decode(_ type: DefaultFalse.Type, forKey key: Key) throws -> DefaultFalse {
+        (try decodeIfPresent(type, forKey: key)) ?? DefaultFalse()
+    }
+}
+
 // MARK: - Word Models
 
 struct Sentence: Codable, Identifiable {
@@ -25,10 +54,11 @@ struct Word: Codable, Identifiable {
     var deletedAt: Date?
     var createdAt: Date?
     var archivedAt: Date?
+    @DefaultFalse var isFavorite: Bool
 
     init(id: UUID = UUID(), word: String, meaning: String, phonetic: String,
          sentences: [Sentence] = [], deletedAt: Date? = nil, createdAt: Date? = Date(),
-         archivedAt: Date? = nil) {
+         archivedAt: Date? = nil, isFavorite: Bool = false) {
         self.id = id
         self.word = word
         self.meaning = meaning
@@ -37,6 +67,7 @@ struct Word: Codable, Identifiable {
         self.deletedAt = deletedAt
         self.createdAt = createdAt
         self.archivedAt = archivedAt
+        self.isFavorite = isFavorite
     }
 }
 
@@ -272,6 +303,11 @@ class WordDataManager: ObservableObject {
         let importedIDs = Set(imported.map { $0.id })
         let trashed = loadAllWords().filter { $0.deletedAt != nil && !importedIDs.contains($0.id) }
         saveAllWords(trashed + imported)
+    }
+
+    /// Toggles the isFavorite flag for the word with the given ID.
+    func toggleFavorite(wordId: UUID) {
+        modifyWords(ids: [wordId]) { $0.isFavorite.toggle() }
     }
 
     /// Updates a word's fields by ID.

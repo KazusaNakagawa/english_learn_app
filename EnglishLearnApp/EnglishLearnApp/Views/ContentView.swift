@@ -30,11 +30,10 @@ struct ContentView: View {
         }
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 0) {
-                if !globalPlaybackManager.queue.isEmpty {
-                    MiniPlayerView()
-                }
+                MiniPlayerView()
                 TabBar(selected: $selectedTab, presentingAdd: $showingAddWordView)
             }
+            .animation(.easeOut(duration: 0.25), value: globalPlaybackManager.queue.isEmpty)
         }
         .sheet(isPresented: $showingAddWordView) {
             AddWordView { newWord in
