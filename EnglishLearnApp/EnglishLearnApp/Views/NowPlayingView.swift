@@ -242,7 +242,7 @@ struct NowPlayingView: View {
                     .shadow(color: .black.opacity(0.3), radius: 9, x: 0, y: 6)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(playbackManager.isPlaying ? "Pause" : "Play")
+            .accessibilityLabel(playbackManager.isPlaying ? "一時停止" : "再生")
             .contentTransition(.symbolEffect(.replace))
 
             Spacer()
