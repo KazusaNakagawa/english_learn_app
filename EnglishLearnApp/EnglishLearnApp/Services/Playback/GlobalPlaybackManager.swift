@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import UIKit
 
 enum RepeatMode: Int {
     case off, all, one
@@ -86,6 +87,7 @@ final class GlobalPlaybackManager: ObservableObject {
     private var progressTimer: AnyCancellable?
     private var speechStartTime: Date?
     private var estimatedSpeechDuration: Double = 3.0
+    private var cachedArtwork: UIImage? = nil
 
     // MARK: - Initialization
 
@@ -384,12 +386,18 @@ final class GlobalPlaybackManager: ObservableObject {
             startProgressTracking(for: item.sentence.english)
         }
 
+        // Regenerate artwork only when the word changes (step 0 = new QueueItem)
+        if step == 0 {
+            cachedArtwork = CoverArtView.image(for: item.word.word)
+        }
+
         // Update Now Playing info
         let stepLabel = mode.stepLabel(for: step)
         NowPlayingInfoManager.update(
             title: item.sentence.english,
             artist: "\(item.word.word) - \(stepLabel)",
             album: item.word.meaning,
+            artwork: cachedArtwork,
             playbackRate: 1.0
         )
 

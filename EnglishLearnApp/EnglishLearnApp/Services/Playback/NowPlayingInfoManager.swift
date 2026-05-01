@@ -1,4 +1,5 @@
 import MediaPlayer
+import UIKit
 
 /// Manages Now Playing info displayed on lock screen and Control Center.
 ///
@@ -25,6 +26,7 @@ enum NowPlayingInfoManager {
         title: String,
         artist: String,
         album: String,
+        artwork: UIImage? = nil,
         playbackRate: Double = 1.0
     ) {
         var nowPlayingInfo = [String: Any]()
@@ -33,7 +35,11 @@ enum NowPlayingInfoManager {
         nowPlayingInfo[MPMediaItemPropertyAlbumTitle] = album
         nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] = playbackRate
         nowPlayingInfo[MPNowPlayingInfoPropertyMediaType] = MPNowPlayingInfoMediaType.audio.rawValue
-
+        if let artwork {
+            nowPlayingInfo[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(
+                boundsSize: artwork.size
+            ) { _ in artwork }
+        }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
     }
 

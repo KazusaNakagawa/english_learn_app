@@ -38,6 +38,14 @@ struct CoverArtView: View {
         )
     }
 
+    /// Renders the cover art as a UIImage for use in MPMediaItemArtwork.
+    @MainActor
+    static func image(for word: String, size: CGFloat = 300) -> UIImage? {
+        let renderer = ImageRenderer(content: CoverArtView(word: word, size: size, radius: 0))
+        renderer.scale = 3
+        return renderer.uiImage
+    }
+
     /// Returns the raw `[Color]` pair for a word — used to build background gradients.
     static func colors(for word: String) -> [Color] {
         let hash = word.unicodeScalars.reduce(5381) { ($0 &* 33) &+ Int($1.value) }
