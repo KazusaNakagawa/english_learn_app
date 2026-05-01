@@ -55,6 +55,7 @@
 		E1000002238D1234567890AB /* Tab.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1000001238D1234567890AB /* Tab.swift */; };
 		E1000004238D1234567890AB /* TabBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1000003238D1234567890AB /* TabBar.swift */; };
 		E1000006238D1234567890AB /* CoverArtView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1000005238D1234567890AB /* CoverArtView.swift */; };
+		F1000002238D1234567890AB /* DesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000001238D1234567890AB /* DesignTokens.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -88,6 +89,7 @@
 		A1000023238D1234567890AB /* TrashView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrashView.swift; sourceTree = "<group>"; };
 		A1000024238D1234567890AB /* EditWordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditWordView.swift; sourceTree = "<group>"; };
 		A1000028238D1234567890AB /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
+		F1000001238D1234567890AB /* DesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokens.swift; sourceTree = "<group>"; };
 		A1000074238D1234567890AB /* ArchiveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveView.swift; sourceTree = "<group>"; };
 		A1000076238D1234567890AB /* PrivacyPolicyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyPolicyView.swift; sourceTree = "<group>"; };
 		A1000078238D1234567890AB /* TermsOfServiceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TermsOfServiceView.swift; sourceTree = "<group>"; };
@@ -162,6 +164,7 @@
 				8577C1972F4BE5AC0061F175 /* Services */,
 				A1000011238D1234567890AB /* EnglishLearnAppApp.swift */,
 				A1000028238D1234567890AB /* AppConfig.swift */,
+				F1000001238D1234567890AB /* DesignTokens.swift */,
 				A1000033238D1234567890AB /* Models */,
 				A1000035238D1234567890AB /* Views */,
 				A1000036238D1234567890AB /* Resources */,
@@ -366,6 +369,7 @@
 				E1000002238D1234567890AB /* Tab.swift in Sources */,
 				E1000004238D1234567890AB /* TabBar.swift in Sources */,
 				E1000006238D1234567890AB /* CoverArtView.swift in Sources */,
+				F1000002238D1234567890AB /* DesignTokens.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
