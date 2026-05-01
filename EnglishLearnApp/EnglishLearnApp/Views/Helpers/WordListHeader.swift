@@ -3,6 +3,7 @@ import SwiftUI
 struct WordListHeader: View {
     @Binding var query: String
     @Binding var letter: String  // "ALL" | "A"…"Z"
+    @EnvironmentObject private var settings: SettingsManager
 
     private static let chips = ["ALL"] + (65...90).map { String(UnicodeScalar($0)!) }
 
@@ -71,4 +72,5 @@ struct WordListHeader: View {
 
     WordListHeader(query: $query, letter: $letter)
         .background(Color.token(\.bg))
+        .environmentObject(SettingsManager.shared)
 }

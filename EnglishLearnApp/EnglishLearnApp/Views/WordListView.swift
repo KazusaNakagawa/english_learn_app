@@ -125,44 +125,44 @@ struct WordListView: View {
                     message: "検索条件を変えてお試しください"
                 )
             } else {
-            List(filteredWords) { word in
-                if selection.isSelecting {
-                    SelectableListRow(id: word.id, selection: selection) {
-                        WordRowView(word: word, speechService: speechService)
-                    }
-                } else {
-                    NavigationLink(destination: destinationView(for: word)) {
-                        WordRowView(word: word, speechService: speechService)
-                    }
-                    .swipeActions(edge: .trailing) {
-                        Button(role: .destructive) {
-                            WordDataManager.shared.moveToTrash(wordId: word.id)
-                        } label: {
-                            Label("ゴミ箱へ", systemImage: "trash")
+                List(filteredWords) { word in
+                    if selection.isSelecting {
+                        SelectableListRow(id: word.id, selection: selection) {
+                            WordRowView(word: word, speechService: speechService)
                         }
-                        Button {
-                            WordDataManager.shared.archive(wordId: word.id)
-                        } label: {
-                            Label("アーカイブ", systemImage: "archivebox")
+                    } else {
+                        NavigationLink(destination: destinationView(for: word)) {
+                            WordRowView(word: word, speechService: speechService)
                         }
-                        .tint(.teal)
+                        .swipeActions(edge: .trailing) {
+                            Button(role: .destructive) {
+                                WordDataManager.shared.moveToTrash(wordId: word.id)
+                            } label: {
+                                Label("ゴミ箱へ", systemImage: "trash")
+                            }
+                            Button {
+                                WordDataManager.shared.archive(wordId: word.id)
+                            } label: {
+                                Label("アーカイブ", systemImage: "archivebox")
+                            }
+                            .tint(.teal)
+                        }
+                        .swipeActions(edge: .leading) {
+                            Button {
+                                wordToEdit = word
+                            } label: {
+                                Label("編集", systemImage: "pencil")
+                            }
+                            .tint(.orange)
+                        }
                     }
-                    .swipeActions(edge: .leading) {
-                        Button {
-                            wordToEdit = word
-                        } label: {
-                            Label("編集", systemImage: "pencil")
-                        }
-                        .tint(.orange)
+                }
+                .safeAreaInset(edge: .bottom) {
+                    if selection.isSelecting {
+                        wordListActionBar
                     }
                 }
             }
-            .safeAreaInset(edge: .bottom) {
-                if selection.isSelecting {
-                    wordListActionBar
-                }
-            }
-            } // end else
         }
         .navigationTitle("英単語リスト")
         .navigationBarTitleDisplayMode(.inline)
