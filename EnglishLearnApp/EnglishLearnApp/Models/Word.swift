@@ -25,10 +25,11 @@ struct Word: Codable, Identifiable {
     var deletedAt: Date?
     var createdAt: Date?
     var archivedAt: Date?
+    var isFavorite: Bool
 
     init(id: UUID = UUID(), word: String, meaning: String, phonetic: String,
          sentences: [Sentence] = [], deletedAt: Date? = nil, createdAt: Date? = Date(),
-         archivedAt: Date? = nil) {
+         archivedAt: Date? = nil, isFavorite: Bool = false) {
         self.id = id
         self.word = word
         self.meaning = meaning
@@ -37,6 +38,21 @@ struct Word: Codable, Identifiable {
         self.deletedAt = deletedAt
         self.createdAt = createdAt
         self.archivedAt = archivedAt
+        self.isFavorite = isFavorite
+    }
+
+    // Custom decoder: treats missing isFavorite key as false for backward compat.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        word = try c.decode(String.self, forKey: .word)
+        meaning = try c.decode(String.self, forKey: .meaning)
+        phonetic = try c.decode(String.self, forKey: .phonetic)
+        sentences = try c.decode([Sentence].self, forKey: .sentences)
+        deletedAt = try c.decodeIfPresent(Date.self, forKey: .deletedAt)
+        createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt)
+        archivedAt = try c.decodeIfPresent(Date.self, forKey: .archivedAt)
+        isFavorite = (try? c.decode(Bool.self, forKey: .isFavorite)) ?? false
     }
 }
 
@@ -272,6 +288,11 @@ class WordDataManager: ObservableObject {
         let importedIDs = Set(imported.map { $0.id })
         let trashed = loadAllWords().filter { $0.deletedAt != nil && !importedIDs.contains($0.id) }
         saveAllWords(trashed + imported)
+    }
+
+    /// Toggles the isFavorite flag for the word with the given ID.
+    func toggleFavorite(wordId: UUID) {
+        modifyWords(ids: Set([wordId])) { $0.isFavorite.toggle() }
     }
 
     /// Updates a word's fields by ID.

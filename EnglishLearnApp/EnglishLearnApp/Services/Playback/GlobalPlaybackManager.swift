@@ -41,6 +41,9 @@ final class GlobalPlaybackManager: ObservableObject {
     /// Whether playback is currently active.
     @Published private(set) var isPlaying: Bool = false
 
+    /// Estimated playback progress for the current utterance (0…1), updated at ~15 fps.
+    @Published private(set) var progress: Double = 0.0
+
     // MARK: - Dependencies
 
     private let speechService: SpeechService
@@ -51,6 +54,9 @@ final class GlobalPlaybackManager: ObservableObject {
 
     private var internalManager: ContinuousPlaybackManager<QueueItem>?
     private let remoteCommandManager = RemoteCommandCenterManager()
+    private var progressTimer: AnyCancellable?
+    private var speechStartTime: Date?
+    private var estimatedSpeechDuration: Double = 3.0
 
     // MARK: - Initialization
 
@@ -178,6 +184,7 @@ final class GlobalPlaybackManager: ObservableObject {
     func pause() {
         guard isPlaying else { return }
 
+        stopProgressTracking()
         internalManager?.stop()
         speechService.stop()
         speechService.deactivateAudioSession()
@@ -302,13 +309,16 @@ final class GlobalPlaybackManager: ObservableObject {
             switch step {
             case 0, 2:
                 speechService.speak(item.sentence.english, language: "en-US", isContinuousPlayback: true)
+                startProgressTracking(for: item.sentence.english)
             case 1:
                 speechService.speak(item.sentence.japanese, language: "ja-JP", isContinuousPlayback: true)
+                startProgressTracking(for: item.sentence.japanese)
             default:
                 break
             }
         case .englishOnly:
             speechService.speak(item.sentence.english, language: "en-US", isContinuousPlayback: true)
+            startProgressTracking(for: item.sentence.english)
         }
 
         // Update Now Playing info
@@ -345,6 +355,7 @@ final class GlobalPlaybackManager: ObservableObject {
     }
 
     private func handlePlaybackCompletion() {
+        stopProgressTracking()
         speechService.deactivateAudioSession()
         NowPlayingInfoManager.clear()
         syncStateFromManager()
@@ -366,6 +377,28 @@ final class GlobalPlaybackManager: ObservableObject {
         if !manager.isPlaying && manager.items.isEmpty && !queue.isEmpty {
             // Manager was stopped - keep queue for resume capability
         }
+    }
+
+    // MARK: - Progress Tracking
+
+    private func startProgressTracking(for text: String) {
+        speechStartTime = Date()
+        let wordCount = max(1, text.split(separator: " ").count)
+        estimatedSpeechDuration = max(1.5, Double(wordCount) * 0.4)
+        progress = 0.0
+        progressTimer = Timer.publish(every: 1.0 / 15.0, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                guard let self, let start = self.speechStartTime else { return }
+                self.progress = min(Date().timeIntervalSince(start) / self.estimatedSpeechDuration, 1.0)
+            }
+    }
+
+    private func stopProgressTracking() {
+        progressTimer?.cancel()
+        progressTimer = nil
+        progress = 0.0
+        speechStartTime = nil
     }
 
     // MARK: - Prefetching

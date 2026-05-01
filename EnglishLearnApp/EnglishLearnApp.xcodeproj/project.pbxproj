@@ -54,6 +54,7 @@
 		D1A00031238D1234567890AB /* AudioCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1A00021238D1234567890AB /* AudioCache.swift */; };
 		E1000002238D1234567890AB /* Tab.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1000001238D1234567890AB /* Tab.swift */; };
 		E1000004238D1234567890AB /* TabBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1000003238D1234567890AB /* TabBar.swift */; };
+		E1000006238D1234567890AB /* CoverArtView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1000005238D1234567890AB /* CoverArtView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -101,6 +102,7 @@
 		A100008C238D1234567890AB /* SpeechButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechButton.swift; sourceTree = "<group>"; };
 		E1000001238D1234567890AB /* Tab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tab.swift; sourceTree = "<group>"; };
 		E1000003238D1234567890AB /* TabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabBar.swift; sourceTree = "<group>"; };
+		E1000005238D1234567890AB /* CoverArtView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverArtView.swift; sourceTree = "<group>"; };
 		C1A00011238D1234567890AB /* QueueItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueueItem.swift; sourceTree = "<group>"; };
 		C1A00012238D1234567890AB /* GlobalPlaybackManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalPlaybackManager.swift; sourceTree = "<group>"; };
 		C1A00013238D1234567890AB /* MiniPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiniPlayerView.swift; sourceTree = "<group>"; };
@@ -242,6 +244,7 @@
 				A100008C238D1234567890AB /* SpeechButton.swift */,
 				E1000001238D1234567890AB /* Tab.swift */,
 				E1000003238D1234567890AB /* TabBar.swift */,
+				E1000005238D1234567890AB /* CoverArtView.swift */,
 			);
 			path = Helpers;
 			sourceTree = "<group>";
@@ -362,6 +365,7 @@
 				C1A00004238D1234567890AB /* FullPlayerView.swift in Sources */,
 				E1000002238D1234567890AB /* Tab.swift in Sources */,
 				E1000004238D1234567890AB /* TabBar.swift in Sources */,
+				E1000006238D1234567890AB /* CoverArtView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

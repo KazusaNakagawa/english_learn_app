@@ -30,9 +30,9 @@ struct ContentView: View {
         }
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 0) {
-                if !globalPlaybackManager.queue.isEmpty {
-                    MiniPlayerView()
-                }
+                MiniPlayerView()
+                    .environmentObject(WordDataManager.shared)
+                    .animation(.easeOut(duration: 0.25), value: globalPlaybackManager.queue.isEmpty)
                 TabBar(selected: $selectedTab, presentingAdd: $showingAddWordView)
             }
         }

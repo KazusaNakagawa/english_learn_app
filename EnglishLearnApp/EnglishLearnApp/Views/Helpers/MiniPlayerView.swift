@@ -1,122 +1,97 @@
 import SwiftUI
 
-/// A persistent mini-player that displays at the bottom of the screen during playback.
-///
-/// Shows the current sentence, playback progress, and control buttons.
-/// Tapping opens the full player sheet for queue management.
 struct MiniPlayerView: View {
     @EnvironmentObject private var playbackManager: GlobalPlaybackManager
-    @EnvironmentObject private var settings: SettingsManager
-
+    @EnvironmentObject private var wordDataManager: WordDataManager
     @State private var showingFullPlayer = false
 
     var body: some View {
-        HStack(spacing: 12) {
-            // Current sentence info - tappable to expand
-            Button {
-                showingFullPlayer = true
-            } label: {
-                VStack(alignment: .leading, spacing: 2) {
-                    if let item = playbackManager.currentItem {
-                        currentSentenceText(for: item)
-                        HStack(spacing: 4) {
-                            Text(item.word.word)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            Text(progressText)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    } else {
-                        Text("No playback")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                    }
+        if let item = playbackManager.currentItem {
+            card(for: item)
+                .padding(.horizontal, 8)
+                .padding(.bottom, 6)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .sheet(isPresented: $showingFullPlayer) {
+                    FullPlayerView()
+                }
+        }
+    }
+
+    // MARK: - Card
+
+    private func card(for item: QueueItem) -> some View {
+        let gradient = coverGradient(for: item.word.word)
+        let isFav = wordDataManager.words.first(where: { $0.id == item.word.id })?.isFavorite
+            ?? item.word.isFavorite
+
+        return Button { showingFullPlayer = true } label: {
+            HStack(spacing: 10) {
+                CoverArtView(word: item.word.word, size: 42, radius: 4)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(item.word.word)
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                    Text(item.sentence.english)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.white.opacity(0.78))
+                        .lineLimit(1)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .buttonStyle(.plain)
 
-            // Playback controls - sibling buttons, not nested
-            HStack(spacing: 16) {
+                Spacer(minLength: 8)
+
                 Button {
-                    playbackManager.previous()
+                    wordDataManager.toggleFavorite(wordId: item.word.id)
                 } label: {
-                    Image(systemName: "backward.fill")
-                        .font(.title3)
-                        .foregroundColor(.primary)
+                    Image(systemName: isFav ? "heart.fill" : "heart")
+                        .font(.system(size: 18))
+                        .foregroundStyle(isFav ? Color.pink : .white)
                 }
                 .buttonStyle(.plain)
-                .disabled(playbackManager.currentIndex == 0)
 
                 Button {
-                    if playbackManager.isPlaying {
-                        playbackManager.pause()
-                    } else {
-                        playbackManager.resume()
-                    }
+                    if playbackManager.isPlaying { playbackManager.pause() }
+                    else { playbackManager.resume() }
                 } label: {
                     Image(systemName: playbackManager.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.title2)
-                        .foregroundColor(.primary)
+                        .font(.system(size: 20))
+                        .foregroundStyle(.white)
+                        .contentTransition(.symbolEffect(.replace))
                 }
                 .buttonStyle(.plain)
-
-                Button {
-                    playbackManager.next()
-                } label: {
-                    Image(systemName: "forward.fill")
-                        .font(.title3)
-                        .foregroundColor(.primary)
-                }
-                .buttonStyle(.plain)
-                .disabled(playbackManager.currentIndex >= playbackManager.queue.count - 1)
+            }
+            .padding(.leading, 8)
+            .padding(.trailing, 10)
+            .padding(.vertical, 8)
+            .background(
+                gradient.overlay(Color.black.opacity(0.18))
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(alignment: .bottom) {
+                ProgressLine(progress: playbackManager.progress)
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 3)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(.regularMaterial)
-        .overlay(alignment: .top) { Divider() }
-        .sheet(isPresented: $showingFullPlayer) {
-            FullPlayerView()
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Progress Line
+
+private struct ProgressLine: View {
+    let progress: Double
+
+    var body: some View {
+        GeometryReader { geo in
+            Capsule()
+                .fill(.white.opacity(0.55))
+                .frame(width: geo.size.width * progress, height: 2)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
-    }
-
-    // MARK: - Helper Views
-
-    @ViewBuilder
-    private func currentSentenceText(for item: QueueItem) -> some View {
-        let mode = settings.playbackMode
-        let step = playbackManager.currentStep
-
-        // Determine which text to show based on current step
-        let (text, isJapanese): (String, Bool) = {
-            switch mode {
-            case .bilingual:
-                switch step {
-                case 0, 2:
-                    return (item.sentence.english, false)
-                case 1:
-                    return (item.sentence.japanese, true)
-                default:
-                    return (item.sentence.english, false)
-                }
-            case .englishOnly:
-                return (item.sentence.english, false)
-            }
-        }()
-
-        Text(text)
-            .font(.subheadline)
-            .fontWeight(.medium)
-            .foregroundColor(isJapanese ? .orange : .blue)
-            .lineLimit(1)
-    }
-
-    private var progressText: String {
-        let current = playbackManager.currentIndex + 1
-        let total = playbackManager.queue.count
-        return "\(current)/\(total)"
+        .frame(height: 2)
     }
 }
 
@@ -126,5 +101,5 @@ struct MiniPlayerView: View {
         MiniPlayerView()
     }
     .environmentObject(GlobalPlaybackManager(speechService: .shared, settings: .shared))
-    .environmentObject(SettingsManager.shared)
+    .environmentObject(WordDataManager.shared)
 }
