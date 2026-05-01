@@ -48,12 +48,11 @@ struct NowPlayingView: View {
         .gesture(
             DragGesture(minimumDistance: 10)
                 .onChanged { value in
-                    // Ignore primarily-horizontal drags (scrubber interaction)
-                    guard abs(value.translation.height) > abs(value.translation.width) else { return }
+                    guard isVerticalDrag(value) else { return }
                     if value.translation.height > 0 { dragOffset = value.translation.height }
                 }
                 .onEnded { value in
-                    guard abs(value.translation.height) > abs(value.translation.width) else { return }
+                    guard isVerticalDrag(value) else { return }
                     if value.translation.height > 120 {
                         dismiss()
                     } else {
@@ -287,6 +286,10 @@ struct NowPlayingView: View {
     }
 
     // MARK: - Helpers
+
+    private func isVerticalDrag(_ value: DragGesture.Value) -> Bool {
+        abs(value.translation.height) > abs(value.translation.width)
+    }
 
     private func formatTime(_ seconds: Double) -> String {
         let s = Int(max(0, seconds))
