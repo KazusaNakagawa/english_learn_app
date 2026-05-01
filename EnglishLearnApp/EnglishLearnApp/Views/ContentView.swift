@@ -11,18 +11,22 @@ struct ContentView: View {
             NavigationStack { WordListView() }
                 .opacity(selectedTab == .learn ? 1 : 0)
                 .allowsHitTesting(selectedTab == .learn)
+                .accessibilityHidden(selectedTab != .learn)
 
             NavigationStack { ArchiveView() }
                 .opacity(selectedTab == .archive ? 1 : 0)
                 .allowsHitTesting(selectedTab == .archive)
+                .accessibilityHidden(selectedTab != .archive)
 
             NavigationStack { TrashView() }
                 .opacity(selectedTab == .trash ? 1 : 0)
                 .allowsHitTesting(selectedTab == .trash)
+                .accessibilityHidden(selectedTab != .trash)
 
             SettingsView()
                 .opacity(selectedTab == .settings ? 1 : 0)
                 .allowsHitTesting(selectedTab == .settings)
+                .accessibilityHidden(selectedTab != .settings)
         }
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 0) {
