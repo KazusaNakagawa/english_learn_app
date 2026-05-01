@@ -3,6 +3,11 @@ import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as ecr_assets from 'aws-cdk-lib/aws-ecr-assets';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as logs from 'aws-cdk-lib/aws-logs';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as sns_subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import * as apigatewayv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import * as apigatewayv2Integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as apigatewayv2Authorizers from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
@@ -243,6 +248,87 @@ export class VoicevoxStack extends cdk.Stack {
       methods: [apigatewayv2.HttpMethod.GET],
       integration: lambdaIntegration,
     });
+
+    // ----------------------------------------------------------------
+    // CloudWatch Alarms: API Gateway 4xx / 5xx → SNS → Slack
+    // ----------------------------------------------------------------
+
+    // SNS topic: receives alarm state changes from CloudWatch
+    const alertTopic = new sns.Topic(this, 'ApiAlertTopic', {
+      topicName: `voicevox-api-alert-${stackEnv}`,
+      displayName: `VOICEVOX API Alerts (${stackEnv})`,
+    });
+
+    // Slack Webhook URL は環境変数から取得
+    // Example: export VOICEVOX_SLACK_WEBHOOK_POC="https://hooks.slack.com/services/..."
+    const slackWebhookEnvVar = `VOICEVOX_SLACK_WEBHOOK_${stackEnv.toUpperCase()}`;
+    const slackWebhookUrl = process.env[slackWebhookEnvVar];
+    if (!slackWebhookUrl) {
+      cdk.Annotations.of(this).addWarning(
+        `${slackWebhookEnvVar} is not set. Slack notifications will be skipped.`
+      );
+    }
+
+    const slackAlertFn = new lambda.Function(this, 'SlackAlertFunction', {
+      functionName: `voicevox-slack-alert-${stackEnv}`,
+      runtime: lambda.Runtime.NODEJS_22_X,
+      handler: 'index.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/alert-to-slack')),
+      environment: {
+        // Webhook URL が未設定の場合、Lambda は通知をスキップしてログのみ出力する
+        SLACK_WEBHOOK_URL: slackWebhookUrl ?? '',
+      },
+      timeout: cdk.Duration.seconds(10),
+      logRetention: logs.RetentionDays.ONE_WEEK,
+      description: `Forwards CloudWatch Alarm notifications to Slack (${stackEnv})`,
+    });
+
+    // SNS → Lambda サブスクリプション
+    alertTopic.addSubscription(
+      new sns_subscriptions.LambdaSubscription(slackAlertFn)
+    );
+
+    const alarmAction = new cloudwatch_actions.SnsAction(alertTopic);
+
+    // 4xx アラーム: 5分間で10件超えたら通知
+    // （認証エラーなどのノイズを除くため閾値を10に設定）
+    const api4xxAlarm = new cloudwatch.Alarm(this, 'Api4xxAlarm', {
+      alarmName: `voicevox-api-4xx-${stackEnv}`,
+      alarmDescription: 'API Gateway 4xx errors exceeded threshold (5min / >10)',
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/ApiGateway',
+        metricName: '4xx',
+        dimensionsMap: { ApiId: httpApi.apiId },
+        statistic: 'Sum',
+        period: cdk.Duration.minutes(5),
+      }),
+      threshold: 10,
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      // データなし = 問題なし（夜間などのトラフィックゼロ時に誤発報しない）
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+    api4xxAlarm.addAlarmAction(alarmAction);
+    api4xxAlarm.addOkAction(alarmAction);  // 回復時も通知
+
+    // 5xx アラーム: 5分間で1件でも通知（サーバーエラーは即時検知）
+    const api5xxAlarm = new cloudwatch.Alarm(this, 'Api5xxAlarm', {
+      alarmName: `voicevox-api-5xx-${stackEnv}`,
+      alarmDescription: 'API Gateway 5xx errors exceeded threshold (5min / >=1)',
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/ApiGateway',
+        metricName: '5xx',
+        dimensionsMap: { ApiId: httpApi.apiId },
+        statistic: 'Sum',
+        period: cdk.Duration.minutes(5),
+      }),
+      threshold: 0,
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+    api5xxAlarm.addAlarmAction(alarmAction);
+    api5xxAlarm.addOkAction(alarmAction);  // 回復時も通知
 
     // ----------------------------------------------------------------
     // Outputs

@@ -1,5 +1,7 @@
 *.js
 *.d.ts
+# Lambda source files (plain JS, not compiled output) are tracked
+!lambda/**/*.js
 node_modules/
 dist/
 cdk.out/
