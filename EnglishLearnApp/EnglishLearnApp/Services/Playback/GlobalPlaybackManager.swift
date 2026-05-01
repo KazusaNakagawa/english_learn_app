@@ -386,9 +386,12 @@ final class GlobalPlaybackManager: ObservableObject {
             startProgressTracking(for: item.sentence.english)
         }
 
-        // Regenerate artwork only when the word changes (step 0 = new QueueItem)
+        // Regenerate cover art asynchronously on the main actor when the word changes.
         if step == 0 {
-            cachedArtwork = CoverArtView.image(for: item.word.word)
+            let wordForArt = item.word.word
+            Task { @MainActor [weak self] in
+                self?.cachedArtwork = CoverArtView.image(for: wordForArt)
+            }
         }
 
         // Update Now Playing info
