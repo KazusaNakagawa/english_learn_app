@@ -1,6 +1,25 @@
 import Foundation
 import Combine
 
+enum RepeatMode: Int {
+    case off, all, one
+
+    var icon: String {
+        switch self {
+        case .off, .all: "repeat"
+        case .one: "repeat.1"
+        }
+    }
+
+    func next() -> RepeatMode {
+        switch self {
+        case .off: .all
+        case .all: .one
+        case .one: .off
+        }
+    }
+}
+
 /// Global playback manager that provides app-wide continuous playback with a persistent mini-player.
 ///
 /// This manager wraps `ContinuousPlaybackManager<QueueItem>` and exposes state for SwiftUI views.
@@ -44,11 +63,21 @@ final class GlobalPlaybackManager: ObservableObject {
     /// Estimated playback progress for the current utterance (0…1), updated at ~15 fps.
     @Published private(set) var progress: Double = 0.0
 
+    /// Whether the queue is currently shuffled.
+    @Published private(set) var isShuffled: Bool = false
+
+    /// Current repeat mode.
+    @Published private(set) var repeatMode: RepeatMode = .off
+
+    /// Estimated duration of the current utterance in seconds.
+    var estimatedDurationSeconds: Double { estimatedSpeechDuration }
+
     // MARK: - Dependencies
 
     private let speechService: SpeechService
     private let settings: SettingsManager
     private var cancellables = Set<AnyCancellable>()
+    private var originalQueue: [QueueItem] = []
 
     // MARK: - Internal Manager
 
@@ -294,9 +323,43 @@ final class GlobalPlaybackManager: ObservableObject {
     func clearQueue() {
         stop()
         queue = []
+        originalQueue = []
         currentIndex = 0
         currentStep = 0
         isPlaying = false
+        isShuffled = false
+    }
+
+    /// Toggles shuffle. Shuffles remaining items on enable; restores original order on disable.
+    func toggleShuffle() {
+        if isShuffled {
+            let currentID = currentItem?.id
+            queue = originalQueue.isEmpty ? queue : originalQueue
+            originalQueue = []
+            if let id = currentID, let idx = queue.firstIndex(where: { $0.id == id }) {
+                currentIndex = idx
+            }
+            isShuffled = false
+        } else {
+            originalQueue = queue
+            var rest = queue
+            let current = rest.remove(at: currentIndex)
+            rest.shuffle()
+            rest.insert(current, at: 0)
+            queue = rest
+            currentIndex = 0
+            isShuffled = true
+        }
+    }
+
+    /// Cycles repeat mode: off → all → one → off.
+    func toggleRepeat() {
+        repeatMode = repeatMode.next()
+    }
+
+    /// Seek is a best-effort no-op for TTS: scrubber position resets to live progress.
+    func seek(to progress: Double) {
+        // TTS does not support mid-utterance seeking.
     }
 
     // MARK: - Private Methods
@@ -355,6 +418,19 @@ final class GlobalPlaybackManager: ObservableObject {
     }
 
     private func handlePlaybackCompletion() {
+        // GlobalPlaybackManager.currentIndex still holds the last played index
+        // because syncStateFromManager() has not been called yet.
+        let lastIndex = currentIndex
+        switch repeatMode {
+        case .one:
+            enqueue(queue, startIndex: lastIndex)
+            return
+        case .all:
+            enqueue(queue, startIndex: 0)
+            return
+        case .off:
+            break
+        }
         stopProgressTracking()
         speechService.deactivateAudioSession()
         NowPlayingInfoManager.clear()

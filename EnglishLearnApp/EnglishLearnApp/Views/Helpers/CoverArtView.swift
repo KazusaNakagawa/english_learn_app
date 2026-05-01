@@ -31,14 +31,19 @@ struct CoverArtView: View {
     /// Deterministic LinearGradient for a word using a stable DJB2 hash.
     /// Uses safe modulo to avoid overflow on any hash value.
     static func gradient(for word: String) -> LinearGradient {
-        let hash = word.unicodeScalars.reduce(5381) { ($0 &* 33) &+ Int($1.value) }
-        let n = gradientPalettes.count
-        let index = ((hash % n) + n) % n
-        return LinearGradient(
-            colors: gradientPalettes[index],
+        LinearGradient(
+            colors: colors(for: word),
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
+    }
+
+    /// Returns the raw `[Color]` pair for a word — used to build background gradients.
+    static func colors(for word: String) -> [Color] {
+        let hash = word.unicodeScalars.reduce(5381) { ($0 &* 33) &+ Int($1.value) }
+        let n = gradientPalettes.count
+        let index = ((hash % n) + n) % n
+        return gradientPalettes[index]
     }
 }
 

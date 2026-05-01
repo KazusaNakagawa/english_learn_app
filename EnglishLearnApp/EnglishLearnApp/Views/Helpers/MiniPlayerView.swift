@@ -11,8 +11,8 @@ struct MiniPlayerView: View {
                 .padding(.horizontal, 8)
                 .padding(.bottom, 6)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
-                .sheet(isPresented: $showingFullPlayer) {
-                    FullPlayerView()
+                .fullScreenCover(isPresented: $showingFullPlayer) {
+                    NowPlayingView()
                 }
         }
     }
