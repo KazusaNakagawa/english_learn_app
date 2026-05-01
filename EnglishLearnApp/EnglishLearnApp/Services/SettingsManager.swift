@@ -106,6 +106,11 @@ class SettingsManager: ObservableObject {
         }
     }
 
+    /// The active color/typography theme for the design system.
+    @Published var theme: Theme {
+        didSet { UserDefaults.standard.set(theme.rawValue, forKey: "appTheme") }
+    }
+
     // MARK: - Computed Properties
 
     /// All presets: built-ins (with any user edits applied) first, then custom.
@@ -296,6 +301,13 @@ class SettingsManager: ObservableObject {
             self.sentenceDelaySeconds = min(max(savedDelay, 0.5), 3.0)
         } else {
             self.sentenceDelaySeconds = 1.5
+        }
+
+        if let saved = UserDefaults.standard.string(forKey: "appTheme"),
+           let t = Theme(rawValue: saved) {
+            self.theme = t
+        } else {
+            self.theme = .dark
         }
 
         // Load custom presets
