@@ -2,7 +2,6 @@ import Foundation
 import Combine
 import UIKit
 
-
 /// Global playback manager that provides app-wide continuous playback with a persistent mini-player.
 ///
 /// This manager wraps `ContinuousPlaybackManager<QueueItem>` and exposes state for SwiftUI views.
@@ -332,20 +331,31 @@ final class GlobalPlaybackManager: ObservableObject {
             startProgressTracking(for: item.sentence.english)
         }
 
-        // Regenerate cover art asynchronously on the main actor when the word changes.
+        // Update Now Playing info
+        let stepLabel = mode.stepLabel(for: step)
+        let sentence = item.sentence.english
+        let wordName = item.word.word
+        let meaning = item.word.meaning
+
         if step == 0 {
-            let wordForArt = item.word.word
+            // Generate artwork asynchronously; update Now Playing again once ready.
             Task { @MainActor [weak self] in
-                self?.cachedArtwork = CoverArtView.image(for: wordForArt)
+                guard let self else { return }
+                self.cachedArtwork = CoverArtView.image(for: wordName)
+                NowPlayingInfoManager.update(
+                    title: sentence,
+                    artist: "\(wordName) - \(stepLabel)",
+                    album: meaning,
+                    artwork: self.cachedArtwork,
+                    playbackRate: 1.0
+                )
             }
         }
 
-        // Update Now Playing info
-        let stepLabel = mode.stepLabel(for: step)
         NowPlayingInfoManager.update(
-            title: item.sentence.english,
-            artist: "\(item.word.word) - \(stepLabel)",
-            album: item.word.meaning,
+            title: sentence,
+            artist: "\(wordName) - \(stepLabel)",
+            album: meaning,
             artwork: cachedArtwork,
             playbackRate: 1.0
         )

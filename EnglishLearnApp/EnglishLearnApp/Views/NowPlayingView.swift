@@ -3,7 +3,6 @@ import SwiftUI
 struct NowPlayingView: View {
     @EnvironmentObject private var playbackManager: GlobalPlaybackManager
     @EnvironmentObject private var wordDataManager: WordDataManager
-    @EnvironmentObject private var settings: SettingsManager
     @Environment(\.dismiss) private var dismiss
 
     @State private var dragOffset: CGFloat = 0
@@ -47,11 +46,14 @@ struct NowPlayingView: View {
         }
         .offset(y: max(0, dragOffset))
         .gesture(
-            DragGesture()
+            DragGesture(minimumDistance: 10)
                 .onChanged { value in
+                    // Ignore primarily-horizontal drags (scrubber interaction)
+                    guard abs(value.translation.height) > abs(value.translation.width) else { return }
                     if value.translation.height > 0 { dragOffset = value.translation.height }
                 }
                 .onEnded { value in
+                    guard abs(value.translation.height) > abs(value.translation.width) else { return }
                     if value.translation.height > 120 {
                         dismiss()
                     } else {
@@ -215,7 +217,7 @@ struct NowPlayingView: View {
 
     private var bigControls: some View {
         HStack {
-            // shuffle: pending proper implementation (Issue #TBD)
+            // shuffle: pending proper implementation (Issue #166)
             Color.clear.frame(width: 20, height: 20)
 
             Spacer()
@@ -253,7 +255,7 @@ struct NowPlayingView: View {
 
             Spacer()
 
-            // repeat: pending proper implementation (Issue #TBD)
+            // repeat: pending proper implementation (Issue #167)
             Color.clear.frame(width: 20, height: 20)
         }
     }
