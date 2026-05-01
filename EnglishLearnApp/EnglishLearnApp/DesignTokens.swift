@@ -41,7 +41,7 @@ struct DSColor {
 enum Tokens {
 
     // MARK: Color
-    enum Color {
+    enum Colors {
         static let bg      = DSColor(
             light: .init(hex: "F2F2F7"),
             dark:  .init(hex: "1C1C1E"),
@@ -105,12 +105,13 @@ enum Tokens {
 
     // MARK: Spacing
     enum Spacing {
-        static let xs:  CGFloat = 4
-        static let sm:  CGFloat = 8
-        static let md:  CGFloat = 12
-        static let lg:  CGFloat = 16
-        static let xl:  CGFloat = 24
-        static let xxl: CGFloat = 32
+        static let xs:   CGFloat = 4
+        static let sm:   CGFloat = 8
+        static let md:   CGFloat = 12
+        static let lg:   CGFloat = 16
+        static let xl20: CGFloat = 20
+        static let xl:   CGFloat = 24
+        static let xxl:  CGFloat = 32
     }
 
     // MARK: Radius
@@ -124,14 +125,14 @@ enum Tokens {
     // MARK: Shadow
     enum Shadow {
         struct Config {
-            let color: SwiftUI.Color  // explicit qualifier avoids shadowing by Tokens.Color
+            let color: Color
             let radius: CGFloat
             let x: CGFloat
             let y: CGFloat
         }
-        static let card     = Config(color: SwiftUI.Color.black.opacity(0.20), radius: 12, x: 0, y: 4)
-        static let mini     = Config(color: SwiftUI.Color.black.opacity(0.15), radius: 8,  x: 0, y: 2)
-        static let expanded = Config(color: SwiftUI.Color.black.opacity(0.30), radius: 24, x: 0, y: 8)
+        static let card     = Config(color: Color.black.opacity(0.20), radius: 12, x: 0, y: 4)
+        static let mini     = Config(color: Color.black.opacity(0.15), radius: 8,  x: 0, y: 2)
+        static let expanded = Config(color: Color.black.opacity(0.30), radius: 24, x: 0, y: 8)
     }
 }
 
@@ -139,6 +140,7 @@ enum Tokens {
 
 extension Color {
     /// Creates a `Color` from a 6-character hex string (e.g. `"1C1C1E"`).
+    /// Falls back to black for any malformed input.
     init(hex: String) {
         let hex = hex.trimmingCharacters(in: .alphanumerics.inverted)
         var int: UInt64 = 0
@@ -151,12 +153,17 @@ extension Color {
 
     /// Resolves a semantic color token for the current theme.
     ///
+    /// **Reactivity:** reads `Theme.current` at call time. To re-render on theme change,
+    /// call this inside a view body that observes `SettingsManager.shared` (e.g. via
+    /// `@EnvironmentObject`), or derive the color inside a `@ViewBuilder` context that
+    /// re-evaluates when `SettingsManager` publishes a change.
+    ///
     /// Usage inside a view body (re-evaluated on theme change):
     /// ```swift
     /// .foregroundStyle(Color.token(\.accent))
     /// ```
-    static func token(_ kp: KeyPath<Tokens.Color.Type, DSColor>) -> Color {
-        Tokens.Color.self[keyPath: kp].resolved(for: Theme.current)
+    static func token(_ kp: KeyPath<Tokens.Colors.Type, DSColor>) -> Color {
+        Tokens.Colors.self[keyPath: kp].resolved(for: Theme.current)
     }
 }
 
@@ -174,7 +181,7 @@ extension View {
 #Preview("Design Tokens") {
     @Previewable @State var theme: Theme = .dark
 
-    let colorTokens: [(String, KeyPath<Tokens.Color.Type, DSColor>)] = [
+    let colorTokens: [(String, KeyPath<Tokens.Colors.Type, DSColor>)] = [
         ("bg",           \.bg),
         ("card",         \.card),
         ("border",       \.border),
@@ -202,7 +209,7 @@ extension View {
             Text("Colors").font(Tokens.Typography.title)
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 140))], spacing: Tokens.Spacing.sm) {
                 ForEach(colorTokens, id: \.0) { name, kp in
-                    let color = Tokens.Color.self[keyPath: kp].resolved(for: theme)
+                    let color = Tokens.Colors.self[keyPath: kp].resolved(for: theme)
                     HStack(spacing: Tokens.Spacing.sm) {
                         RoundedRectangle(cornerRadius: Tokens.Radius.sm)
                             .fill(color)
@@ -235,7 +242,8 @@ extension View {
             Text("Spacing").font(Tokens.Typography.title)
             ForEach([("xs", Tokens.Spacing.xs), ("sm", Tokens.Spacing.sm),
                      ("md", Tokens.Spacing.md), ("lg", Tokens.Spacing.lg),
-                     ("xl", Tokens.Spacing.xl), ("xxl", Tokens.Spacing.xxl)],
+                     ("xl20", Tokens.Spacing.xl20), ("xl", Tokens.Spacing.xl),
+                     ("xxl", Tokens.Spacing.xxl)],
                     id: \.0) { name, value in
                 HStack(spacing: Tokens.Spacing.sm) {
                     Rectangle()
@@ -263,9 +271,36 @@ extension View {
         }
         .padding(Tokens.Spacing.lg)
     }
-    .background(Tokens.Color.bg.resolved(for: theme))
-    .foregroundStyle(Tokens.Color.text.resolved(for: theme))
+    .background(Tokens.Colors.bg.resolved(for: theme))
+    .foregroundStyle(Tokens.Colors.text.resolved(for: theme))
     .onChange(of: theme) { _, newTheme in
         Theme.current = newTheme
     }
+}
+
+#Preview("Token API") {
+    // Exercises Color.token(_:) singleton path — verifies reactivity wiring compiles.
+    @Previewable @State var theme: Theme = .dark
+
+    VStack(spacing: Tokens.Spacing.md) {
+        Text("accent via Color.token")
+            .foregroundStyle(Color.token(\.accent))
+            .padding(Tokens.Spacing.md)
+            .background(Color.token(\.card))
+            .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.md))
+
+        Text("danger via Color.token")
+            .foregroundStyle(Color.token(\.danger))
+            .padding(Tokens.Spacing.md)
+            .background(Color.token(\.card))
+            .clipShape(RoundedRectangle(cornerRadius: Tokens.Radius.md))
+
+        Picker("Theme", selection: $theme) {
+            ForEach(Theme.allCases, id: \.self) { Text($0.displayName).tag($0) }
+        }
+        .pickerStyle(.segmented)
+    }
+    .padding(Tokens.Spacing.lg)
+    .background(Color.token(\.bg))
+    .onChange(of: theme) { _, newTheme in Theme.current = newTheme }
 }
