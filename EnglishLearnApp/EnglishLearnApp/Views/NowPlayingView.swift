@@ -215,11 +215,8 @@ struct NowPlayingView: View {
 
     private var bigControls: some View {
         HStack {
-            Button { playbackManager.toggleShuffle() } label: {
-                Image(systemName: "shuffle")
-                    .font(.system(size: 20))
-                    .foregroundStyle(playbackManager.isShuffled ? Color.token(\.accent) : .white.opacity(0.85))
-            }
+            // shuffle: pending proper implementation (Issue #TBD)
+            Color.clear.frame(width: 20, height: 20)
 
             Spacer()
 

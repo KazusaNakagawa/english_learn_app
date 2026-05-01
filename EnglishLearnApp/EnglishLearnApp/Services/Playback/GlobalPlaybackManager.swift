@@ -64,9 +64,6 @@ final class GlobalPlaybackManager: ObservableObject {
     /// Estimated playback progress for the current utterance (0…1), updated at ~15 fps.
     @Published private(set) var progress: Double = 0.0
 
-    /// Whether the queue is currently shuffled.
-    @Published private(set) var isShuffled: Bool = false
-
     /// Current repeat mode.
     @Published private(set) var repeatMode: RepeatMode = .off
 
@@ -78,7 +75,6 @@ final class GlobalPlaybackManager: ObservableObject {
     private let speechService: SpeechService
     private let settings: SettingsManager
     private var cancellables = Set<AnyCancellable>()
-    private var originalQueue: [QueueItem] = []
 
     // MARK: - Internal Manager
 
@@ -325,33 +321,9 @@ final class GlobalPlaybackManager: ObservableObject {
     func clearQueue() {
         stop()
         queue = []
-        originalQueue = []
         currentIndex = 0
         currentStep = 0
         isPlaying = false
-        isShuffled = false
-    }
-
-    /// Toggles shuffle. Shuffles remaining items on enable; restores original order on disable.
-    func toggleShuffle() {
-        if isShuffled {
-            let currentID = currentItem?.id
-            queue = originalQueue.isEmpty ? queue : originalQueue
-            originalQueue = []
-            if let id = currentID, let idx = queue.firstIndex(where: { $0.id == id }) {
-                currentIndex = idx
-            }
-            isShuffled = false
-        } else {
-            originalQueue = queue
-            var rest = queue
-            let current = rest.remove(at: currentIndex)
-            rest.shuffle()
-            rest.insert(current, at: 0)
-            queue = rest
-            currentIndex = 0
-            isShuffled = true
-        }
     }
 
     /// Cycles repeat mode: off → all → one → off.
