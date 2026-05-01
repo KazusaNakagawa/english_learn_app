@@ -28,7 +28,7 @@ struct WordListView: View {
     @ObservedObject private var dataManager = WordDataManager.shared
     @State private var searchText: String = ""
     @State private var wordToEdit: Word? = nil
-    @State private var selectedLetter: Character? = nil
+    @State private var selectedLetter: String = "ALL"
     @State private var selectedCategory: String? = nil
 
     @AppStorage("wordSortOption") private var sortOptionRaw: String = WordSortOption.alphabeticalAZ.rawValue
@@ -43,11 +43,6 @@ struct WordListView: View {
         WordSortOption(rawValue: sortOptionRaw) ?? .alphabeticalAZ
     }
 
-    private var availableLetters: [Character] {
-        let letters = dataManager.words.compactMap { $0.word.uppercased().first }
-        return Array(Set(letters)).sorted()
-    }
-
     /// Unique categories from all active words' sentences, sorted.
     private var availableCategories: [String] {
         let cats = dataManager.words.flatMap { $0.sentences.map { $0.category } }
@@ -58,8 +53,10 @@ struct WordListView: View {
         var result = dataManager.words
 
         // Letter filter
-        if let letter = selectedLetter {
-            result = result.filter { $0.word.uppercased().first == letter }
+        if selectedLetter != "ALL" {
+            result = result.filter {
+                $0.word.first.map { String($0).uppercased() } == selectedLetter
+            }
         }
 
         // Category filter: keep words that have at least one sentence in the selected category
@@ -117,46 +114,53 @@ struct WordListView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            letterFilterBar
+            WordListHeader(query: $searchText, letter: $selectedLetter)
             if !availableCategories.isEmpty {
                 categoryFilterBar
             }
-            List(filteredWords) { word in
-                if selection.isSelecting {
-                    SelectableListRow(id: word.id, selection: selection) {
-                        WordRowView(word: word, speechService: speechService)
-                    }
-                } else {
-                    NavigationLink(destination: destinationView(for: word)) {
-                        WordRowView(word: word, speechService: speechService)
-                    }
-                    .swipeActions(edge: .trailing) {
-                        Button(role: .destructive) {
-                            WordDataManager.shared.moveToTrash(wordId: word.id)
-                        } label: {
-                            Label("ゴミ箱へ", systemImage: "trash")
+            if filteredWords.isEmpty {
+                EmptyListView(
+                    systemImage: "magnifyingglass",
+                    title: "該当する単語がありません",
+                    message: "検索条件を変えてお試しください"
+                )
+            } else {
+                List(filteredWords) { word in
+                    if selection.isSelecting {
+                        SelectableListRow(id: word.id, selection: selection) {
+                            WordRowView(word: word, speechService: speechService)
                         }
-                        Button {
-                            WordDataManager.shared.archive(wordId: word.id)
-                        } label: {
-                            Label("アーカイブ", systemImage: "archivebox")
+                    } else {
+                        NavigationLink(destination: destinationView(for: word)) {
+                            WordRowView(word: word, speechService: speechService)
                         }
-                        .tint(.teal)
-                    }
-                    .swipeActions(edge: .leading) {
-                        Button {
-                            wordToEdit = word
-                        } label: {
-                            Label("編集", systemImage: "pencil")
+                        .swipeActions(edge: .trailing) {
+                            Button(role: .destructive) {
+                                WordDataManager.shared.moveToTrash(wordId: word.id)
+                            } label: {
+                                Label("ゴミ箱へ", systemImage: "trash")
+                            }
+                            Button {
+                                WordDataManager.shared.archive(wordId: word.id)
+                            } label: {
+                                Label("アーカイブ", systemImage: "archivebox")
+                            }
+                            .tint(.teal)
                         }
-                        .tint(.orange)
+                        .swipeActions(edge: .leading) {
+                            Button {
+                                wordToEdit = word
+                            } label: {
+                                Label("編集", systemImage: "pencil")
+                            }
+                            .tint(.orange)
+                        }
                     }
                 }
-            }
-            .searchable(text: $searchText, prompt: "単語・意味・発音記号で検索")
-            .safeAreaInset(edge: .bottom) {
-                if selection.isSelecting {
-                    wordListActionBar
+                .safeAreaInset(edge: .bottom) {
+                    if selection.isSelecting {
+                        wordListActionBar
+                    }
                 }
             }
         }
@@ -272,20 +276,6 @@ struct WordListView: View {
 
     // MARK: - Subviews
 
-    private var letterFilterBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                letterChip(nil, label: "All")
-                ForEach(availableLetters, id: \.self) { letter in
-                    letterChip(letter, label: String(letter))
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-        }
-        .background(Color(.systemGroupedBackground))
-    }
-
     private var categoryFilterBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
@@ -299,20 +289,6 @@ struct WordListView: View {
         }
         .background(Color(.systemGroupedBackground))
         .overlay(alignment: .top) { Divider() }
-    }
-
-    private func letterChip(_ letter: Character?, label: String) -> some View {
-        Button {
-            selectedLetter = letter
-        } label: {
-            Text(label)
-                .font(.subheadline.bold())
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(selectedLetter == letter ? Color.accentColor : Color(.secondarySystemGroupedBackground))
-                .foregroundColor(selectedLetter == letter ? .white : .primary)
-                .cornerRadius(8)
-        }
     }
 
     private func categoryChip(_ category: String?, label: String) -> some View {

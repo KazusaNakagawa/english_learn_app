@@ -56,6 +56,7 @@
 		E1000004238D1234567890AB /* TabBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1000003238D1234567890AB /* TabBar.swift */; };
 		E1000006238D1234567890AB /* CoverArtView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1000005238D1234567890AB /* CoverArtView.swift */; };
 		F1000002238D1234567890AB /* DesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000001238D1234567890AB /* DesignTokens.swift */; };
+		G1000002238D1234567890AB /* WordListHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = G1000001238D1234567890AB /* WordListHeader.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -105,6 +106,7 @@
 		E1000001238D1234567890AB /* Tab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tab.swift; sourceTree = "<group>"; };
 		E1000003238D1234567890AB /* TabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabBar.swift; sourceTree = "<group>"; };
 		E1000005238D1234567890AB /* CoverArtView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverArtView.swift; sourceTree = "<group>"; };
+		G1000001238D1234567890AB /* WordListHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WordListHeader.swift; sourceTree = "<group>"; };
 		C1A00011238D1234567890AB /* QueueItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueueItem.swift; sourceTree = "<group>"; };
 		C1A00012238D1234567890AB /* GlobalPlaybackManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalPlaybackManager.swift; sourceTree = "<group>"; };
 		C1A00013238D1234567890AB /* MiniPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiniPlayerView.swift; sourceTree = "<group>"; };
@@ -248,6 +250,7 @@
 				E1000001238D1234567890AB /* Tab.swift */,
 				E1000003238D1234567890AB /* TabBar.swift */,
 				E1000005238D1234567890AB /* CoverArtView.swift */,
+				G1000001238D1234567890AB /* WordListHeader.swift */,
 			);
 			path = Helpers;
 			sourceTree = "<group>";
@@ -370,6 +373,7 @@
 				E1000004238D1234567890AB /* TabBar.swift in Sources */,
 				E1000006238D1234567890AB /* CoverArtView.swift in Sources */,
 				F1000002238D1234567890AB /* DesignTokens.swift in Sources */,
+				G1000002238D1234567890AB /* WordListHeader.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
