@@ -124,14 +124,14 @@ enum Tokens {
     // MARK: Shadow
     enum Shadow {
         struct Config {
-            let color: Color
+            let color: SwiftUI.Color  // explicit qualifier avoids shadowing by Tokens.Color
             let radius: CGFloat
             let x: CGFloat
             let y: CGFloat
         }
-        static let card     = Config(color: .black.opacity(0.20), radius: 12, x: 0, y: 4)
-        static let mini     = Config(color: .black.opacity(0.15), radius: 8,  x: 0, y: 2)
-        static let expanded = Config(color: .black.opacity(0.30), radius: 24, x: 0, y: 8)
+        static let card     = Config(color: SwiftUI.Color.black.opacity(0.20), radius: 12, x: 0, y: 4)
+        static let mini     = Config(color: SwiftUI.Color.black.opacity(0.15), radius: 8,  x: 0, y: 2)
+        static let expanded = Config(color: SwiftUI.Color.black.opacity(0.30), radius: 24, x: 0, y: 8)
     }
 }
 
