@@ -126,14 +126,18 @@ struct NowPlayingView: View {
             ?? item.word.isFavorite
 
         return HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(item.word.word)
                     .font(.system(size: 24, weight: .heavy))
                     .lineLimit(1)
-                Text(item.word.meaning)
+                Text(item.sentence.english)
                     .font(.system(size: 14))
-                    .foregroundStyle(.white.opacity(0.7))
-                    .lineLimit(1)
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                Text(item.sentence.japanese)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.white.opacity(0.6))
+                    .lineLimit(2)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
