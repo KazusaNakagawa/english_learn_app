@@ -253,11 +253,8 @@ struct NowPlayingView: View {
 
             Spacer()
 
-            Button { playbackManager.toggleRepeat() } label: {
-                Image(systemName: playbackManager.repeatMode.icon)
-                    .font(.system(size: 20))
-                    .foregroundStyle(playbackManager.repeatMode == .off ? .white.opacity(0.85) : Color.token(\.accent))
-            }
+            // repeat: pending proper implementation (Issue #TBD)
+            Color.clear.frame(width: 20, height: 20)
         }
     }
 

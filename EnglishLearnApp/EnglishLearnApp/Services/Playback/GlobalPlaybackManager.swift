@@ -2,24 +2,6 @@ import Foundation
 import Combine
 import UIKit
 
-enum RepeatMode: Int {
-    case off, all, one
-
-    var icon: String {
-        switch self {
-        case .off, .all: "repeat"
-        case .one: "repeat.1"
-        }
-    }
-
-    func next() -> RepeatMode {
-        switch self {
-        case .off: .all
-        case .all: .one
-        case .one: .off
-        }
-    }
-}
 
 /// Global playback manager that provides app-wide continuous playback with a persistent mini-player.
 ///
@@ -63,9 +45,6 @@ final class GlobalPlaybackManager: ObservableObject {
 
     /// Estimated playback progress for the current utterance (0…1), updated at ~15 fps.
     @Published private(set) var progress: Double = 0.0
-
-    /// Current repeat mode.
-    @Published private(set) var repeatMode: RepeatMode = .off
 
     /// Estimated duration of the current utterance in seconds.
     var estimatedDurationSeconds: Double { estimatedSpeechDuration }
@@ -326,11 +305,6 @@ final class GlobalPlaybackManager: ObservableObject {
         isPlaying = false
     }
 
-    /// Cycles repeat mode: off → all → one → off.
-    func toggleRepeat() {
-        repeatMode = repeatMode.next()
-    }
-
     /// Seek is a best-effort no-op for TTS: scrubber position resets to live progress.
     func seek(to progress: Double) {
         // TTS does not support mid-utterance seeking.
@@ -401,19 +375,6 @@ final class GlobalPlaybackManager: ObservableObject {
     }
 
     private func handlePlaybackCompletion() {
-        // GlobalPlaybackManager.currentIndex still holds the last played index
-        // because syncStateFromManager() has not been called yet.
-        let lastIndex = currentIndex
-        switch repeatMode {
-        case .one:
-            enqueue(queue, startIndex: lastIndex)
-            return
-        case .all:
-            enqueue(queue, startIndex: 0)
-            return
-        case .off:
-            break
-        }
         stopProgressTracking()
         speechService.deactivateAudioSession()
         NowPlayingInfoManager.clear()
