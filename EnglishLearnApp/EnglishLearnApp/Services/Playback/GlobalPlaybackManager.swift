@@ -382,6 +382,7 @@ final class GlobalPlaybackManager: ObservableObject {
     // MARK: - Progress Tracking
 
     private func startProgressTracking(for text: String) {
+        progressTimer?.cancel()
         speechStartTime = Date()
         let wordCount = max(1, text.split(separator: " ").count)
         estimatedSpeechDuration = max(1.5, Double(wordCount) * 0.4)

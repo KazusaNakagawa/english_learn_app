@@ -20,7 +20,7 @@ struct MiniPlayerView: View {
     // MARK: - Card
 
     private func card(for item: QueueItem) -> some View {
-        let gradient = coverGradient(for: item.word.word)
+        let gradient = CoverArtView.gradient(for: item.word.word)
         let isFav = wordDataManager.words.first(where: { $0.id == item.word.id })?.isFavorite
             ?? item.word.isFavorite
 
@@ -39,8 +39,7 @@ struct MiniPlayerView: View {
                         .lineLimit(1)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-
-                Spacer(minLength: 8)
+                .padding(.trailing, 8)
 
                 Button {
                     wordDataManager.toggleFavorite(wordId: item.word.id)

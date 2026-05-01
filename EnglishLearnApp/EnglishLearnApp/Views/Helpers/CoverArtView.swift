@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Color palette
+// MARK: - Gradient palette
 
 private let gradientPalettes: [[Color]] = [
     [Color(hue: 0.65, saturation: 0.70, brightness: 0.80), Color(hue: 0.75, saturation: 0.60, brightness: 0.90)],
@@ -11,13 +11,6 @@ private let gradientPalettes: [[Color]] = [
     [Color(hue: 0.10, saturation: 0.80, brightness: 0.90), Color(hue: 0.15, saturation: 0.70, brightness: 0.80)],
 ]
 
-/// Returns a deterministic LinearGradient for a word string.
-func coverGradient(for word: String) -> LinearGradient {
-    let index = abs(word.hashValue) % gradientPalettes.count
-    let colors = gradientPalettes[index]
-    return LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
-}
-
 /// Square cover art: gradient background + first-letter monogram.
 struct CoverArtView: View {
     let word: String
@@ -26,13 +19,26 @@ struct CoverArtView: View {
 
     var body: some View {
         ZStack {
-            coverGradient(for: word)
+            CoverArtView.gradient(for: word)
             Text(String((word.first ?? "?")).uppercased())
                 .font(.system(size: size * 0.44, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
         }
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: radius))
+    }
+
+    /// Deterministic LinearGradient for a word using a stable DJB2 hash.
+    /// Uses safe modulo to avoid overflow on any hash value.
+    static func gradient(for word: String) -> LinearGradient {
+        let hash = word.unicodeScalars.reduce(5381) { ($0 &* 33) &+ Int($1.value) }
+        let n = gradientPalettes.count
+        let index = ((hash % n) + n) % n
+        return LinearGradient(
+            colors: gradientPalettes[index],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
     }
 }
 
