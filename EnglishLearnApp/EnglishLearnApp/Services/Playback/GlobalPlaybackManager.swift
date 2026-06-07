@@ -304,11 +304,6 @@ final class GlobalPlaybackManager: ObservableObject {
         isPlaying = false
     }
 
-    /// Seek is a best-effort no-op for TTS: scrubber position resets to live progress.
-    func seek(to progress: Double) {
-        // TTS does not support mid-utterance seeking.
-    }
-
     // MARK: - Private Methods
 
     private func handleSpeech(for item: QueueItem, step: Int) {
@@ -338,15 +333,18 @@ final class GlobalPlaybackManager: ObservableObject {
         let meaning = item.word.meaning
 
         if step == 0 {
-            // Generate artwork asynchronously; update Now Playing again once ready.
+            cachedArtwork = nil
+            let itemID = item.id
             Task { @MainActor [weak self] in
-                guard let self else { return }
-                self.cachedArtwork = CoverArtView.image(for: wordName)
+                guard let self, self.currentItem?.id == itemID else { return }
+                let artwork = CoverArtView.image(for: wordName)
+                guard self.currentItem?.id == itemID else { return }
+                self.cachedArtwork = artwork
                 NowPlayingInfoManager.update(
                     title: sentence,
                     artist: "\(wordName) - \(stepLabel)",
                     album: meaning,
-                    artwork: self.cachedArtwork,
+                    artwork: artwork,
                     playbackRate: 1.0
                 )
             }

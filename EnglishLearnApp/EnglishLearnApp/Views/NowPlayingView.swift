@@ -6,7 +6,6 @@ struct NowPlayingView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var dragOffset: CGFloat = 0
-    @State private var scrubProgress: Double? = nil
     @State private var showingQueue = false
 
     var body: some View {
@@ -157,7 +156,8 @@ struct NowPlayingView: View {
     // MARK: - Scrubber
 
     private var scrubber: some View {
-        let displayProgress = scrubProgress ?? playbackManager.progress
+        // Drag-to-seek pending proper implementation (TTS cannot seek mid-utterance).
+        let displayProgress = playbackManager.progress
         let elapsed = displayProgress * playbackManager.estimatedDurationSeconds
         let total   = playbackManager.estimatedDurationSeconds
 
@@ -175,30 +175,10 @@ struct NowPlayingView: View {
                         .frame(width: 12, height: 12)
                         .offset(x: max(0, geo.size.width * displayProgress - 6))
                 }
-                .contentShape(Rectangle())
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { value in
-                            scrubProgress = max(0, min(1, value.location.x / geo.size.width))
-                        }
-                        .onEnded { value in
-                            let p = max(0, min(1, value.location.x / geo.size.width))
-                            playbackManager.seek(to: p)
-                            scrubProgress = nil
-                        }
-                )
             }
             .frame(height: 12)
             .accessibilityLabel("再生位置")
             .accessibilityValue("\(Int(displayProgress * 100))%")
-            .accessibilityAdjustableAction { direction in
-                let step = 0.1
-                switch direction {
-                case .increment: playbackManager.seek(to: min(1, displayProgress + step))
-                case .decrement: playbackManager.seek(to: max(0, displayProgress - step))
-                @unknown default: break
-                }
-            }
 
             HStack {
                 Text(formatTime(elapsed))
