@@ -11,8 +11,8 @@ struct MiniPlayerView: View {
                 .padding(.horizontal, 8)
                 .padding(.bottom, 6)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
-                .sheet(isPresented: $showingFullPlayer) {
-                    FullPlayerView()
+                .fullScreenCover(isPresented: $showingFullPlayer) {
+                    NowPlayingView()
                 }
         }
     }
@@ -20,7 +20,6 @@ struct MiniPlayerView: View {
     // MARK: - Card
 
     private func card(for item: QueueItem) -> some View {
-        let gradient = CoverArtView.gradient(for: item.word.word)
         let isFav = wordDataManager.words.first(where: { $0.id == item.word.id })?.isFavorite
             ?? item.word.isFavorite
 
@@ -65,7 +64,7 @@ struct MiniPlayerView: View {
             .padding(.trailing, 10)
             .padding(.vertical, 8)
             .background(
-                gradient.overlay(Color.black.opacity(0.18))
+                CoverArtView.gradient(for: item.word.word).overlay(Color.black.opacity(0.18))
             )
             .clipShape(RoundedRectangle(cornerRadius: 8))
             .overlay(alignment: .bottom) {

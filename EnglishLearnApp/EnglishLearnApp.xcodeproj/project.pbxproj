@@ -57,6 +57,7 @@
 		E1000006238D1234567890AB /* CoverArtView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1000005238D1234567890AB /* CoverArtView.swift */; };
 		F1000002238D1234567890AB /* DesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000001238D1234567890AB /* DesignTokens.swift */; };
 		G1000002238D1234567890AB /* WordListHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = G1000001238D1234567890AB /* WordListHeader.swift */; };
+		H1000002238D1234567890AB /* NowPlayingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = H1000001238D1234567890AB /* NowPlayingView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -90,7 +91,6 @@
 		A1000023238D1234567890AB /* TrashView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrashView.swift; sourceTree = "<group>"; };
 		A1000024238D1234567890AB /* EditWordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditWordView.swift; sourceTree = "<group>"; };
 		A1000028238D1234567890AB /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
-		F1000001238D1234567890AB /* DesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokens.swift; sourceTree = "<group>"; };
 		A1000074238D1234567890AB /* ArchiveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArchiveView.swift; sourceTree = "<group>"; };
 		A1000076238D1234567890AB /* PrivacyPolicyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyPolicyView.swift; sourceTree = "<group>"; };
 		A1000078238D1234567890AB /* TermsOfServiceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TermsOfServiceView.swift; sourceTree = "<group>"; };
@@ -103,15 +103,17 @@
 		A1000088238D1234567890AB /* PronunciationResultView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PronunciationResultView.swift; sourceTree = "<group>"; };
 		A100008A238D1234567890AB /* RecognitionResultView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecognitionResultView.swift; sourceTree = "<group>"; };
 		A100008C238D1234567890AB /* SpeechButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechButton.swift; sourceTree = "<group>"; };
-		E1000001238D1234567890AB /* Tab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tab.swift; sourceTree = "<group>"; };
-		E1000003238D1234567890AB /* TabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabBar.swift; sourceTree = "<group>"; };
-		E1000005238D1234567890AB /* CoverArtView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverArtView.swift; sourceTree = "<group>"; };
-		G1000001238D1234567890AB /* WordListHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WordListHeader.swift; sourceTree = "<group>"; };
 		C1A00011238D1234567890AB /* QueueItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueueItem.swift; sourceTree = "<group>"; };
 		C1A00012238D1234567890AB /* GlobalPlaybackManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalPlaybackManager.swift; sourceTree = "<group>"; };
 		C1A00013238D1234567890AB /* MiniPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiniPlayerView.swift; sourceTree = "<group>"; };
 		C1A00014238D1234567890AB /* FullPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FullPlayerView.swift; sourceTree = "<group>"; };
 		D1A00021238D1234567890AB /* AudioCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioCache.swift; sourceTree = "<group>"; };
+		E1000001238D1234567890AB /* Tab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tab.swift; sourceTree = "<group>"; };
+		E1000003238D1234567890AB /* TabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabBar.swift; sourceTree = "<group>"; };
+		E1000005238D1234567890AB /* CoverArtView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverArtView.swift; sourceTree = "<group>"; };
+		F1000001238D1234567890AB /* DesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokens.swift; sourceTree = "<group>"; };
+		G1000001238D1234567890AB /* WordListHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WordListHeader.swift; sourceTree = "<group>"; };
+		H1000001238D1234567890AB /* NowPlayingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -201,6 +203,7 @@
 			children = (
 				A1000012238D1234567890AB /* ContentView.swift */,
 				C1A00014238D1234567890AB /* FullPlayerView.swift */,
+				H1000001238D1234567890AB /* NowPlayingView.swift */,
 				A1000016238D1234567890AB /* WordListView.swift */,
 				A1000017238D1234567890AB /* WordPracticeView.swift */,
 				A100001C238D1234567890AB /* SentenceListView.swift */,
@@ -369,6 +372,7 @@
 				C1A00002238D1234567890AB /* GlobalPlaybackManager.swift in Sources */,
 				C1A00003238D1234567890AB /* MiniPlayerView.swift in Sources */,
 				C1A00004238D1234567890AB /* FullPlayerView.swift in Sources */,
+				H1000002238D1234567890AB /* NowPlayingView.swift in Sources */,
 				E1000002238D1234567890AB /* Tab.swift in Sources */,
 				E1000004238D1234567890AB /* TabBar.swift in Sources */,
 				E1000006238D1234567890AB /* CoverArtView.swift in Sources */,

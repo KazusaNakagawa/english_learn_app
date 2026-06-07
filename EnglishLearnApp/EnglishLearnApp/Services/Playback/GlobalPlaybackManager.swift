@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import UIKit
 
 /// Global playback manager that provides app-wide continuous playback with a persistent mini-player.
 ///
@@ -44,6 +45,9 @@ final class GlobalPlaybackManager: ObservableObject {
     /// Estimated playback progress for the current utterance (0…1), updated at ~15 fps.
     @Published private(set) var progress: Double = 0.0
 
+    /// Estimated duration of the current utterance in seconds.
+    var estimatedDurationSeconds: Double { estimatedSpeechDuration }
+
     // MARK: - Dependencies
 
     private let speechService: SpeechService
@@ -57,6 +61,7 @@ final class GlobalPlaybackManager: ObservableObject {
     private var progressTimer: AnyCancellable?
     private var speechStartTime: Date?
     private var estimatedSpeechDuration: Double = 3.0
+    private var cachedArtwork: UIImage? = nil
 
     // MARK: - Initialization
 
@@ -323,10 +328,33 @@ final class GlobalPlaybackManager: ObservableObject {
 
         // Update Now Playing info
         let stepLabel = mode.stepLabel(for: step)
+        let sentence = item.sentence.english
+        let wordName = item.word.word
+        let meaning = item.word.meaning
+
+        if step == 0 {
+            cachedArtwork = nil
+            let itemID = item.id
+            Task { @MainActor [weak self] in
+                guard let self, self.currentItem?.id == itemID else { return }
+                let artwork = CoverArtView.image(for: wordName)
+                guard self.currentItem?.id == itemID else { return }
+                self.cachedArtwork = artwork
+                NowPlayingInfoManager.update(
+                    title: sentence,
+                    artist: "\(wordName) - \(stepLabel)",
+                    album: meaning,
+                    artwork: artwork,
+                    playbackRate: 1.0
+                )
+            }
+        }
+
         NowPlayingInfoManager.update(
-            title: item.sentence.english,
-            artist: "\(item.word.word) - \(stepLabel)",
-            album: item.word.meaning,
+            title: sentence,
+            artist: "\(wordName) - \(stepLabel)",
+            album: meaning,
+            artwork: cachedArtwork,
             playbackRate: 1.0
         )
 
