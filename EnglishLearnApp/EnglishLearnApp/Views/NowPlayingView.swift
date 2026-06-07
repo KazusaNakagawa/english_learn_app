@@ -51,7 +51,10 @@ struct NowPlayingView: View {
                     if value.translation.height > 0 { dragOffset = value.translation.height }
                 }
                 .onEnded { value in
-                    guard isVerticalDrag(value) else { return }
+                    guard isVerticalDrag(value) else {
+                        withAnimation(.spring(duration: 0.3)) { dragOffset = 0 }
+                        return
+                    }
                     if value.translation.height > 120 {
                         dismiss()
                     } else {
