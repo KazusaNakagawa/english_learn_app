@@ -61,6 +61,30 @@ VOICEVOX TTS バックエンドを指定環境にデプロイします。
 
 - AWS CLI が設定済み
 - `npx cdk bootstrap` が実行済み（初回のみ）
+- **`VOICEVOX_API_KEY_{POC|DEV|PRO}` が設定済み**
+
+API キーが未設定だと `aws/lib/voicevox-stack.ts` が synth の時点で例外を投げ、
+デプロイは必ず失敗する。
+
+```
+API key not found. Set environment variable: VOICEVOX_API_KEY_POC
+```
+
+`aws/bin/*.ts` が `dotenv/config` を読み込むため、`aws/.env` に置けばよい。
+
+```bash
+# aws/.env （git 管理外）
+VOICEVOX_API_KEY_POC=<64桁の hex>
+```
+
+未作成なら生成する。
+
+```bash
+echo "VOICEVOX_API_KEY_POC=$(openssl rand -hex 32)" >> aws/.env
+```
+
+`VOICEVOX_SLACK_WEBHOOK_{ENV}` は未設定でも警告のみでデプロイは通るが、
+アラート通知が飛ばなくなる。
 
 ## 注意
 
