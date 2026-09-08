@@ -2,7 +2,7 @@
 name: parallel-cleanup
 description: Cleanup parallel development environment (worktrees and tmux)
 argument-hint: "[session-name]"
-allowed-tools: Bash(git:*), Bash(tmux:*), Bash(rm:*)
+allowed-tools: Bash(git:*), Bash(tmux:*)
 ---
 
 # Parallel Development Cleanup
@@ -60,8 +60,18 @@ FORCE_DISCARD="no"
 
 ### 3. Kill tmux Session
 
+`$ARGUMENTS` is substituted by the skill runner before the block executes, so it
+has to appear bare — inside `${ARGUMENTS:-parallel-dev}` no substitution happens
+and the shell sees an undefined variable, silently falling back to
+`parallel-dev` while the session the user actually named stays alive.
+
+`session_name` is also read by the summary in step 6, which runs as a separate
+block, so persist it to a file rather than relying on shell state carrying over.
+
 ```bash
-session_name="${ARGUMENTS:-parallel-dev}"
+session_name="$ARGUMENTS"
+session_name="${session_name:-parallel-dev}"
+echo "$session_name" > /tmp/parallel-cleanup-session
 
 if tmux has-session -t "$session_name" 2>/dev/null; then
   tmux kill-session -t "$session_name"
@@ -125,10 +135,18 @@ echo "✓ Pruned stale worktree metadata"
 
 ### 5. Return to Develop
 
+`git checkout develop` fails when the main repository has uncommitted changes, or
+when `develop` is still checked out in a worktree that was kept. Branch on the
+result instead of announcing success unconditionally.
+
 ```bash
-# Switch back to develop branch
-git checkout develop
-echo "✓ Switched to develop branch"
+if git checkout develop; then
+  echo "✓ Switched to develop branch"
+else
+  echo "✗ Could not switch to develop — staying on $(git branch --show-current)" >&2
+  echo "  Commit or stash your changes, or check whether develop is still" >&2
+  echo "  checked out in a worktree you chose to keep." >&2
+fi
 
 # Show clean state
 echo ""
@@ -139,11 +157,14 @@ git worktree list
 ### 6. Summary
 
 ```bash
+# Step 3 runs in a separate block, so recover the name it recorded.
+session_name="$(cat /tmp/parallel-cleanup-session 2>/dev/null || echo parallel-dev)"
+
 echo ""
 echo "Cleanup complete!"
 echo "  - Killed tmux session: $session_name"
-echo "  - Removed all parallel-dev worktrees"
-echo "  - Returned to develop branch"
+echo "  - Removed the confirmed worktrees (see step 4 output for skips)"
+echo "  - Current branch: $(git branch --show-current)"
 echo ""
 echo "You can now:"
 echo "  - Run /parallel-setup to start new parallel development"

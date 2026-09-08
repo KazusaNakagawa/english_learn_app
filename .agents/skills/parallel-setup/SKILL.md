@@ -56,19 +56,26 @@ For each worker (example with 3 workers handling issues #100, #101, #102):
 # Get issue title for branch naming
 issue_title=$(gh issue view 100 --json title -q .title)
 
-# Sanitize and truncate title (UTF-8 safe)
-# - Convert to lowercase
-# - Replace non-alphanumeric with hyphens
-# - Limit to 30 characters using awk (respects UTF-8)
-# - Remove trailing hyphens
-sanitized_title=$(echo "$issue_title" |
-  tr '[:upper:]' '[:lower:]' |
-  sed 's/[^a-z0-9]/-/g' |
-  sed 's/--*/-/g' |
-  awk '{print substr($0, 1, 30)}' |
-  sed 's/-$//')
+# Sanitize and truncate the title for use in a branch name.
+#
+# Non-ASCII input matters here: this repository has plenty of Japanese issue
+# titles, and a byte-wise `sed 's/[^a-z0-9]/-/g'` turns every multibyte
+# character into hyphens that then collapse to nothing, yielding a bare
+# `feature/issue-100-`. Slugify in Python so multibyte text is handled by
+# character, and fall back to the issue number alone when nothing survives.
+sanitized_title=$(ISSUE_TITLE="$issue_title" python3 -c '
+import os, re, unicodedata
+title = unicodedata.normalize("NFKC", os.environ["ISSUE_TITLE"]).lower()
+slug = re.sub(r"[^0-9a-z぀-ヿ一-鿿]+", "-", title)
+print(slug.strip("-")[:30].strip("-"))
+')
 
-branch_name="feature/issue-100-${sanitized_title}"
+# Branch names cannot be empty after the issue number, so guard the fallback.
+if [ -z "$sanitized_title" ]; then
+  branch_name="feature/issue-100"
+else
+  branch_name="feature/issue-100-${sanitized_title}"
+fi
 
 # Create worktree
 git worktree add ~/worktree-worker1 -b "$branch_name" develop
@@ -137,16 +144,35 @@ tmux select-layout -t parallel-dev:workers tiled
 
 ```bash
 # Worker 1 (pane 0)
-tmux send-keys -t parallel-dev:workers.0 'Codex' Enter
+tmux send-keys -t parallel-dev:workers.0 'codex' Enter
 sleep 2  # Wait for Codex to start
 
 # Worker 2 (pane 1)
-tmux send-keys -t parallel-dev:workers.1 'Codex' Enter
+tmux send-keys -t parallel-dev:workers.1 'codex' Enter
 sleep 2  # Wait for Codex to start
 
 # Worker 3 (pane 2) - if applicable
-# tmux send-keys -t parallel-dev:workers.2 'Codex' Enter
+# tmux send-keys -t parallel-dev:workers.2 'codex' Enter
 # sleep 2
+```
+
+The binary is lowercase `codex`. Confirm it resolves before sending anything —
+otherwise every pane silently becomes a shell that reports `command not found`,
+and the `/start` keystrokes in step 7 go to that shell instead of the agent:
+
+```bash
+command -v codex >/dev/null || {
+  echo "❌ 'codex' not found in PATH — panes would receive shell input instead" >&2
+  exit 1
+}
+
+# Verify each pane actually entered the agent rather than sitting at a prompt.
+for pane in 0 1; do
+  if tmux capture-pane -p -t "parallel-dev:workers.$pane" | grep -q 'command not found'; then
+    echo "❌ Pane $pane failed to launch codex" >&2
+    exit 1
+  fi
+done
 
 echo "✓ Codex launched in all panes"
 ```
@@ -157,28 +183,18 @@ echo "✓ Codex launched in all panes"
 - `parallel-dev:workers.2` = Worker 3 (third pane)
 - etc.
 
-### 6. Rename Codex Sessions (Optional)
+### 6. Wait for Codex to Initialize
 
-After Codex sessions are ready, rename them for easier identification:
+`/start` in step 7 is typed into the agent, so it must not be sent while the pane
+is still booting — otherwise it lands in the shell.
 
 ```bash
 # Configurable startup delay (default: 10 seconds)
 # Adjust CODEX_STARTUP_DELAY if Codex takes longer/shorter to initialize on your system
 CODEX_STARTUP_DELAY=${CODEX_STARTUP_DELAY:-10}
 
-# Wait for Codex sessions to be fully initialized
 echo "Waiting ${CODEX_STARTUP_DELAY}s for Codex sessions to initialize..."
 sleep $CODEX_STARTUP_DELAY
-
-# Rename each Codex session in its pane
-# Example with 2 workers handling issues #79 and #80:
-tmux send-keys -t parallel-dev:workers.0 '/rename worker1-issue79' Enter
-tmux send-keys -t parallel-dev:workers.1 '/rename worker2-issue80' Enter
-
-# For 3 workers:
-# tmux send-keys -t parallel-dev:workers.2 '/rename worker3-issue102' Enter
-
-echo "✓ Codex sessions renamed"
 ```
 
 **Note:** If Codex doesn't start in time, increase `CODEX_STARTUP_DELAY`:
@@ -186,18 +202,17 @@ echo "✓ Codex sessions renamed"
 CODEX_STARTUP_DELAY=15 /parallel-setup 2
 ```
 
+**Session renaming is not available here.** The Claude Code version of this
+workflow sent `/rename worker1-issue79` at this point. Codex does not implement
+`/rename`, so that keystroke would be typed as literal text into the agent.
+Identify workers by their pane index and worktree path instead — the pane
+targeting reference above, plus the summary printed in step 8.
+
 ### 7. Auto-start Development
 
-After renaming, send `/start` command to begin development:
+Send the `/start` command to begin development:
 
 ```bash
-# Configurable post-rename delay (default: 3 seconds)
-# Adjust POST_RENAME_DELAY if /rename takes longer to process
-POST_RENAME_DELAY=${POST_RENAME_DELAY:-3}
-
-# Wait for rename to complete
-echo "Waiting ${POST_RENAME_DELAY}s for rename to complete..."
-sleep $POST_RENAME_DELAY
 
 # Send /start command to each worker pane with their issue numbers
 tmux send-keys -t parallel-dev:workers.0 '/start 79' Enter
