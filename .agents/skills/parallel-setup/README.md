@@ -1,4 +1,4 @@
-# Parallel Development with tmux + Claude Code
+# Parallel Development with tmux + Codex
 
 tmuxとGit Worktreesを使った並行開発環境のクイックスタートガイド。
 
@@ -17,7 +17,7 @@ gh auth status
 ### 1. 並行開発環境のセットアップ
 
 ```bash
-# Claude Codeで実行（2-3 workerを推奨）
+# Codexで実行（2-3 workerを推奨）
 /parallel-setup 2
 ```
 
@@ -30,7 +30,7 @@ gh auth status
 2. 各Issueごとにfeatureブランチを作成
 3. Git worktreeを作成（`~/worktree-worker1`, `~/worktree-worker2`）
 4. tmuxセッション `parallel-dev` を**ペイン分割モード**で起動
-5. 各ペインで独立したClaude Codeセッションを開始
+5. 各ペインで独立したCodexセッションを開始
 6. 各ワーカーで `/start <issue-number>` を実行
 
 **✨ ペイン分割モード（デフォルト）:** 全workerが1画面に同時表示！
@@ -53,7 +53,7 @@ tmux attach -t parallel-dev
 │ Worker 1 (#79)     │ Worker 2 (#80)         │
 │ ~/worktree-worker1 │ ~/worktree-worker2     │
 │                    │                        │
-│ Claude Code        │ Claude Code            │
+│ Codex              │ Codex                  │
 │ [task output...]   │ [task output...]       │
 │                    │                        │
 └──────────────────────────────────────────────┘
@@ -91,7 +91,7 @@ tmux attach -t parallel-dev
 
 ### 4. 各ワーカーでの作業
 
-ペイン分割モードでは、1つのtmuxウィンドウ内の各ペインでClaude Codeが動作しています：
+ペイン分割モードでは、1つのtmuxウィンドウ内の各ペインでCodexが動作しています：
 
 ```bash
 # Worker 1（左ペイン、Issue #100）
@@ -105,14 +105,14 @@ tmux attach -t parallel-dev
 # 既に /start 102 が実行済み
 ```
 
-※ 別ウィンドウモードを使用する場合は、各tmuxウィンドウ（window 0, 1, 2）でClaude Codeが動作します。
+※ 別ウィンドウモードを使用する場合は、各tmuxウィンドウ（window 0, 1, 2）でCodexが動作します。
 
 ### 5. クリーンアップ
 
 全ての作業が完了したら：
 
 ```bash
-# Claude Codeで実行（どのワーカーからでも可）
+# Codexで実行（どのワーカーからでも可）
 /parallel-cleanup
 ```
 
@@ -265,9 +265,9 @@ worktree-worker3 (~/worktree-worker3)  [feature/issue-102-dashboard]
 ```bash
 tmux session: parallel-dev
 └── window 0: workers (3 panes)
-    ├── pane 0: worker1-issue100 [Claude Code session]
-    ├── pane 1: worker2-issue101 [Claude Code session]
-    └── pane 2: worker3-issue102 [Claude Code session]
+    ├── pane 0: worker1-issue100 [Codex session]
+    ├── pane 1: worker2-issue101 [Codex session]
+    └── pane 2: worker3-issue102 [Codex session]
 ```
 
 すべてのworkerが1画面に同時表示されます。
@@ -276,9 +276,9 @@ tmux session: parallel-dev
 
 ```bash
 tmux session: parallel-dev
-├── window 0: worker1-issue100  [Claude Code session]
-├── window 1: worker2-issue101  [Claude Code session]
-└── window 2: worker3-issue102  [Claude Code session]
+├── window 0: worker1-issue100  [Codex session]
+├── window 1: worker2-issue101  [Codex session]
+└── window 2: worker3-issue102  [Codex session]
 ```
 
 Ctrl+b {番号} でウィンドウを切り替えます。
@@ -309,4 +309,4 @@ Ctrl+b {番号} でウィンドウを切り替えます。
 
 - [SKILL.md](./SKILL.md) - `/parallel-setup` スキルの詳細仕様
 - [../parallel-cleanup/SKILL.md](../parallel-cleanup/SKILL.md) - `/parallel-cleanup` スキルの詳細仕様
-- [CLAUDE.md](../../../CLAUDE.md) - プロジェクト全体のClaude Code設定
+- [AGENTS.md](../../../AGENTS.md) - プロジェクト全体のCodex設定

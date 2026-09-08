@@ -45,6 +45,18 @@ Use AskUserQuestion to confirm:
 - Which tmux session to kill (default: `parallel-dev`)
 - Which worktrees to remove (show list from `git worktree list`)
 - Whether to keep any worktrees for later use
+- If any selected worktree has uncommitted changes, whether to discard them
+
+Record the answers before moving on — step 4 acts on these, not on a pattern match:
+
+```bash
+# Absolute paths the user explicitly chose, one per line.
+SELECTED_WORKTREES="/Users/you/worktree-worker1
+/Users/you/worktree-worker2"
+
+# Only set to "yes" if the user confirmed discarding uncommitted work.
+FORCE_DISCARD="no"
+```
 
 ### 3. Kill tmux Session
 
@@ -61,20 +73,50 @@ fi
 
 ### 4. Remove Git Worktrees
 
-```bash
-# Get list of worktree paths (excluding main repo)
-worktrees=$(git worktree list --porcelain | grep "worktree " | cut -d' ' -f2 | grep -v "^$(git rev-parse --show-toplevel)$")
+Remove **only** the paths the user confirmed in step 2. Never enumerate worktrees
+and delete everything that happens to match a pattern — that risks destroying an
+unrelated worktree or uncommitted work.
 
-# Remove each worktree
-for worktree in $worktrees; do
-  if [[ "$worktree" == *"worktree-worker"* ]] || [[ "$worktree" == *"worktree-"* ]]; then
-    echo "Removing worktree: $worktree"
-    git worktree remove "$worktree" --force
-    echo "✓ Removed $worktree"
-  else
-    echo "⚠ Skipping $worktree (not a parallel-dev worktree)"
+```bash
+: "${SELECTED_WORKTREES:?No worktrees confirmed — re-run step 2 before removing anything}"
+
+repo_root="$(git rev-parse --show-toplevel)"
+
+while IFS= read -r worktree; do
+  [ -n "$worktree" ] || continue
+
+  # Never touch the main checkout.
+  if [ "$worktree" = "$repo_root" ]; then
+    echo "⚠ Skipping $worktree (main repository)"
+    continue
   fi
-done
+
+  # Strict allowlist: only the ~/worktree-worker<N> paths parallel-setup creates.
+  if [[ ! "$worktree" =~ ^${HOME}/worktree-worker[0-9]+$ ]]; then
+    echo "⚠ Skipping $worktree (not a parallel-dev worktree)"
+    continue
+  fi
+
+  # Must still be a registered worktree of this repository.
+  if ! git worktree list --porcelain | grep -qxF "worktree $worktree"; then
+    echo "⚠ Skipping $worktree (not a worktree of this repository)"
+    continue
+  fi
+
+  # Refuse to discard uncommitted work unless the user opted in at step 2.
+  if [ -n "$(git -C "$worktree" status --porcelain)" ]; then
+    if [ "${FORCE_DISCARD:-no}" != "yes" ]; then
+      echo "✗ $worktree has uncommitted changes — skipped."
+      echo "  Commit or stash them, then re-run."
+      continue
+    fi
+    echo "⚠ Discarding uncommitted changes in $worktree (confirmed by user)"
+    git worktree remove --force "$worktree"
+  else
+    git worktree remove "$worktree"
+  fi
+  echo "✓ Removed $worktree"
+done <<< "$SELECTED_WORKTREES"
 
 # Prune stale worktree metadata
 git worktree prune
@@ -112,20 +154,30 @@ echo "  - Continue working on develop branch normally"
 
 ### Selective Removal
 
-Only removes worktrees matching patterns:
-- `~/worktree-worker*`
-- `~/worktree-*`
+Removal is driven by `SELECTED_WORKTREES` — the explicit list the user confirmed
+in step 2 — not by scanning `git worktree list`. Each entry then has to clear
+three further gates before it is touched:
 
-Skips other worktrees to avoid accidental deletion.
+1. It is not the main repository checkout.
+2. It matches `~/worktree-worker<N>` exactly (the paths `parallel-setup` creates).
+3. It is still a registered worktree of this repository.
 
-### Force Remove
+Anything else is skipped with a message. A path the user never selected is never
+removed, even if it looks like a parallel-dev worktree.
 
-Uses `--force` flag in `git worktree remove` to handle:
-- Uncommitted changes
-- Branches not yet merged
-- Dirty worktrees
+### Uncommitted Changes
 
-**Important:** User confirmation is requested during step 2 (via AskUserQuestion) to check the status of worktrees. After confirmation, `git worktree remove --force` will delete the worktree regardless of its dirty state. There is no additional automatic warning after the initial confirmation.
+`git worktree remove` is called **without** `--force` by default, so Git itself
+refuses to delete a dirty worktree. Before removing, the worktree is checked with
+`git status --porcelain`:
+
+- **Clean** → removed normally.
+- **Dirty** → skipped, with instructions to commit or stash.
+- **Dirty and `FORCE_DISCARD=yes`** → removed with `--force`, but only when the
+  user explicitly agreed to discard the changes at step 2.
+
+`--force` also drops branches that are not merged, so treat that confirmation as
+irreversible.
 
 ### Confirmation
 

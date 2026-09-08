@@ -163,12 +163,12 @@ After Codex sessions are ready, rename them for easier identification:
 
 ```bash
 # Configurable startup delay (default: 10 seconds)
-# Adjust CLAUDE_STARTUP_DELAY if Codex takes longer/shorter to initialize on your system
-CLAUDE_STARTUP_DELAY=${CLAUDE_STARTUP_DELAY:-10}
+# Adjust CODEX_STARTUP_DELAY if Codex takes longer/shorter to initialize on your system
+CODEX_STARTUP_DELAY=${CODEX_STARTUP_DELAY:-10}
 
 # Wait for Codex sessions to be fully initialized
-echo "Waiting ${CLAUDE_STARTUP_DELAY}s for Codex sessions to initialize..."
-sleep $CLAUDE_STARTUP_DELAY
+echo "Waiting ${CODEX_STARTUP_DELAY}s for Codex sessions to initialize..."
+sleep $CODEX_STARTUP_DELAY
 
 # Rename each Codex session in its pane
 # Example with 2 workers handling issues #79 and #80:
@@ -181,9 +181,9 @@ tmux send-keys -t parallel-dev:workers.1 '/rename worker2-issue80' Enter
 echo "✓ Codex sessions renamed"
 ```
 
-**Note:** If Codex doesn't start in time, increase `CLAUDE_STARTUP_DELAY`:
+**Note:** If Codex doesn't start in time, increase `CODEX_STARTUP_DELAY`:
 ```bash
-CLAUDE_STARTUP_DELAY=15 /parallel-setup 2
+CODEX_STARTUP_DELAY=15 /parallel-setup 2
 ```
 
 ### 7. Auto-start Development

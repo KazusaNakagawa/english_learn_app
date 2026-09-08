@@ -26,7 +26,8 @@ fi
 if [ $# -ge 1 ]; then
   CODE="$1"
 else
-  read -r -p "MFA code for ${MFA_SERIAL##*/}: " CODE
+  read -r -s -p "MFA code for ${MFA_SERIAL##*/}: " CODE
+  echo
 fi
 
 CREDS="$(aws sts get-session-token \
@@ -44,7 +45,10 @@ print(c["AccessKeyId"], c["SecretAccessKey"], c["SessionToken"], c["Expiration"]
 ')
 EOF
 
-REGION="$(aws configure get region --profile "$BASE_PROFILE" || echo ap-northeast-1)"
+# `aws configure get region` can exit 0 with an empty value, so `||` alone is not
+# enough — fall back whenever the result is empty.
+REGION="$(aws configure get region --profile "$BASE_PROFILE" || true)"
+REGION="${REGION:-${AWS_MFA_REGION:-ap-northeast-1}}"
 
 aws configure set aws_access_key_id "$ACCESS_KEY" --profile "$SESSION_PROFILE"
 aws configure set aws_secret_access_key "$SECRET_KEY" --profile "$SESSION_PROFILE"
