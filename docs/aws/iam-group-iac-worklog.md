@@ -516,6 +516,56 @@ Resources
 追加のみ。既存グループ・ユーザへの変更はなし。
 この 2 本はどのグループにも未アタッチなので、デプロイしても**現時点では誰の実効権限も変わらない**。
 
+### 訂正: `NotAction` の除外はリソース非スコープだった
+
+PR #181 のレビューで指摘され、Deny 文を 2 本立てに直した。
+
+`NotAction` は「このアクションは（このステートメントでは）拒否しない」という意味で、
+**リソースを問わない**。つまり最初の実装は
+
+> MFA なしでも「MFA 登録に必要なアクション」は誰に対してでも実行できる
+
+という状態だった。単独なら害はない（Allow 側が自分の ARN に限定されているため）。
+問題は**同じプリンシパルに広い IAM 許可が併存する場合**で、
+既存の `dev_user` はまさに `IAMFullAccess` を持っている。この組み合わせだと
+パスワードだけのセッションで他人のパスワード変更や MFA デバイス付け替えが通ってしまい、
+ベースラインの意味が消える。
+
+対処として、除外したアクションを**もう一度 `NotResource` 付きで Deny** する:
+
+```json
+{
+  "Sid": "DenyOtherPeoplesCredentialsUnlessMfaAuthenticated",
+  "Effect": "Deny",
+  "Action": ["iam:ChangePassword", "iam:CreateVirtualMFADevice", "iam:DeleteVirtualMFADevice",
+             "iam:EnableMFADevice", "iam:GetUser", "iam:ListMFADevices", "iam:ResyncMFADevice"],
+  "NotResource": ["arn:...:user/${aws:username}", "arn:...:mfa/${aws:username}"],
+  "Condition": {"BoolIfExists": {"aws:MultiFactorAuthPresent": "false"}}
+}
+```
+
+これで除外の意味が「自分の資格情報を管理できる」に狭まる。
+
+**アカウントレベルのアクションは意図的に含めない。**
+`iam:ListVirtualMFADevices` / `iam:GetAccountPasswordPolicy` / `sts:GetSessionToken` は
+リソース単位で絞れず、含めると `NotResource` に一致しようがないので必ず Deny になり、
+MFA 登録の入口そのものが塞がる。
+
+回帰防止として、この対応関係を不変条件テストにした:
+
+> `covers every globally exempted action that can target another user`
+
+グローバル除外リストからアクションを増やしたとき、
+アカウントレベルでもリソーススコープ Deny でもないものが残っていれば落ちる。
+
+**教訓**: `NotAction` は「除外」であって「限定」ではない。
+自己管理系のポリシーで `NotAction` を使うときは、
+同じプリンシパルに他の Allow が乗る前提で読み直す必要がある。
+
+なお `iam:CreateVirtualMFADevice` のリソースは `mfa/<デバイス名>` なので、
+**仮想 MFA デバイスの名前はユーザ名と一致させる必要がある**（`mfa/${aws:username}` に一致しないと拒否される）。
+これは #176 の手順書に書く。
+
 ### 未完了（デプロイが必要な受け入れ条件）
 
 #172 の受け入れ条件のうち 2 つは、実際にデプロイしてテストユーザを作らないと確認できない:

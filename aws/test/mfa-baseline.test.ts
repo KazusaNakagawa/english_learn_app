@@ -6,6 +6,7 @@ const ACCOUNT = '123456789012';
 const ENV = { account: ACCOUNT, region: 'ap-northeast-1' };
 
 type Statement = {
+  NotResource?: unknown;
   Sid?: string;
   Effect: string;
   Action?: string | string[];
@@ -151,7 +152,18 @@ describe('MFA baseline policies', () => {
   });
 
   describe(DENY_WITHOUT_MFA, () => {
-    const statement = () => managedPolicies()[DENY_WITHOUT_MFA][0];
+    const statements = () => managedPolicies()[DENY_WITHOUT_MFA];
+    const statement = () => statements()[0];
+    const scopedDeny = () =>
+      statements().find((s) => s.NotResource !== undefined)!;
+
+    // アカウント全体が対象で、リソース単位の絞り込みができないアクション。
+    // これらをリソーススコープの Deny に含めると MFA 登録自体が回らなくなる。
+    const ACCOUNT_LEVEL = [
+      'iam:ListVirtualMFADevices',
+      'iam:GetAccountPasswordPolicy',
+      'sts:GetSessionToken',
+    ];
 
     it('denies on a wildcard resource when MFA is absent', () => {
       expect(statement().Effect).toBe('Deny');
@@ -182,6 +194,52 @@ describe('MFA baseline policies', () => {
     it('does NOT exempt any access key action', () => {
       const exempted = asArray(statement().NotAction);
       expect(exempted.filter((a) => a.includes('AccessKey'))).toEqual([]);
+    });
+
+    // --- リソーススコープの Deny (#181 レビュー指摘) -------------------
+    // NotAction による除外はリソース非スコープなので、それ単体では
+    // 「MFA なしで *自分の* 登録だけができる」を表現できていない。
+    // IAMFullAccess のような広い許可を併せ持つと、MFA なしのセッションで
+    // 他人のパスワードや MFA デバイスを操作できてしまう。
+    describe('resource-scoped deny for the exempted actions', () => {
+      it('exists, with the same MFA condition', () => {
+        expect(scopedDeny()).toBeDefined();
+        expect(scopedDeny().Effect).toBe('Deny');
+        expect(scopedDeny().Condition).toEqual({
+          BoolIfExists: { 'aws:MultiFactorAuthPresent': 'false' },
+        });
+      });
+
+      it('limits the exemption to the caller own user and MFA device', () => {
+        const raw = scopedDeny().NotResource;
+        const notResource = (Array.isArray(raw) ? raw : [raw]).map(renderArn);
+
+        expect(notResource.sort()).toEqual([
+          `arn:\${AWS::Partition}:iam::${ACCOUNT}:mfa/\${aws:username}`,
+          `arn:\${AWS::Partition}:iam::${ACCOUNT}:user/\${aws:username}`,
+        ]);
+      });
+
+      // 中核の不変条件: グローバルに除外したアクションは、
+      // アカウントレベルで絞りようがないものを除き、
+      // すべてリソーススコープの Deny 側で拾われていなければならない。
+      // どちらからも漏れたアクションは「誰に対してでも MFA なしで実行可能」になる。
+      it('covers every globally exempted action that can target another user', () => {
+        const globallyExempt = asArray(statement().NotAction);
+        const scoped = asArray(scopedDeny().Action);
+
+        const uncovered = globallyExempt.filter(
+          (action) => !ACCOUNT_LEVEL.includes(action) && !scoped.includes(action),
+        );
+
+        expect(uncovered).toEqual([]);
+      });
+
+      // 失敗系: 逆にアカウントレベルのアクションを含めてしまうと、
+      // リソースが一致しようがないので MFA 登録の入口が塞がる。
+      it.each(ACCOUNT_LEVEL)('does NOT scope %s, which has no resource to match', (action) => {
+        expect(asArray(scopedDeny().Action)).not.toContain(action);
+      });
     });
   });
 

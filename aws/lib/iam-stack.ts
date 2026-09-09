@@ -37,6 +37,34 @@ const ALLOWED_WITHOUT_MFA = [
 ];
 
 /**
+ * The subset of ALLOWED_WITHOUT_MFA that can name another user's resource.
+ *
+ * A `NotAction` exemption is not resource-scoped: it says "this action is not
+ * denied", for *any* resource. On its own that is too generous, because a
+ * principal that also holds broad IAM permissions (the existing `dev_user`
+ * group carries `IAMFullAccess`) could then use a password-only session to
+ * change someone else's password or attach an MFA device to their user.
+ *
+ * These actions are therefore denied again, this time with `NotResource`
+ * limited to the caller's own ARNs, so the exemption really means
+ * "manage your own credentials" rather than "manage anyone's".
+ *
+ * Account-level actions are excluded on purpose — `iam:ListVirtualMFADevices`,
+ * `iam:GetAccountPasswordPolicy` and `sts:GetSessionToken` have no per-user
+ * resource to match, so scoping them would deny them outright and close the
+ * only route into MFA enrolment.
+ */
+const SELF_TARGETED_WITHOUT_MFA = [
+  'iam:ChangePassword',
+  'iam:GetUser',
+  'iam:CreateVirtualMFADevice',
+  'iam:DeleteVirtualMFADevice',
+  'iam:EnableMFADevice',
+  'iam:ListMFADevices',
+  'iam:ResyncMFADevice',
+];
+
+/**
  * Account-wide IAM groups and policies.
  *
  * Deliberately separate from VoicevoxStack: permissions have their own review
@@ -135,6 +163,18 @@ export class IamStack extends cdk.Stack {
           conditions: {
             // BoolIfExists, not Bool: long-lived access keys carry no
             // aws:MultiFactorAuthPresent key at all, and must be denied too.
+            BoolIfExists: { 'aws:MultiFactorAuthPresent': 'false' },
+          },
+        }),
+        // Narrows the exemption above from "any resource" to "your own".
+        // Without this, the baseline is defeated by any policy on the same
+        // principal that grants these actions broadly (e.g. IAMFullAccess).
+        new iam.PolicyStatement({
+          sid: 'DenyOtherPeoplesCredentialsUnlessMfaAuthenticated',
+          effect: iam.Effect.DENY,
+          actions: SELF_TARGETED_WITHOUT_MFA,
+          notResources: [ownUser, ownMfaDevice],
+          conditions: {
             BoolIfExists: { 'aws:MultiFactorAuthPresent': 'false' },
           },
         }),
