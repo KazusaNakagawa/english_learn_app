@@ -5,19 +5,24 @@
   "scripts": {
     "build": "tsc",
     "watch": "tsc -w",
+    "test": "jest",
     "cdk": "cdk",
-    "deploy:poc": "cdk deploy -c env=poc",
-    "deploy:dev": "cdk deploy -c env=dev",
-    "deploy:pro": "cdk deploy -c env=pro",
-    "diff:poc": "cdk diff -c env=poc",
-    "diff:dev": "cdk diff -c env=dev",
-    "diff:pro": "cdk diff -c env=pro",
-    "synth:poc": "cdk synth -c env=poc",
-    "synth:dev": "cdk synth -c env=dev",
-    "synth:pro": "cdk synth -c env=pro",
-    "destroy:poc": "cdk destroy -c env=poc",
-    "destroy:dev": "cdk destroy -c env=dev",
-    "destroy:pro": "cdk destroy -c env=pro"
+    "deploy:poc": "cdk deploy VoicevoxStack-poc -c env=poc",
+    "diff:poc": "cdk diff VoicevoxStack-poc -c env=poc",
+    "synth:poc": "cdk synth VoicevoxStack-poc -c env=poc",
+    "destroy:poc": "cdk destroy VoicevoxStack-poc -c env=poc",
+    "deploy:dev": "cdk deploy VoicevoxStack-dev -c env=dev",
+    "diff:dev": "cdk diff VoicevoxStack-dev -c env=dev",
+    "synth:dev": "cdk synth VoicevoxStack-dev -c env=dev",
+    "destroy:dev": "cdk destroy VoicevoxStack-dev -c env=dev",
+    "deploy:pro": "cdk deploy VoicevoxStack-pro -c env=pro",
+    "diff:pro": "cdk diff VoicevoxStack-pro -c env=pro",
+    "synth:pro": "cdk synth VoicevoxStack-pro -c env=pro",
+    "destroy:pro": "cdk destroy VoicevoxStack-pro -c env=pro",
+    "deploy:iam": "cdk deploy IamStack",
+    "diff:iam": "cdk diff IamStack",
+    "synth:iam": "cdk synth IamStack",
+    "destroy:iam": "cdk destroy IamStack"
   },
   "dependencies": {
     "aws-cdk-lib": "^2.120.0",
@@ -25,9 +30,12 @@
     "constructs": "^10.0.0"
   },
   "devDependencies": {
+    "@types/jest": "^29.5.14",
     "@types/node": "^20.0.0",
     "aws-cdk": "^2.120.0",
     "dotenv": "^17.3.1",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.4.12",
     "ts-node": "^10.9.0",
     "typescript": "^5.3.0"
   }
