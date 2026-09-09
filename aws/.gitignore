@@ -2,6 +2,8 @@
 *.d.ts
 # Lambda source files (plain JS, not compiled output) are tracked
 !lambda/**/*.js
+# Jest config is hand-written, not tsc output
+!jest.config.js
 node_modules/
 dist/
 cdk.out/

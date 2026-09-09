@@ -3,6 +3,11 @@ import 'dotenv/config';
 import * as cdk from 'aws-cdk-lib';
 import { VoicevoxStack } from '../lib/voicevox-stack';
 
+// IamStack is deliberately NOT declared here — it has its own entry,
+// bin/iam-app.ts. This app's stacks require VOICEVOX_API_KEY_{ENV}, and a CDK
+// app constructs every declared stack before the CLI applies a stack selector,
+// so declaring IamStack here would make IAM commands fail without a VOICEVOX
+// key. See docs/aws/iam-group-iac-worklog.md.
 const app = new cdk.App();
 
 const env = app.node.tryGetContext('env') ?? 'poc';

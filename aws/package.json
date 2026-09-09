@@ -5,19 +5,24 @@
   "scripts": {
     "build": "tsc",
     "watch": "tsc -w",
+    "test": "jest",
     "cdk": "cdk",
     "deploy:poc": "cdk deploy -c env=poc",
     "deploy:dev": "cdk deploy -c env=dev",
     "deploy:pro": "cdk deploy -c env=pro",
+    "deploy:iam": "cdk deploy IamStack --app 'npx ts-node --prefer-ts-exts bin/iam-app.ts'",
     "diff:poc": "cdk diff -c env=poc",
     "diff:dev": "cdk diff -c env=dev",
     "diff:pro": "cdk diff -c env=pro",
+    "diff:iam": "cdk diff IamStack --app 'npx ts-node --prefer-ts-exts bin/iam-app.ts'",
     "synth:poc": "cdk synth -c env=poc",
     "synth:dev": "cdk synth -c env=dev",
     "synth:pro": "cdk synth -c env=pro",
+    "synth:iam": "cdk synth IamStack --app 'npx ts-node --prefer-ts-exts bin/iam-app.ts'",
     "destroy:poc": "cdk destroy -c env=poc",
     "destroy:dev": "cdk destroy -c env=dev",
-    "destroy:pro": "cdk destroy -c env=pro"
+    "destroy:pro": "cdk destroy -c env=pro",
+    "destroy:iam": "cdk destroy IamStack --app 'npx ts-node --prefer-ts-exts bin/iam-app.ts'"
   },
   "dependencies": {
     "aws-cdk-lib": "^2.120.0",
@@ -25,9 +30,12 @@
     "constructs": "^10.0.0"
   },
   "devDependencies": {
+    "@types/jest": "^29.5.14",
     "@types/node": "^20.0.0",
     "aws-cdk": "^2.120.0",
     "dotenv": "^17.3.1",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.4.12",
     "ts-node": "^10.9.0",
     "typescript": "^5.3.0"
   }

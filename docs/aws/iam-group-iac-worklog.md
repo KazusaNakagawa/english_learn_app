@@ -210,6 +210,192 @@ npm run deploy:pro                                                # ← これ�
 
 ---
 
+## 2026-09-10 — #171 IamStack のスキャフォールド
+
+### やったこと
+
+- `aws/lib/iam-stack.ts` を新規作成。リソースはまだ 0 件の器のみ（env サフィックスなし）
+- `aws/bin/iam-app.ts` を新規作成。IAM 専用の CDK app エントリ
+  （当初は `bin/app.ts` に相乗りさせたが、レビュー指摘を受けて分離。下記「訂正」参照）
+- テスト基盤（jest + ts-jest）を導入し、`aws/test/` に 18 ケース
+- `package.json` に `deploy:iam` / `diff:iam` / `synth:iam` / `destroy:iam` を追加。
+  いずれも `--app` で `bin/iam-app.ts` を指す
+
+### ハマった点
+
+#### 1. スタックを 2 つにした瞬間、既存の npm script が全部壊れた
+
+> 最終的に app エントリを分けたため、この PR ではスクリプトを元に戻している。
+> ただし「1 つの app に 2 つ目のスタックを足すと起きること」として記録しておく。
+
+`cdk deploy -c env=poc` のようにスタック名を省略した書き方をしていたため、
+app に 2 つ目のスタックを足した時点でこうなる:
+
+```
+Since this app includes more than a single stack, specify which stacks to use (wildcards are supported) or specify `--all`
+Stacks: VoicevoxStack-poc · IamStack
+```
+
+`deploy` / `diff` / `synth` / `destroy` × `poc` / `dev` / `pro` の 12 個すべてが対象。
+**全スクリプトにスタック名を明示**して解決した:
+
+```diff
+-"deploy:poc": "cdk deploy -c env=poc",
++"deploy:poc": "cdk deploy VoicevoxStack-poc -c env=poc",
+```
+
+スタックが 1 つしかないうちは名前を省略できてしまうので、
+**2 つ目を足すときに初めて顕在化する**。単一スタックの CDK プロジェクトに
+共通の落とし穴だと思う。
+
+#### 2. `jest.config.js` が `.gitignore` に消された
+
+`aws/.gitignore` の 1 行目が `*.js`（tsc の出力を無視するため）。
+新規作成した `jest.config.js` がこれに巻き込まれ、`git status` に出てこなかった。
+気づかず PR を出していたら、他の環境で `npm test` が動かない。
+
+```console
+$ git check-ignore -v aws/jest.config.js
+aws/.gitignore:1:*.js	aws/jest.config.js
+```
+
+既に `!lambda/**/*.js` という否定パターンの前例があったので、同じ書き方で例外にした:
+
+```gitignore
+# Jest config is hand-written, not tsc output
+!jest.config.js
+```
+
+**教訓**: 生成物を無視するリポジトリで手書きの `.js` を足すときは
+`git check-ignore` を通す。`git status` に出ないことをもって
+「変更なし」と判断しない。
+
+### 判断が分かれた点
+
+#### app エントリを分けるか、1 つの app に相乗りさせるか
+
+#171 の Goal は「`VoicevoxStack` から独立してデプロイできること」。
+`bin/app.ts` に相乗りさせると、IAM をいじるだけでも VOICEVOX の
+Docker イメージビルドが走るのでは、という懸念があった。
+
+実測したところ Docker ビルドは**走らなかった**:
+
+```console
+$ time npx cdk synth IamStack -c env=poc
+npx cdk synth IamStack -c env=poc  3.36s user 0.36s system 131% cpu 2.819 total
+```
+
+CDK v2 の `DockerImageAsset` は synth 時点ではアセットマニフェストを出すだけで、
+実ビルドは deploy のアセット publish 段階。マニフェストはスタック単位でもある。
+
+**この結果をもって「app エントリは分けない」と判断したが、これは誤りだった。**
+見ていた依存が Docker だけで、環境変数の依存を見落としていた。次項で訂正する。
+
+#### 訂正: 相乗りさせると VOICEVOX の API キーなしで IAM 操作ができない
+
+PR #180 のレビューで指摘された。**CDK の app は、CLI がスタックセレクタを
+適用する前に、宣言されている全スタックを構築する。** そして `VoicevoxStack` の
+constructor は API キーが未設定だと throw する:
+
+```ts
+const apiKeyEnvVar = `VOICEVOX_API_KEY_${stackEnv.toUpperCase()}`;
+const apiKeyValue = process.env[apiKeyEnvVar];
+if (!apiKeyValue) {
+  throw new Error(`API key not found. Set environment variable: ${apiKeyEnvVar}\n` + ...);
+}
+```
+
+つまり `cdk synth IamStack` と書いても `VoicevoxStack` の構築は先に走り、落ちる:
+
+```console
+$ DOTENV_CONFIG_PATH=/dev/null npx cdk synth IamStack -c env=poc
+Error: API key not found. Set environment variable: VOICEVOX_API_KEY_POC
+    at new VoicevoxStack (.../lib/voicevox-stack.ts:131:13)
+    at Object.<anonymous> (.../bin/app.ts:20:1)
+```
+
+IAM と何の関係もない VOICEVOX の資格情報が、IAM 操作の前提条件になっていた。
+Goal の「独立してデプロイできる」を満たしていない。
+
+**なぜ検証をすり抜けたか**: ローカルに `.env` があり、`bin/app.ts` の
+`import 'dotenv/config'` がそれを読んでいたため、手元では常に成功していた。
+**自分の環境で通ることは、独立性の証明にならない。**
+以降 IAM 側の検証は `DOTENV_CONFIG_PATH=/dev/null` と `env -u` で
+クリーン環境を再現して行う。
+
+→ **app エントリを分ける**。`bin/iam-app.ts` を新設し、`:iam` 系スクリプトは
+`--app` でそちらを指す。`bin/iam-app.ts` には `dotenv/config` を**入れない**
+（`.env` を必要としないことを構造として担保する。`CDK_DEFAULT_ACCOUNT` /
+`CDK_DEFAULT_REGION` は CDK CLI 自身が注入する）。
+
+回帰防止として、誰かが `VoicevoxStack` をこのエントリに足したら落ちるテストを置いた。
+なおこのテストは最初 `expect(source).not.toContain('VoicevoxStack')` と書いていて、
+**「なぜ分けたか」を説明するコメント自体に反応して落ちた**。
+import 文と生成箇所だけを見る正規表現に直している。
+
+app を分けた結果、`bin/app.ts` のスタックは 1 つのままなので、
+「ハマった点 1」で全スクリプトに付けたスタック名の明示は不要になり、元に戻した。
+`bin/app.ts` への変更は説明コメントの追加のみ。
+
+### 検証コマンドと結果
+
+```console
+$ npm run build          # AC1
+$ npm test               # 18 passed
+```
+
+AC2 は**クリーン環境を再現して**確認する。手元の `.env` が読まれる状態では
+独立性を検証したことにならない（上の訂正参照）:
+
+```console
+$ env -u VOICEVOX_API_KEY_POC -u VOICEVOX_API_KEY_DEV -u VOICEVOX_API_KEY_PRO \
+    DOTENV_CONFIG_PATH=/dev/null npm run synth:iam
+Resources:
+  CDKMetadata:
+    ...
+```
+
+AC3「`synth:poc` が従来どおり `VoicevoxStack-poc` を出す」は、
+目視ではなく **develop 時点のテンプレートとバイト単位で比較**して確認した:
+
+```console
+$ npm run synth:poc && cp cdk.out/VoicevoxStack-poc.template.json /tmp/after.json
+$ git stash push bin/app.ts package.json          # develop 相当に戻す
+$ npx cdk synth -c env=poc && cp cdk.out/VoicevoxStack-poc.template.json /tmp/before.json
+$ git stash pop
+$ diff /tmp/before.json /tmp/after.json
+（差分なし）
+```
+
+AC4（スタック間の分離）:
+
+| 確認 | 結果 |
+| --- | --- |
+| `IamStack` のリソース種別 | `["AWS::CDK::Metadata"]` のみ |
+| `VoicevoxStack-poc` 内の `AWS::IAM::Group` | 0 件 |
+| `IamStack` 内の Lambda / ECR / ApiGateway / SNS / CloudWatch | 0 件 |
+
+AC5（既存グループに影響しないこと）は実アカウントに対して確認:
+
+```console
+$ npm run diff:iam
+Stack IamStack
+Parameters
+[+] Parameter BootstrapVersion BootstrapVersion: {...}
+
+✨  Number of stacks with differences: 1
+```
+
+新規スタックの `BootstrapVersion` パラメータのみ。
+既存グループへの変更・削除は一切出ていない。デプロイはしていないので現状も不変:
+
+```console
+$ aws iam list-groups --profile dev_user1 --query 'Groups[].GroupName'
+["dev_readonly", "dev_user"]
+```
+
+---
+
 <!--
 以降、PR ごとに追記する。テンプレート:
 
