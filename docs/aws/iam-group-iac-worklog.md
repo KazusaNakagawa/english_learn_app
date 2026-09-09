@@ -19,6 +19,7 @@
 | 4. MFA ベースライン | deny-without-MFA の落とし穴（自分を締め出す） | #172 |
 | 5. CDK 実装 | VoicevoxStack とスタックを分ける理由、env サフィックスなしの判断 | #171 |
 | 6. CDK bootstrap ロールの権限問題 | **記事の山場**。絞らずに文書化を選んだ理由 | 2026-09-10 §決定事項 |
+| 6.5 assumed role に Deny は効かない | identity policy の Deny が assume 後のセッションに引き継がれない件。実際に設計を間違えた | 2026-09-10 §訂正 |
 | 7. 既存グループからの移行 | `AlreadyExists` 問題、ロックアウト回避、2 段階廃止 | #178 |
 | 8. まとめ | やってよかったこと / やらなくてよかったこと | — |
 
@@ -29,13 +30,27 @@
 ### 背景
 
 個人開発の AWS アカウント（VOICEVOX TTS バックエンドを CDK で運用）で、IAM グループを整備したくなった。
-出発点の要件（`.agents/skills/prompt/aws-ioc.md`）は以下:
 
-- `readonly`: 障害/リソース調査。破壊的操作ができない権限。開発者が使う
-- `develop`: 開発者用。CDK / Lambda / API GW。インフラに依頼せずある程度作業できる
-- `infra`: 管理する上で対応できる一般的な権限
-- `ope`: 運用監視用。readonly と同等であれば作成不要
-- テンプレ化したいので IaC 管理。`VoicevoxStack` とは別ファイル
+出発点の要件は `.agents/skills/prompt/aws-ioc.md` に書いたもの。
+**このファイルはローカルの作業用プロンプトで、リポジトリにはコミットしていない**
+（`.agents/skills/` 配下の他のファイルは追跡下にあるが、これは未追跡）。
+参照先を辿れないと意味がないので、全文を以下に引用する:
+
+```markdown
+## 要件
+IAM ユーザグループを作成したい。
+一般的に採用されているグループ構成
+
+- readonly: 障害/リソース調査 etc 破壊的操作ができない権限 開発者が使う
+- develop: 開発者用 / CDK / Lambda / API GW etc インフラに依頼しなくてもある程度作業できる権限
+- infra: 管理する上で対応できる一般的な権限
+- ope: 運用監視用: readonly と同等であれば作成不要
+- あと、私が抜けているロールがあれば提案お願いします
+
+## 構成
+- テンプレ化したいので IoC 管理
+- VoicevoxStack とは別ファイルで管理できれば問題ない
+```
 
 ### 現状調査
 
@@ -46,8 +61,16 @@ aws sts get-caller-identity --profile dev_user1
 aws iam list-groups --profile dev_user1 --query 'Groups[].GroupName'
 aws iam list-users  --profile dev_user1 --query 'Users[].UserName'
 aws iam list-policies --profile dev_user1 --scope Local --query 'Policies[].PolicyName'
-aws iam list-attached-group-policies --profile dev_user1 --group-name dev_user
-aws iam list-group-policies --profile dev_user1 --group-name dev_readonly
+
+# アタッチ済み管理ポリシーとインラインポリシーは両グループ分を取る
+# （片方だけだと下の表の「dev_user に MFA 強制なし」が裏取りできない）
+for g in dev_readonly dev_user; do
+  aws iam list-attached-group-policies --profile dev_user1 --group-name "$g" \
+    --query 'AttachedPolicies[].PolicyName'
+  aws iam list-group-policies --profile dev_user1 --group-name "$g" \
+    --query 'PolicyNames'
+done
+
 aws cloudformation list-stacks --profile dev_user1 \
   --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE --query 'StackSummaries[].StackName'
 ```
@@ -105,14 +128,57 @@ CDK bootstrap ロール（`cdk-*-deploy-role-*` 等）への `sts:AssumeRole` �
 作った意味自体が消える。過去に同じ構成で管理コストが手間になった経験がある。
 
 この判断の帰結として `develop` は**サンドボックスではなく信頼済みグループ**という位置づけになる。
-実効的な統制は次の 3 つに絞られ、これを設計書に明記する:
 
-- MFA 強制（このグループでは必須）
-- CloudTrail での `cdk-*` ロールへの `sts:AssumeRole` 可視化
-- `*-pro` の deny — 悪意ではなく**事故**に対するガードレール
+### 訂正: `*-pro` の deny は `cdk deploy` を止めない
+
+当初この節に「実効的な統制」として次の 3 つを挙げていた:
+
+1. MFA 強制
+2. CloudTrail での `cdk-*` ロールへの `sts:AssumeRole` 可視化
+3. `*-pro` の deny — 事故に対するガードレール
+
+**3 は誤り。** PR #179 のレビューで指摘され、訂正する。
+
+理由は IAM のポリシー評価の仕組み。`sts:AssumeRole` の後、以降の API 呼び出しは
+**assume したロールのプリンシパルとして評価される**。呼び出し元ユーザの identity policy は
+そのセッションでは評価されない。したがって `develop` グループに書いた `*-pro` の Deny は、
+bootstrap ロールを assume した後のセッションには**一切効かない**。
+
+さらに悪いことに、CDK の bootstrap ロール（`cdk-hnb659fds-deploy-role-<account>-<region>`）は
+**アカウント + リージョン単位で 1 つ**であり、poc / dev / pro で共通。ロール側から見て
+「どの環境向けのデプロイか」は区別できない。つまり `npm run deploy:pro` は deny を素通りする。
+
+`*-pro` の deny が効くのは、ユーザ自身の credential で直接叩く場合だけ:
+
+```bash
+aws lambda delete-function --function-name voicevox-engine-pro   # ← これは止まる
+npm run deploy:pro                                                # ← これは止まらない
+```
+
+事故の主経路は後者なので、ガードレールとしてはほぼ機能していなかったことになる。
+
+#### 単一アカウントで取れる代替案
+
+| 案 | 効くか | コスト | 判断 |
+| --- | --- | --- | --- |
+| SCP で pro を保護 | ○ | AWS Organizations が必要 | 現状 Organizations なしのため**不可** |
+| 環境ごとに AWS アカウントを分ける | ◎（本来の答え） | 大 | 今回は見送り。将来の検討事項 |
+| bootstrap ロールを環境別 qualifier で分ける | ○ | 中〜大 | 「絞らない」判断と矛盾するため見送り |
+| CFn の**削除保護 + スタックポリシー**を `VoicevoxStack-pro` に付ける | ○ | **小** | **採用**。プリンシパルに依存せずスタック側で効く |
+| bootstrap ロールの信頼ポリシーに MFA 条件 | △（pro は止まらないが底上げ） | 小 | 採用 |
+
+**採用: 削除保護 + スタックポリシー。** これはアイデンティティ側ではなく**リソース側**の防御なので、
+誰がどのロールで来ても効く。ロールを絞る運用コストを払わずに事故だけ止められるという点で、
+今回の「絞らない」判断と両立する。
+
+> `develop` に対する pro の防御は、identity policy ではなく**スタック側**で行う。
+> これを設計書（#176）に明記し、#174 の受け入れ条件からは
+> 「`npm run deploy:pro` が `AccessDenied` になること」を削除する（**設計上そうならない**ため）。
 
 > 記事では「絞れば安全」という素朴な結論に落とさず、
 > **権限を絞ることの継続的コスト**と**明文化して受け入れる**という選択肢を対比させたい。
+> あわせて、**identity policy の Deny が assumed role に引き継がれない**という
+> 見落としやすい挙動も扱う（今回まさに踏んだ）。
 
 ### 移行の論点
 
