@@ -396,6 +396,138 @@ $ aws iam list-groups --profile dev_user1 --query 'Groups[].GroupName'
 
 ---
 
+## 2026-09-10 — #172 MFA ベースライン
+
+### やったこと
+
+既存の `dev_readonly` にインラインで付いていた `EnforceMFA` を読み、
+customer-managed policy 2 本として `IamStack` に実装した。
+
+| ポリシー | 役割 |
+| --- | --- |
+| `self-service-credentials` | 自分のパスワード / MFA デバイス / アクセスキーを管理できる |
+| `deny-without-mfa` | MFA セッションでなければ、上記以外のすべてを拒否 |
+
+既存ポリシーからの変更点は 3 つ。いずれも #172 で意識的に決めた。
+
+#### 1. アクセスキーの自己管理を追加
+
+既存ポリシーには `*AccessKey*` が一切なく、**ユーザは自分のキーをローテーションできなかった**。
+実際 `dev_user1` のキーは 2026-02-14 作成から一度も交換されていない。
+`Create` / `Update` / `Delete` / `ListAccessKeys` を Allow に追加した。
+
+ただし Deny の `NotAction` には**入れない**。ローテーションには MFA セッションを要求する。
+
+#### 2. `iam:DeleteVirtualMFADevice` を Deny の除外対象に追加
+
+既存ポリシー（= AWS 公式サンプル）には登録中の詰み経路があった:
+
+```console
+$ aws iam create-virtual-mfa-device --virtual-mfa-device-name alice   # 通る
+# QR 読み込みに失敗 / 画面を閉じる
+
+$ aws iam create-virtual-mfa-device --virtual-mfa-device-name alice   # EntityAlreadyExists
+$ aws iam delete-virtual-mfa-device --serial-number arn:...:mfa/alice  # AccessDenied
+```
+
+作りかけのデバイスを消せず、自力で回復できない。
+
+除外に加えても安全な理由: **AWS は有効化済みの仮想 MFA デバイスの削除前に
+`iam:DeactivateMFADevice` を要求する**。この Deactivate は `NotAction` に入れていないので、
+パスワードだけを盗んだ相手が有効な MFA を外すことはできない。
+解放されるのは「未割り当てデバイスの削除」だけ。
+
+現状維持案を採らなかったのは、このアカウントで `IAMFullAccess` を持つのが `dev_user1` 
+だけだから。それが詰むと root でしか復旧できない。
+
+#### 3. `iam:DeactivateMFADevice` を Allow に追加
+
+MFA デバイスの機種変更に必要。Allow には入れるが Deny の除外には入れない、
+という 1 と同じ構造にした。
+
+### ハマった点
+
+#### テストの期待値のほうが間違っていた
+
+「アカウント ID をベタ書きしない」ことを確認するテストで、
+`arn:aws:iam::<account>:user/${aws:username}` という**平坦な文字列**を期待したら落ちた。
+実際に `Stack.formatArn` が生成するのはこれ:
+
+```json
+{"Fn::Join": ["", ["arn:", {"Ref": "AWS::Partition"}, ":iam::<account>:user/${aws:username}"]]}
+```
+
+パーティションを `aws` 固定にせず deploy 時に解決している。
+`aws-cn` / `aws-us-gov` でも動くので**実装のほうが正しい**。
+`Fn::Join` を平坦化するヘルパをテストに足して対応した。
+
+#### スコープ確認テストのフィルタが雑で `*` を拾った
+
+「資格情報系のアクションは自分の ARN に限定されていること」を検証するのに、
+`iam:` で始まるアクションを含む文を全部集めていたら、
+`Resource: "*"` の `AllowViewAccountInfo`（`ListVirtualMFADevices` 等）まで拾って落ちた。
+
+対象アクションを明示列挙し、それぞれを許可している文だけを見る形に直した。
+`it.each` で 9 アクション分に分かれるので、どれが `*` になったかも一目で分かる。
+
+#### `${aws:username}` を TS のテンプレートリテラルに置かない
+
+IAM のポリシー変数であって CDK トークンではない。
+バッククォート内に書くと TypeScript が展開してしまう。定数に切り出した:
+
+```ts
+const OWN_USERNAME = '${aws:username}';
+```
+
+### 判断が分かれた点
+
+#### `all-users` グループを作るか、各グループに貼るか
+
+Issue には「どちらか選べ」と書いていた。**各グループに貼る**方を採った。
+
+`all-users` 方式は DRY だが、**ユーザを追加し忘れると MFA 強制が丸ごと抜ける**
+という静かな失敗をする。各グループに貼る方式なら、貼り忘れたグループは
+テストで落とせる。実際に不変条件テストを置いた:
+
+> `attaches both baseline policies to every group in the stack`
+
+グループ 0 件の現時点では自明に通るが、#173-#175 でベースライン未付与のグループが
+足された瞬間に落ちる。
+
+### 検証コマンドと結果
+
+```console
+$ npm test
+Tests:       46 passed, 46 total
+
+$ env -u VOICEVOX_API_KEY_POC -u VOICEVOX_API_KEY_DEV -u VOICEVOX_API_KEY_PRO \
+    DOTENV_CONFIG_PATH=/dev/null npm run synth:iam   # OK
+```
+
+実アカウントに対する diff（読み取りのみ、未デプロイ）:
+
+```console
+$ npm run diff:iam
+Resources
+[+] AWS::IAM::ManagedPolicy SelfServiceCredentials SelfServiceCredentials5BE643D3
+[+] AWS::IAM::ManagedPolicy DenyWithoutMfa DenyWithoutMfa0B185844
+```
+
+追加のみ。既存グループ・ユーザへの変更はなし。
+この 2 本はどのグループにも未アタッチなので、デプロイしても**現時点では誰の実効権限も変わらない**。
+
+### 未完了（デプロイが必要な受け入れ条件）
+
+#172 の受け入れ条件のうち 2 つは、実際にデプロイしてテストユーザを作らないと確認できない:
+
+- MFA 未登録のユーザが仮想 MFA デバイスを登録でき、かつ `s3:ListAllMyBuckets` で `AccessDenied` になること
+- MFA サインイン後は所属グループの権限が使えること
+
+グループがまだ存在しない（#173-#175）ため、後者は #173 以降とまとめて検証するのが自然。
+デプロイの判断とあわせて持ち越す。
+
+---
+
 <!--
 以降、PR ごとに追記する。テンプレート:
 
