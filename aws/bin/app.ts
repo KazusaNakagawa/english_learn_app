@@ -2,8 +2,12 @@
 import 'dotenv/config';
 import * as cdk from 'aws-cdk-lib';
 import { VoicevoxStack } from '../lib/voicevox-stack';
-import { IamStack } from '../lib/iam-stack';
 
+// IamStack is deliberately NOT declared here — it has its own entry,
+// bin/iam-app.ts. This app's stacks require VOICEVOX_API_KEY_{ENV}, and a CDK
+// app constructs every declared stack before the CLI applies a stack selector,
+// so declaring IamStack here would make IAM commands fail without a VOICEVOX
+// key. See docs/aws/iam-group-iac-worklog.md.
 const app = new cdk.App();
 
 const env = app.node.tryGetContext('env') ?? 'poc';
@@ -12,16 +16,10 @@ if (!validEnvs.includes(env)) {
   throw new Error(`Invalid env: "${env}". Must be one of: ${validEnvs.join(' | ')}`);
 }
 
-const awsEnv = {
-  account: process.env.CDK_DEFAULT_ACCOUNT,
-  region: process.env.CDK_DEFAULT_REGION ?? 'ap-northeast-1',
-};
-
 new VoicevoxStack(app, `VoicevoxStack-${env}`, {
-  env: awsEnv,
+  env: {
+    account: process.env.CDK_DEFAULT_ACCOUNT,
+    region: process.env.CDK_DEFAULT_REGION ?? 'ap-northeast-1',
+  },
   stackEnv: env,
 });
-
-// No `-${env}` suffix: IAM is account-global and poc/dev/pro share one account,
-// so there is exactly one instance regardless of the `env` context value.
-new IamStack(app, 'IamStack', { env: awsEnv });

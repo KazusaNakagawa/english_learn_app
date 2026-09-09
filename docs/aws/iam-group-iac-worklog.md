@@ -214,14 +214,19 @@ npm run deploy:pro                                                # ← これ�
 
 ### やったこと
 
-- `aws/lib/iam-stack.ts` を新規作成。リソースはまだ 0 件の器のみ
-- `aws/bin/app.ts` で `VoicevoxStack-{env}` と並べて `IamStack` を生成（env サフィックスなし）
-- テスト基盤（jest + ts-jest）を導入し、`aws/test/iam-stack.test.ts` を追加
-- `package.json` に `deploy:iam` / `diff:iam` / `synth:iam` / `destroy:iam` を追加
+- `aws/lib/iam-stack.ts` を新規作成。リソースはまだ 0 件の器のみ（env サフィックスなし）
+- `aws/bin/iam-app.ts` を新規作成。IAM 専用の CDK app エントリ
+  （当初は `bin/app.ts` に相乗りさせたが、レビュー指摘を受けて分離。下記「訂正」参照）
+- テスト基盤（jest + ts-jest）を導入し、`aws/test/` に 18 ケース
+- `package.json` に `deploy:iam` / `diff:iam` / `synth:iam` / `destroy:iam` を追加。
+  いずれも `--app` で `bin/iam-app.ts` を指す
 
 ### ハマった点
 
 #### 1. スタックを 2 つにした瞬間、既存の npm script が全部壊れた
+
+> 最終的に app エントリを分けたため、この PR ではスクリプトを元に戻している。
+> ただし「1 つの app に 2 つ目のスタックを足すと起きること」として記録しておく。
 
 `cdk deploy -c env=poc` のようにスタック名を省略した書き方をしていたため、
 app に 2 つ目のスタックを足した時点でこうなる:
@@ -272,29 +277,82 @@ aws/.gitignore:1:*.js	aws/jest.config.js
 #171 の Goal は「`VoicevoxStack` から独立してデプロイできること」。
 `bin/app.ts` に相乗りさせると、IAM をいじるだけでも VOICEVOX の
 Docker イメージビルドが走るのでは、という懸念があった。
-走るなら Docker のない環境で IAM 作業ができなくなり、Goal と矛盾する。
 
-実測したところ**走らなかった**:
+実測したところ Docker ビルドは**走らなかった**:
 
 ```console
 $ time npx cdk synth IamStack -c env=poc
-...
 npx cdk synth IamStack -c env=poc  3.36s user 0.36s system 131% cpu 2.819 total
 ```
 
 CDK v2 の `DockerImageAsset` は synth 時点ではアセットマニフェストを出すだけで、
-実ビルドは deploy のアセット publish 段階。しかもマニフェストはスタック単位なので、
-`cdk deploy IamStack` では VOICEVOX 側のイメージに触れない。
+実ビルドは deploy のアセット publish 段階。マニフェストはスタック単位でもある。
 
-→ **app エントリは分けない**。スタックセレクタだけで独立性が確保できるので、
-`bin/iam-app.ts` を増やす必要はないと判断。
+**この結果をもって「app エントリは分けない」と判断したが、これは誤りだった。**
+見ていた依存が Docker だけで、環境変数の依存を見落としていた。次項で訂正する。
+
+#### 訂正: 相乗りさせると VOICEVOX の API キーなしで IAM 操作ができない
+
+PR #180 のレビューで指摘された。**CDK の app は、CLI がスタックセレクタを
+適用する前に、宣言されている全スタックを構築する。** そして `VoicevoxStack` の
+constructor は API キーが未設定だと throw する:
+
+```ts
+const apiKeyEnvVar = `VOICEVOX_API_KEY_${stackEnv.toUpperCase()}`;
+const apiKeyValue = process.env[apiKeyEnvVar];
+if (!apiKeyValue) {
+  throw new Error(`API key not found. Set environment variable: ${apiKeyEnvVar}\n` + ...);
+}
+```
+
+つまり `cdk synth IamStack` と書いても `VoicevoxStack` の構築は先に走り、落ちる:
+
+```console
+$ DOTENV_CONFIG_PATH=/dev/null npx cdk synth IamStack -c env=poc
+Error: API key not found. Set environment variable: VOICEVOX_API_KEY_POC
+    at new VoicevoxStack (.../lib/voicevox-stack.ts:131:13)
+    at Object.<anonymous> (.../bin/app.ts:20:1)
+```
+
+IAM と何の関係もない VOICEVOX の資格情報が、IAM 操作の前提条件になっていた。
+Goal の「独立してデプロイできる」を満たしていない。
+
+**なぜ検証をすり抜けたか**: ローカルに `.env` があり、`bin/app.ts` の
+`import 'dotenv/config'` がそれを読んでいたため、手元では常に成功していた。
+**自分の環境で通ることは、独立性の証明にならない。**
+以降 IAM 側の検証は `DOTENV_CONFIG_PATH=/dev/null` と `env -u` で
+クリーン環境を再現して行う。
+
+→ **app エントリを分ける**。`bin/iam-app.ts` を新設し、`:iam` 系スクリプトは
+`--app` でそちらを指す。`bin/iam-app.ts` には `dotenv/config` を**入れない**
+（`.env` を必要としないことを構造として担保する。`CDK_DEFAULT_ACCOUNT` /
+`CDK_DEFAULT_REGION` は CDK CLI 自身が注入する）。
+
+回帰防止として、誰かが `VoicevoxStack` をこのエントリに足したら落ちるテストを置いた。
+なおこのテストは最初 `expect(source).not.toContain('VoicevoxStack')` と書いていて、
+**「なぜ分けたか」を説明するコメント自体に反応して落ちた**。
+import 文と生成箇所だけを見る正規表現に直している。
+
+app を分けた結果、`bin/app.ts` のスタックは 1 つのままなので、
+「ハマった点 1」で全スクリプトに付けたスタック名の明示は不要になり、元に戻した。
+`bin/app.ts` への変更は説明コメントの追加のみ。
 
 ### 検証コマンドと結果
 
 ```console
 $ npm run build          # AC1
-$ npm test               # 13 passed
-$ npm run synth:iam      # AC2 — IamStack のテンプレートが出る
+$ npm test               # 18 passed
+```
+
+AC2 は**クリーン環境を再現して**確認する。手元の `.env` が読まれる状態では
+独立性を検証したことにならない（上の訂正参照）:
+
+```console
+$ env -u VOICEVOX_API_KEY_POC -u VOICEVOX_API_KEY_DEV -u VOICEVOX_API_KEY_PRO \
+    DOTENV_CONFIG_PATH=/dev/null npm run synth:iam
+Resources:
+  CDKMetadata:
+    ...
 ```
 
 AC3「`synth:poc` が従来どおり `VoicevoxStack-poc` を出す」は、
