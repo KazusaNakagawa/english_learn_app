@@ -1438,7 +1438,37 @@ $ npm run diff:poc    # Stack VoicevoxStack-poc / differences: 1
 
 `infra` 単独（`IAMFullAccess` なし）で CDK 運用が成立している。
 
-### Phase 2 を保留した理由と、soak の見直し
+### Phase 2 実行: 旧グループを削除
+
+soak を置かずに削除した（理由は次節）。削除前に空であることを再確認:
+
+```console
+dev_readonly: メンバー=0 アタッチ=0 インライン=0
+dev_user:     メンバー=0 アタッチ=0 インライン=0
+```
+
+```console
+$ aws iam delete-group --group-name dev_readonly
+$ aws iam delete-group --group-name dev_user
+
+$ aws iam list-groups --query 'Groups[].GroupName'
+["admin","audit","billing","develop","infra","readonly"]
+```
+
+**アカウント内のグループはすべて IaC 管理下**になった（`dev_` プレフィックスは 0 件）。
+
+削除は CloudFormation のドリフトを生まない — 旧グループは元から
+`IamStack` の管理外だったため:
+
+```console
+$ npm run diff:iam
+✨  Number of stacks with differences: 0
+```
+
+削除後も `infra` 単独で実務が回ることを再確認（lambda 一覧 / IAM 読み取り /
+グループ運用の往復、いずれも成功）。
+
+### soak を置かなかった理由
 
 #178 には「2 週間空グループのまま置いて切り戻し可能にする」と書いた。
 実際に移行してみると、**その切り戻し経路は成立しない**:
@@ -1450,7 +1480,12 @@ $ npm run diff:poc    # Stack VoicevoxStack-poc / differences: 1
 **これは旧グループの有無と無関係**に可能（実際に今回使った）。
 
 つまり soak 期間は安心材料として機能していない。
-削除は不可逆なので判断を仰ぐ。
+**存在しない安全策のために不可逆な操作を先送りしても、得られるものがない。**
+判断を仰いだ上で即削除した。
+
+> 教訓: 「切り戻せるようにしておく」と書いたときは、
+> **その切り戻し手順を実際に通せるか**を確認する。
+> 今回は移行を実行して初めて、書いた手順が通らないことが分かった。
 
 ### 検証コマンドと結果
 
