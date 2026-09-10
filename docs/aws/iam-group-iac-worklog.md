@@ -1353,6 +1353,105 @@ ARN に `:mfa/` を含むものを明示的に選ぶよう変更した:
 
 前提となる MFA プロファイルの検証が済むまで、メンバーシップには触れない。
 
+### 移行の実行（Phase 1 完了）
+
+MFA プロファイルの検証が済んだので実移行した。**Phase 2（旧グループの削除）は未実施。**
+
+#### MFA ベースラインが実アカウントで効くことの確認
+
+`dev_user1` を `infra` に追加した直後、平プロファイルはこうなった:
+
+```console
+$ aws s3 ls --profile dev_user1
+An error occurred (AccessDenied) when calling the ListBuckets operation:
+User: arn:aws:iam::460*******:user/dev_user1 is not authorized to perform:
+s3:ListAllMyBuckets with an explicit deny in an identity-based policy:
+arn:aws:iam::460*******:policy/deny-without-mfa
+```
+
+**長期アクセスキーが `BoolIfExists` で正しく Deny される**ことの実証。
+`dev_user1-mfa` は同じ操作が通る。#172 の設計が意図どおり機能している。
+
+なお最初の確認スクリプトでは「まだ通る」と誤判定した。
+**AWS CLI はエラー出力の前に空行を出す**ため、`2>&1 | head -1` が空行を拾っていた。
+エラー検出をパイプの先頭行に頼らないこと。
+
+#### 順序を間違えた: `dev_user` から抜ける前にポリシーを剥がしてしまった
+
+`infra` の `RemoveUserFromGroup` は**新グループ 5 つにスコープされている**（#188）。
+`dev_user` は含まれない。したがって旧グループからの離脱には
+`dev_user` 側の `IAMFullAccess` が要る。
+
+自分でそう分析していたのに、**先に `IAMFullAccess` をデタッチしてしまい**、
+自分を `dev_user` から外せなくなった:
+
+```console
+$ aws iam remove-user-from-group --group-name dev_user --user-name dev_user1
+An error occurred (AccessDenied) ... because no identity-based policy allows
+the iam:RemoveUserFromGroup action
+```
+
+権限上の実害はない（`dev_user` は既に空の器）が、宙ぶらりんの所属が残る。
+
+回復は `iam:AttachUserPolicy` で `IAMFullAccess` を**自分に一時的に直付け**して実行し、
+直後に剥がした。これは #188 で「許容する」と決めた昇格経路そのもの
+（`AdministratorAccess` だけは条件で Deny されている）。
+
+**正しい順序**: メンバーシップを外す → ポリシーを剥がす。逆にすると詰む。
+
+#### もう一つの落とし穴: IAM の伝播遅延
+
+一時付与した `IAMFullAccess` は、5 秒後の実行では**まだ効かなかった**。
+10 秒待って成功。IAM のポリシー変更は即時反映されない。
+移行スクリプトを書くならリトライ前提にする必要がある。
+
+#### 境界テスト（`dev_user1` が `infra` のみになってから実施）
+
+`dev_user` に在籍しているうちは `IAMFullAccess` が全部通してしまうので、
+これらのテストは**旧グループを離れて初めて意味を持つ**:
+
+| 試行 | 結果 |
+| --- | --- |
+| `admin` グループへの自己追加 | ✅ 拒否 |
+| `AdministratorAccess` の直付け | ✅ 明示的 Deny |
+| `deny-without-mfa` の書き換え | ✅ 明示的 Deny |
+| `organizations:LeaveOrganization` | ✅ 拒否 |
+
+#188 で入れたガードが実環境で機能している。
+
+#### 移行後の状態
+
+| グループ | メンバー | ポリシー |
+| --- | --- | --- |
+| `dev_readonly` | なし | なし（空の器） |
+| `dev_user` | なし | なし（空の器） |
+| `readonly` | `dev_readonly1` | ReadOnlyAccess + ベースライン + deny-secret-reads |
+| `infra` | `dev_user1` | PowerUserAccess + ベースライン + infra-administration |
+| `audit` / `develop` / `billing` / `admin` | なし | 定義済み |
+
+実務が回ることも確認:
+
+```console
+$ npm run diff:iam    # ✨ Number of stacks with differences: 0
+$ npm run diff:poc    # Stack VoicevoxStack-poc / differences: 1
+```
+
+`infra` 単独（`IAMFullAccess` なし）で CDK 運用が成立している。
+
+### Phase 2 を保留した理由と、soak の見直し
+
+#178 には「2 週間空グループのまま置いて切り戻し可能にする」と書いた。
+実際に移行してみると、**その切り戻し経路は成立しない**:
+
+- `infra` は `AddUserToGroup` を新グループ 5 つにしか持たない → `dev_user` に戻せない
+- 空の器にはポリシーも無いので、器が残っていること自体に価値がない
+
+現実的な切り戻しは「`IAMFullAccess` をユーザに直付けする」で、
+**これは旧グループの有無と無関係**に可能（実際に今回使った）。
+
+つまり soak 期間は安心材料として機能していない。
+削除は不可逆なので判断を仰ぐ。
+
 ### 検証コマンドと結果
 
 ```console
