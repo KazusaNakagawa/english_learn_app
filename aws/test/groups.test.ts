@@ -86,6 +86,38 @@ describe(DENY_SECRET_READS, () => {
     },
   );
 
+  // SSM は現時点で未使用だが、パラメータは秘密の置き場になりやすい。
+  // kms:Decrypt だけでは SecureString の復号しか塞げず、
+  // プレーンな String パラメータに秘密を置かれた場合は素通りする (#183 レビュー指摘)。
+  describe('ssm parameter values', () => {
+    const ssmDeny = () =>
+      statements().find((s) => asArray(s.Action).includes('ssm:GetParameter'))!;
+
+    it.each([
+      'ssm:GetParameter',
+      'ssm:GetParameters',
+      'ssm:GetParametersByPath',
+      'ssm:GetParameterHistory',
+    ])('denies %s', (action) => {
+      expect(asArray(ssmDeny().Action)).toContain(action);
+    });
+
+    // 境界値: アカウント内に実在する唯一のパラメータは
+    // /cdk-bootstrap/hnb659fds/version（値は整数 "30"）で秘密ではない。
+    // ツールが読むので除外しておく。
+    it('keeps the CDK bootstrap version readable', () => {
+      const allowed = renderArns(ssmDeny().NotResource);
+
+      expect(allowed).toHaveLength(1);
+      expect(allowed[0]).toMatch(/:parameter\/cdk-bootstrap\/\*$/);
+    });
+
+    // 失敗系: 例外が広がっていないこと。ここが `*` だと Deny 全体が無効になる。
+    it('does not exempt anything beyond that path', () => {
+      expect(renderArns(ssmDeny().NotResource)).not.toContain('*');
+    });
+  });
+
   // このリポジトリ固有の実害:
   // ReadOnlyAccess の lambda:GetFunctionConfiguration で環境変数が平文で読める。
   // voicevox-authorizer は API_KEY を、voicevox-slack-alert は SLACK_WEBHOOK_URL を持つ。

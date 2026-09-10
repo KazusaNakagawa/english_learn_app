@@ -693,6 +693,44 @@ Resources
 
 すべて追加のみ。既存の `dev_readonly` / `dev_user` への変更はなし。
 
+### 追加対応: SSM の String パラメータ（#183 レビュー指摘）
+
+`kms:Decrypt` を止めたことで「SSM も塞いだ」と書いていたが、
+**それは SecureString の話でしかなかった**。プレーンな `String` パラメータに
+秘密を置かれた場合は `ssm:GetParameter` で素通りする。
+
+指摘のうち半分は正しく、半分は誤っていた:
+
+| 指摘された経路 | 判定 |
+| --- | --- |
+| String パラメータに秘密を置いた場合 | **正しい**。素通りする |
+| SecureString を復号せずに読む場合 | **誤り**。暗号文しか返らない |
+
+対応方針を決めるために、まず実際に何があるか確認した:
+
+```console
+$ aws ssm describe-parameters --query 'Parameters[].{Name:Name,Type:Type}'
+[{"Name": "/cdk-bootstrap/hnb659fds/version", "Type": "String"}]
+
+$ aws ssm get-parameter --name /cdk-bootstrap/hnb659fds/version --query 'Parameter.Value'
+"30"
+```
+
+アカウント内のパラメータは CDK bootstrap のバージョン 1 件だけで、値は整数。秘密ではない。
+
+そこで **`NotResource` で `/cdk-bootstrap/*` だけを除外し、それ以外のパラメータ読み取りを Deny** した。
+fail-closed にしても**今日のコストがゼロ**だと実データで確認できたのが決め手。
+
+```ts
+notResources: [/* arn:...:ssm:*:*:parameter/cdk-bootstrap/* */]
+```
+
+後から正当な非秘密パラメータを足すときは、この例外を意識的に広げることになる。
+それが狙いで、**うっかり SSM に置かれた秘密が黙って `readonly` から読める状態にはしない**。
+
+> 教訓: 「A を塞げば B も塞がる」と書くときは、B の全経路を数えたか確認する。
+> `kms:Decrypt` は SecureString の復号経路だけを塞ぐのであって、SSM を塞ぐわけではない。
+
 ### 未完了（デプロイが必要）
 
 #172 から持ち越した実機検証は**まだ実施していない**。

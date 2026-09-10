@@ -215,11 +215,40 @@ export class IamStack extends cdk.Stack {
           effect: iam.Effect.DENY,
           actions: [
             'secretsmanager:GetSecretValue',
-            // Also closes SSM SecureString: GetParameter WithDecryption needs
-            // kms:Decrypt, while the undecrypted read returns only ciphertext.
+            // Covers SSM SecureString: GetParameter WithDecryption needs
+            // kms:Decrypt, and an undecrypted read returns only ciphertext.
+            // It does NOT cover plain String parameters — see below.
             'kms:Decrypt',
           ],
           resources: ['*'],
+        }),
+        // kms:Decrypt says nothing about a secret stored in a plain String
+        // parameter, which is a common enough mistake to fail closed on.
+        // Denying by default costs nothing today: the account holds exactly one
+        // parameter, /cdk-bootstrap/hnb659fds/version, whose value is "30".
+        //
+        // Adding a legitimate non-secret parameter later means widening this
+        // exception on purpose, which is the point — an accidental secret in
+        // SSM should not silently become readable by everyone in `readonly`.
+        new iam.PolicyStatement({
+          sid: 'DenySsmParameterValues',
+          effect: iam.Effect.DENY,
+          actions: [
+            'ssm:GetParameter',
+            'ssm:GetParameters',
+            'ssm:GetParametersByPath',
+            'ssm:GetParameterHistory',
+          ],
+          notResources: [
+            this.formatArn({
+              service: 'ssm',
+              region: '*',
+              account: '*',
+              resource: 'parameter',
+              resourceName: 'cdk-bootstrap/*',
+              arnFormat: cdk.ArnFormat.SLASH_RESOURCE_NAME,
+            }),
+          ],
         }),
         new iam.PolicyStatement({
           sid: 'DenyLambdaEnvironmentHoldingSecrets',
