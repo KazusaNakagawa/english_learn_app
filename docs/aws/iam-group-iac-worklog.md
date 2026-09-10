@@ -823,8 +823,174 @@ $ aws iam get-policy-version --policy-arn "$POLICY_ARN" --version-id "$VERSION_I
 
 ---
 
-<!--
-以降、PR ごとに追記する。テンプレート:
+## 2026-09-10 — #174 develop グループ
+
+### やったこと
+
+- `develop` グループと `develop-workload` ポリシーを追加
+- `VoicevoxStack` の `pro` にだけ削除保護（`terminationProtection`）を有効化
+- スタックポリシーは CDK が非対応のため #186 に分離
+
+### 最大の罠: `Deny iam:*` を書くと MFA ベースラインが壊れる
+
+Issue には「`iam:*` の書き込みを全部 Deny、ただし `iam:PassRole` は除く」と書いていた。
+これを素直に書くと**壊れる**。
+
+**明示的 Deny はあらゆる Allow に優先する。** `develop` に `Deny iam:*` を置くと、
+同じユーザに付いている `self-service-credentials`（#172）の Allow を上書きし、
+**develop の全員が MFA 登録もパスワード変更もアクセスキー交換もできなくなる**。
+
+しかも既存メンバーは MFA 登録済みなので気づかない。
+**新しく入った人が登録できずに詰んで初めて発覚する**タイプの障害になる。
+
+「`iam:*` から一部を除く」は IAM では書けない:
+
+| 書き方 | 結果 |
+| --- | --- |
+| `Action: "iam:*"` | 除外を表現できない |
+| `NotAction: [除外したいもの]` | **IAM 以外の全アクション**まで Deny される |
+
+そこで**危険な IAM 書き込みアクションを明示列挙**する方式にした（34 個）。
+列挙漏れのリスクはあるが、ベースラインを巻き込む事故よりはるかに軽い。
+
+回帰防止として、自己管理系 9 アクションが **Deny されていないこと**を個別にテストしている:
+
+> `does NOT deny iam:ChangePassword, which would break the MFA baseline`
+
+### 気づいたこと: 同じ性質が逆方向に働く
+
+`iam:CreateRole` などを Deny すると `cdk deploy` が壊れるのでは、と思ったが**壊れない**。
+
+理由は #179 で踏んだのと同じ性質。CloudFormation はロールを
+**assume した bootstrap ロール経由**で作るので、呼び出し元ユーザの identity policy は
+そのセッションでは評価されない。
+
+- `*-pro` の Deny が効かなかったのも同じ理由（守れない側）
+- `iam:*` の Deny がデプロイを壊さないのも同じ理由（助かる側）
+
+同じ挙動が、片方では穴になり、片方では救いになる。
+
+### 名前でスコープできないリソースがある
+
+`lambda` / `ecr` / `logs` / `sns` は ARN に名前が入るので `-poc` / `-dev` に限定できた。
+一方で**限定できないものが 2 つ**ある:
+
+| サービス | 理由 |
+| --- | --- |
+| API Gateway v2 | ARN が `/apis/<生成 ID>` 形式。名前も環境も入らない |
+| CloudWatch アラーム | CDK 生成のサフィックスが付き、環境名で一意に切れない |
+
+この 2 つはアカウント全体（= pro を含む）に対する許可になっている。
+`develop` が「信頼済みグループ」である以上は許容範囲だが、
+**環境分離に実在する穴**なので、糊塗せずコメントとテストに残した。
+
+### pro の保護
+
+削除保護は `VoicevoxStack` 側に置いた。`bin/app.ts` に書くとテストしづらいため。
+
+```ts
+terminationProtection: props.terminationProtection ?? props.stackEnv === 'pro',
+```
+
+`poc` / `dev` は日常的に作り直すので保護しない。ここを一律 `true` にすると
+`npm run destroy:poc` が落ちるようになる（境界値テストで固定した）。
+
+**ただし削除保護だけでは足りない。** 防げるのは*削除*であって*更新*ではないので、
+誤った `deploy:pro` によるリソース置換は依然として通る。
+それを止めるのがスタックポリシーだが:
+
+- **CDK が非対応**。`cdk.StackProps` に `terminationProtection` はあるが `stackPolicy` はなく、
+  L1 構成も存在しない。CloudFormation の `SetStackPolicy` API 経由でしか設定できない
+- **`VoicevoxStack-pro` が未デプロイ**。貼る対象がまだない
+
+→ #186 に分離した。
+
+なお `terminationProtection` はスタックのマニフェスト側の属性なので、
+**テンプレート本体は変わらない**。`VoicevoxStack-poc` のテンプレートが
+`develop` 時点とバイト一致することを確認済み。
+
+### レビュー指摘への対応（#187）
+
+3 件のうち **2 件が妥当、1 件は誤り**だった。判定は推測ではなく合成結果で行った。
+
+#### 妥当 1: `iam:PassRole` が実在のロールに一致していなかった
+
+`role/VoicevoxStack-*` に限定していたが、`VoicevoxStack` は Lambda 実行ロールに
+**名前を明示指定**している:
+
+```console
+$ grep -n "roleName" lib/voicevox-stack.ts
+84:      roleName: `voicevox-engine-role-${stackEnv}`,
+```
+
+合成テンプレート上の実際のロール名:
+
+| 論理 ID | RoleName |
+| --- | --- |
+| `VoicevoxFunctionRole...` | **`voicevox-engine-role-poc`** |
+| `ApiKeyAuthorizerServiceRole...` | (CDK 生成 = `VoicevoxStack-poc-...`) |
+
+つまり CDK 生成名は拾えるが、**肝心の実行ロールだけ渡せない**状態だった。
+`voicevox-*-role-*` を追加。「Lambda を直接更新できる」という触れ込みが
+実際には成立していなかったので、これは実害のあるバグ。
+
+#### 妥当 2: IAM 書き込みの列挙漏れ
+
+`iam:CreateRole` / `DeleteRole` / `UpdateRole`、権限境界、タグ操作が抜けていた。
+**ロールを作れれば任意の権限を持つプリンシパルを用意できる**ので、
+ユーザ・グループ系だけ塞いでも意味が薄い。11 個追加した。
+
+denylist 方式を採った時点で列挙漏れは織り込み済みのリスクだったが、
+「ロールを作れる」は最も大きい穴なので見落としは痛い。
+
+なお `iam:CreateServiceLinkedRole` は**意図的に Deny しない**。
+AWS が定義済みポリシーで作る限定的なロールで、初回利用時の自動作成が要る場面がある。
+これも「抜けている」と誤読されないようコメントとテストに明記した。
+
+#### 誤り: 「`sts:AssumeRole` の account が `*`」
+
+合成結果を見れば `*` ではない:
+
+```json
+"Resource": [{"Fn::Join": ["", ["arn:", {"Ref": "AWS::Partition"},
+  ":iam::", {"Ref": "AWS::AccountId"}, ":role/cdk-*-deploy-role-*"]]}, ...]
+```
+
+`formatArn` に `account` を渡さなければ**スタックのアカウントが既定で入る**。
+ソースに `account:` の記述がないことを「`*`」と読んだ誤りと思われる。
+
+ただし**指摘の周辺には本当の緩さがあった**。`lambda` / `ecr` / `logs` / `sns` /
+`cloudformation` の Allow 側では明示的に `account: '*'` と書いていた。これは外した。
+
+ここで **Allow と Deny で扱いを変えている**点を記録しておく:
+
+| | account | 理由 |
+| --- | --- | --- |
+| Allow | 当アカウント | 他アカウントの同名リソースまで許す理由がない |
+| Deny（pro 保護） | `*` のまま | Deny は広いほど安全。絞ると防御が外れる |
+
+### ハマった点: テストヘルパが ARN を誤って分解した
+
+account セグメントを `arn.split(':')[4]` で取ろうとしたら全部落ちた。
+**`${AWS::Partition}` 自体がコロンを含む**ため、区切り位置がずれる。
+
+さらに、テストではスタックに明示アカウントを渡しているので、
+ARN に入るのは `${AWS::AccountId}` ではなく**リテラルのアカウント ID**。
+実アカウントに対する synth 結果とテスト時の synth 結果で、
+同じコードでも ARN の見え方が変わる。
+
+### 検証コマンドと結果
+
+```console
+$ npm test
+Tests:       142 passed, 142 total
+
+$ npm run diff:iam
+[+] AWS::IAM::ManagedPolicy DevelopWorkload
+[+] AWS::IAM::Group DevelopGroup
+```
+
+追加のみ。デプロイ済みの `readonly` / `audit` / ベースライン 3 本には変更なし。
 
 ---
 

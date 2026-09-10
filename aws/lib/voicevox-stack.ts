@@ -28,7 +28,15 @@ const envConfig: Record<string, { memorySize: number; throttleRateLimit: number;
 
 export class VoicevoxStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: VoicevoxStackProps) {
-    super(scope, id, props);
+    super(scope, id, {
+      ...props,
+      // Production is guarded here rather than in the `develop` group's policy.
+      // That group can assume the CDK bootstrap roles, and after sts:AssumeRole
+      // the caller's identity policy is no longer evaluated — so an IAM deny
+      // cannot reach a `cdk deploy`. Stack-side protection binds regardless of
+      // which principal or assumed role makes the call. See #174.
+      terminationProtection: props.terminationProtection ?? props.stackEnv === 'pro',
+    });
 
     const { stackEnv } = props;
     const cfg = envConfig[stackEnv];

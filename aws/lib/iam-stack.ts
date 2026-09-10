@@ -37,24 +37,6 @@ const ALLOWED_WITHOUT_MFA = [
 ];
 
 /**
- * The subset of ALLOWED_WITHOUT_MFA that can name another user's resource.
- *
- * A `NotAction` exemption is not resource-scoped: it says "this action is not
- * denied", for *any* resource. On its own that is too generous, because a
- * principal that also holds broad IAM permissions (the existing `dev_user`
- * group carries `IAMFullAccess`) could then use a password-only session to
- * change someone else's password or attach an MFA device to their user.
- *
- * These actions are therefore denied again, this time with `NotResource`
- * limited to the caller's own ARNs, so the exemption really means
- * "manage your own credentials" rather than "manage anyone's".
- *
- * Account-level actions are excluded on purpose — `iam:ListVirtualMFADevices`,
- * `iam:GetAccountPasswordPolicy` and `sts:GetSessionToken` have no per-user
- * resource to match, so scoping them would deny them outright and close the
- * only route into MFA enrolment.
- */
-/**
  * Lambda functions whose environment variables hold secrets in plaintext.
  *
  * `ReadOnlyAccess` includes `lambda:GetFunctionConfiguration`, which returns
@@ -73,6 +55,106 @@ const ALLOWED_WITHOUT_MFA = [
  */
 const SECRET_BEARING_FUNCTIONS = ['voicevox-authorizer-*', 'voicevox-slack-alert-*'];
 
+/**
+ * Environments a `develop` member may touch directly. `pro` is absent, and the
+ * allow-list is what actually keeps it out — the explicit pro deny further down
+ * is defence in depth for the day another policy joins this group.
+ */
+const DEVELOP_ENVS = ['poc', 'dev'];
+
+/**
+ * IAM writes that must not be reachable from `develop`.
+ *
+ * Spelled out rather than expressed as "iam:* except ...", because IAM has no
+ * subtraction: `NotAction` would deny every *non*-IAM action instead, and a
+ * blanket `Deny iam:*` would override the #172 baseline's Allow — an explicit
+ * deny beats any allow — leaving the whole group unable to enrol MFA or change
+ * a password. That failure is silent until someone new joins, so
+ * test/develop-group.test.ts pins each self-service action as *not* denied.
+ *
+ * Denying these does not break `cdk deploy`: CloudFormation creates roles
+ * through the assumed bootstrap role, whose session is not evaluated against
+ * the calling user's identity policy. The same property that made the pro deny
+ * useless makes this deny harmless.
+ */
+const DENIED_IAM_WRITES = [
+  'iam:CreateUser',
+  'iam:DeleteUser',
+  'iam:UpdateUser',
+  'iam:CreateLoginProfile',
+  'iam:UpdateLoginProfile',
+  'iam:DeleteLoginProfile',
+  'iam:CreateGroup',
+  'iam:DeleteGroup',
+  'iam:UpdateGroup',
+  'iam:AddUserToGroup',
+  'iam:RemoveUserFromGroup',
+  'iam:AttachUserPolicy',
+  'iam:AttachGroupPolicy',
+  'iam:AttachRolePolicy',
+  'iam:DetachUserPolicy',
+  'iam:DetachGroupPolicy',
+  'iam:DetachRolePolicy',
+  'iam:PutUserPolicy',
+  'iam:PutGroupPolicy',
+  'iam:PutRolePolicy',
+  'iam:DeleteUserPolicy',
+  'iam:DeleteGroupPolicy',
+  'iam:DeleteRolePolicy',
+  'iam:CreatePolicy',
+  'iam:DeletePolicy',
+  'iam:CreatePolicyVersion',
+  'iam:DeletePolicyVersion',
+  'iam:SetDefaultPolicyVersion',
+  'iam:UpdateAssumeRolePolicy',
+  'iam:CreateAccountAlias',
+  'iam:DeleteAccountAlias',
+  'iam:UpdateAccountPasswordPolicy',
+  'iam:CreateSAMLProvider',
+  'iam:CreateOpenIDConnectProvider',
+  'iam:UpdateOpenIDConnectProviderThumbprint',
+  // Roles are the sharpest tool here: anyone able to create one can mint a
+  // principal with arbitrary permissions, which makes locking down users and
+  // groups alone fairly pointless.
+  'iam:CreateRole',
+  'iam:DeleteRole',
+  'iam:UpdateRole',
+  'iam:UpdateRoleDescription',
+  // Permissions boundaries are the mechanism a future design would use to cap
+  // what these roles can do; being able to detach one voids that in advance.
+  'iam:PutRolePermissionsBoundary',
+  'iam:DeleteRolePermissionsBoundary',
+  'iam:PutUserPermissionsBoundary',
+  'iam:DeleteUserPermissionsBoundary',
+  // Tags become an authorization surface the moment any policy conditions on
+  // aws:ResourceTag, at which point rewriting them is privilege escalation.
+  'iam:TagRole',
+  'iam:UntagRole',
+  'iam:TagUser',
+  'iam:UntagUser',
+  // Deliberately absent: iam:CreateServiceLinkedRole. AWS defines those roles
+  // and their policies, several services create them on first use, and denying
+  // it breaks legitimate work for no meaningful gain.
+];
+
+/**
+ * The subset of ALLOWED_WITHOUT_MFA that can name another user's resource.
+ *
+ * A `NotAction` exemption is not resource-scoped: it says "this action is not
+ * denied", for *any* resource. On its own that is too generous, because a
+ * principal that also holds broad IAM permissions (the existing `dev_user`
+ * group carries `IAMFullAccess`) could then use a password-only session to
+ * change someone else's password or attach an MFA device to their user.
+ *
+ * These actions are therefore denied again, this time with `NotResource`
+ * limited to the caller's own ARNs, so the exemption really means
+ * "manage your own credentials" rather than "manage anyone's".
+ *
+ * Account-level actions are excluded on purpose — `iam:ListVirtualMFADevices`,
+ * `iam:GetAccountPasswordPolicy` and `sts:GetSessionToken` have no per-user
+ * resource to match, so scoping them would deny them outright and close the
+ * only route into MFA enrolment.
+ */
 const SELF_TARGETED_WITHOUT_MFA = [
   'iam:ChangePassword',
   'iam:GetUser',
@@ -96,7 +178,6 @@ const SELF_TARGETED_WITHOUT_MFA = [
  * resource-ARN conditions inside the group policies, not from separate stacks.
  * See docs/aws/iam-group-iac-worklog.md.
  *
- * Scaffold only — groups are added in follow-up issues (#172-#175).
  * The pre-existing hand-created groups (`dev_readonly`, `dev_user`) are NOT
  * touched here; CloudFormation cannot adopt an existing group by name and would
  * fail with AlreadyExists. Cutover is #178.
@@ -282,10 +363,211 @@ export class IamStack extends cdk.Stack {
       denySecretReads,
     ]);
 
+    this.addGroup('DevelopGroup', 'develop', [this.developWorkloadPolicy()]);
+
     // No `ope` group: it would be identical to `readonly` (see the original
     // requirement, which says as much). Operations staff get `readonly` plus a
     // narrow write policy if and when someone actually needs one — inventing
     // it now would mean guessing at the actions.
+  }
+
+  /**
+   * What a developer may do without asking infra.
+   *
+   * `develop` is a **trusted** group, not a sandbox. Granting `cloudformation`
+   * plus AssumeRole on the CDK bootstrap roles is effectively admin over
+   * whatever a stack can define, and that was accepted deliberately rather
+   * than paying the cost of maintaining a narrowed bootstrap role. The
+   * controls that actually bind are MFA (#172), CloudTrail on those
+   * AssumeRole calls, and stack-side protection on VoicevoxStack-pro.
+   * See docs/aws/iam-group-iac-worklog.md.
+   */
+  private developWorkloadPolicy(): iam.ManagedPolicy {
+    const stackArns = DEVELOP_ENVS.map((env) =>
+      this.formatArn({
+        service: 'cloudformation',
+        region: '*',
+        resource: 'stack',
+        resourceName: `VoicevoxStack-${env}/*`,
+      }),
+    );
+
+    const perEnv = (build: (env: string) => string) => DEVELOP_ENVS.map(build);
+
+    // account is left to default to this stack's account. Allows are narrowed;
+    // the production deny further down deliberately keeps account: '*', since a
+    // deny is only ever safer for being broader.
+    const lambdaArns = perEnv((env) =>
+      this.formatArn({
+        service: 'lambda',
+        region: '*',
+        resource: 'function',
+        resourceName: `voicevox-*-${env}`,
+        arnFormat: cdk.ArnFormat.COLON_RESOURCE_NAME,
+      }),
+    );
+    const ecrArns = perEnv((env) =>
+      this.formatArn({
+        service: 'ecr',
+        region: '*',
+        resource: 'repository',
+        resourceName: `voicevox-*-${env}`,
+      }),
+    );
+    const logArns = perEnv((env) =>
+      this.formatArn({
+        service: 'logs',
+        region: '*',
+        resource: 'log-group',
+        resourceName: `/aws/lambda/voicevox-*-${env}*`,
+        arnFormat: cdk.ArnFormat.COLON_RESOURCE_NAME,
+      }),
+    );
+    const snsArns = perEnv((env) =>
+      this.formatArn({ service: 'sns', region: '*', resource: `voicevox-*-${env}` }),
+    );
+
+    return new iam.ManagedPolicy(this, 'DevelopWorkload', {
+      managedPolicyName: 'develop-workload',
+      description:
+        'Lets developers deploy and iterate on VoicevoxStack poc/dev without infra involvement.',
+      statements: [
+        new iam.PolicyStatement({
+          sid: 'DeployProjectStacks',
+          actions: ['cloudformation:*'],
+          resources: stackArns,
+        }),
+        // Not resource-scopeable, and read-only, so granted account-wide.
+        new iam.PolicyStatement({
+          sid: 'InspectCloudFormation',
+          actions: [
+            'cloudformation:ListStacks',
+            'cloudformation:GetTemplateSummary',
+            'cloudformation:ValidateTemplate',
+            'cloudformation:DescribeStackDriftDetectionStatus',
+          ],
+          resources: ['*'],
+        }),
+        // The step that actually makes `cdk deploy` work. cfn-exec-role is
+        // absent on purpose: CloudFormation assumes that one itself, and
+        // handing it to a person grants CloudFormation's own execution rights.
+        new iam.PolicyStatement({
+          sid: 'AssumeCdkBootstrapRoles',
+          actions: ['sts:AssumeRole'],
+          resources: [
+            'deploy-role',
+            'file-publishing-role',
+            'image-publishing-role',
+            'lookup-role',
+          ].map((role) =>
+            this.formatArn({
+              service: 'iam',
+              region: '',
+              resource: 'role',
+              resourceName: `cdk-*-${role}-*`,
+            }),
+          ),
+        }),
+        new iam.PolicyStatement({
+          sid: 'IterateOnWorkloadResources',
+          actions: ['lambda:*', 'ecr:*', 'logs:*', 'sns:*'],
+          resources: [...lambdaArns, ...ecrArns, ...logArns, ...snsArns],
+        }),
+        // CloudWatch alarms and API Gateway cannot be scoped by name:
+        // alarm ARNs carry CDK-generated suffixes, and API Gateway v2 ARNs
+        // identify APIs by generated id, not by stack or environment. Both are
+        // therefore account-wide, which includes pro. Recorded rather than
+        // papered over — it is consistent with `develop` being trusted, but it
+        // is a genuine hole in the environment separation.
+        new iam.PolicyStatement({
+          sid: 'ManageObservabilityAndApiUnscopeable',
+          actions: ['cloudwatch:*', 'apigateway:*'],
+          resources: ['*'],
+        }),
+        // Needed to attach the Lambda execution role during a direct update.
+        // An unscoped PassRole would let any role be attached to a function,
+        // which is privilege escalation by another name.
+        new iam.PolicyStatement({
+          sid: 'PassProjectRolesOnly',
+          actions: ['iam:PassRole'],
+          resources: [
+            // CDK-generated role names are prefixed with the stack name...
+            'VoicevoxStack-*',
+            // ...but the Lambda execution role is named explicitly in
+            // voicevox-stack.ts (`voicevox-engine-role-${stackEnv}`), so the
+            // stack-name pattern alone would miss the one role a direct
+            // function update actually needs to pass.
+            'voicevox-*-role-*',
+          ].map((roleName) =>
+            this.formatArn({
+              service: 'iam',
+              region: '',
+              resource: 'role',
+              resourceName: roleName,
+            }),
+          ),
+        }),
+        new iam.PolicyStatement({
+          sid: 'DenyIamAdministration',
+          effect: iam.Effect.DENY,
+          actions: DENIED_IAM_WRITES,
+          resources: ['*'],
+        }),
+        new iam.PolicyStatement({
+          sid: 'DenyAccountLevelControls',
+          effect: iam.Effect.DENY,
+          actions: ['organizations:*', 'account:*', 'ce:*', 'aws-portal:*'],
+          resources: ['*'],
+        }),
+        // Blocks direct calls at pro. It does NOT block `cdk deploy -c env=pro`:
+        // after sts:AssumeRole the session is evaluated as the bootstrap role,
+        // and the caller's identity policy no longer applies. Production is
+        // guarded stack-side instead — see #174 and the worklog.
+        new iam.PolicyStatement({
+          sid: 'DenyDirectCallsAgainstProduction',
+          effect: iam.Effect.DENY,
+          actions: ['lambda:*', 'ecr:*', 'logs:*', 'sns:*', 'cloudformation:*'],
+          resources: [
+            this.formatArn({
+              service: 'lambda',
+              region: '*',
+              account: '*',
+              resource: 'function',
+              resourceName: 'voicevox-*-pro',
+              arnFormat: cdk.ArnFormat.COLON_RESOURCE_NAME,
+            }),
+            this.formatArn({
+              service: 'ecr',
+              region: '*',
+              account: '*',
+              resource: 'repository',
+              resourceName: 'voicevox-*-pro',
+            }),
+            this.formatArn({
+              service: 'logs',
+              region: '*',
+              account: '*',
+              resource: 'log-group',
+              resourceName: '/aws/lambda/voicevox-*-pro*',
+              arnFormat: cdk.ArnFormat.COLON_RESOURCE_NAME,
+            }),
+            this.formatArn({
+              service: 'sns',
+              region: '*',
+              account: '*',
+              resource: 'voicevox-*-pro',
+            }),
+            this.formatArn({
+              service: 'cloudformation',
+              region: '*',
+              account: '*',
+              resource: 'stack',
+              resourceName: 'VoicevoxStack-pro/*',
+            }),
+          ],
+        }),
+      ],
+    });
   }
 
   /**
