@@ -731,10 +731,79 @@ notResources: [/* arn:...:ssm:*:*:parameter/cdk-bootstrap/* */]
 > 教訓: 「A を塞げば B も塞がる」と書くときは、B の全経路を数えたか確認する。
 > `kms:Decrypt` は SecureString の復号経路だけを塞ぐのであって、SSM を塞ぐわけではない。
 
-### 未完了（デプロイが必要）
+### 未完了（実機検証）
 
-#172 から持ち越した実機検証は**まだ実施していない**。
-デプロイは実アカウントへの変更なので、判断を待っている状態。
+#172 から持ち越した実機検証は #184 に切り出した。
+MFA デバイスの登録は QR 読み取りと TOTP 入力を伴い、**人の手が要る**ため、
+コード側の作業（#174 / #175）の前段に置くとそこがボトルネックになる。
+独立した Issue にしておけば、空き時間にいつでもでき、何もブロックしない。
+
+---
+
+## 2026-09-10 — IamStack 初回デプロイ
+
+コードは #171-#173 で揃ったので、実アカウントへ初めてデプロイした。
+
+```console
+$ npm run deploy:iam -- --require-approval never
+IamStack | 7/7 | CREATE_COMPLETE | AWS::CloudFormation::Stack | IamStack
+ ✅  IamStack
+✨  Deployment time: 53.33s
+```
+
+デプロイ前に「追加のみ・既存リソースへの変更なし」を `cdk diff` で確認している。
+作られたのは managed policy 3 本とグループ 2 つ。
+
+### デプロイ後の実測
+
+```console
+$ aws iam list-groups --query 'Groups[].GroupName'
+["audit", "dev_readonly", "dev_user", "readonly"]
+```
+
+新旧が並んで存在する状態。旧グループは #178 で廃止する。
+
+| グループ | アタッチ済みポリシー | メンバー |
+| --- | --- | --- |
+| `readonly` | `ReadOnlyAccess`, `deny-without-mfa`, `deny-secret-reads`, `self-service-credentials` | **0 人** |
+| `audit` | `SecurityAudit`, `deny-without-mfa`, `deny-secret-reads`, `self-service-credentials` | **0 人** |
+
+既存グループが無傷であることも確認:
+
+```console
+$ aws iam list-attached-group-policies --group-name dev_readonly
+["ReadOnlyAccess"]
+$ aws iam list-attached-group-policies --group-name dev_user
+["IAMFullAccess","PowerUserAccess"]
+```
+
+**メンバーが 0 人なので、この時点で誰の実効権限も変わっていない。**
+デプロイの安全性はここに依存していた — グループにポリシーを貼るだけなら、
+所属者がいない限り無害。
+
+### 確認できたこと: `${aws:username}` がリテラルのまま保存されている
+
+CDK 経由で IAM ポリシー変数を通すのは、TypeScript のテンプレートリテラルに
+巻き込まれる危険があった（#172 で定数に切り出した理由）。
+デプロイ後の実物を読んで、意図どおり展開されずに残っていることを確認した:
+
+```console
+$ aws iam get-policy-version --policy-arn <deny-without-mfa> --version-id <default>
+...
+"NotResource": [
+  "arn:aws:iam::460*******:user/${aws:username}",
+  "arn:aws:iam::460*******:mfa/${aws:username}"
+]
+```
+
+アカウント ID は解決され、ポリシー変数は残っている。これが逆になっていたら、
+「自分のリソースだけ」という限定が効かない。**synth の確認だけでは分からない層**なので、
+初回デプロイ時に実物を読んでおく価値があった。
+
+---
+
+<!--
+以降、PR ごとに追記する。テンプレート:
 
 ---
 
