@@ -1480,12 +1480,17 @@ $ npm run diff:iam
 
 | 操作 | 結果 |
 | --- | --- |
-| `list-mfa-devices --user-name dev_user1`（自分） | ✅ 成功（2 件）— 登録の逃げ道が生きている |
+| `list-mfa-devices --user-name dev_user1`（自分） | ✅ 成功（2 件） |
 | `list-mfa-devices --user-name dev_readonly1`（他人） | ✅ 明示的 Deny |
 | `get-user --user-name dev_readonly1`（他人） | ✅ 拒否 |
 
 `iam:ListMFADevices` は `NotAction` でグローバルに除外されているにもかかわらず、
 他人の ARN では拒否される。#181 のレビュー指摘に対する修正が実環境で効いている。
+
+**この 3 行が示すのは `ListMFADevices` の除外範囲だけ**であって、
+登録の逃げ道（`CreateVirtualMFADevice` / `EnableMFADevice`）の証明にはならない。
+`dev_user1` は既に 2 台登録済みなので、そもそも登録経路を通っていない。
+そちらは #184 に残っている（後述）。
 
 #### `deny-secret-reads`（#183）— audit に一時所属して検証
 
@@ -1498,7 +1503,21 @@ $ npm run diff:iam
 | それ以外の SSM パス | ✅ 明示的 Deny |
 | `secretsmanager:GetSecretValue` | ✅ 拒否 |
 
-fail-closed が意図どおり。除外パスだけが通る。
+**この結論は SSM と Secrets Manager に限る。**
+`deny-secret-reads` は `kms:Decrypt` も `*` に対して Deny しているが、
+そちらは検証できていない:
+
+```console
+$ aws kms decrypt --ciphertext-blob fileb:///dev/null
+An error occurred (ValidationException) when calling the Decrypt operation: ...
+```
+
+**入力検証が認可より先に走る**ため、拒否されたのか単に引数が不正なのかを区別できない。
+正しく検証するには実際の KMS 鍵と暗号文が要る。
+
+これは机上の話ではない。`kms:Decrypt` の Deny は影響範囲が秘密の読み取りより広く、
+**SSE-KMS の S3 オブジェクトを読むだけでも `readonly` / `audit` は失敗する**。
+最初に踏んだ人が「未検証だった」と分かるよう、ここに残す。
 
 #### 検証できなかったもの
 
@@ -1509,9 +1528,23 @@ $ aws lambda list-functions --query 'length(Functions)'
 0
 ```
 
-`VoicevoxStack-poc` が未デプロイなので、`voicevox-authorizer-*` も
-`voicevox-engine-*` も存在しない。#182（環境変数から秘密を外す）で
-そもそも前提が変わるため、そちらと合わせて確認する。
+`VoicevoxStack-poc` が未デプロイで、そもそも関数が 1 つも無い
+（`list-functions` はリージョン単位だが、このアカウントは `ap-northeast-1` 単一）。
+
+**Deny 対象を取り違えないこと。** 実際の対象は 2 つ:
+
+```ts
+const SECRET_BEARING_FUNCTIONS = ['voicevox-authorizer-*', 'voicevox-slack-alert-*'];
+```
+
+`voicevox-engine-*` は**意図的に対象外**（秘密を持たず、障害調査で最も見たい関数）。
+検証時は「authorizer と slack-alert が Deny され、engine は読める」を確認する。
+`slack-alert` を落とすと、Deny を入れる動機だった `SLACK_WEBHOOK_URL` の露出が
+未検証のまま残る。
+
+#182（環境変数から秘密を外す）で前提が変わるため、**#182 の受け入れ条件に追加した**。
+prose で「そちらで見る」と書くだけでは、どちらの Issue も緑で閉じて
+誰も確認しないまま終わる。
 
 #### #184 に残ったもの
 
