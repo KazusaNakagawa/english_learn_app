@@ -11,11 +11,17 @@ set -euo pipefail
 # A long-lived access key carries no MFA context at all, so once a user joins
 # any of those groups their plain profile stops working — run this first.
 #
+# The session profile is always "<base profile>-mfa", so the profile to use
+# afterwards depends on which base profile you ran this with. The script prints
+# the exact name on success; do not copy a profile name from these examples.
+#
 # Usage:
-#   ./scripts/aws-mfa-session.sh                            # prompts for the code
-#   ./scripts/aws-mfa-session.sh 123456                     # non-interactive
+#   ./scripts/aws-mfa-session.sh              # prompts for the code
+#   ./scripts/aws-mfa-session.sh 123456       # non-interactive
+#   aws s3 ls --profile dev_readonly1-mfa     # default base profile
+#
 #   AWS_MFA_BASE_PROFILE=dev_user1 ./scripts/aws-mfa-session.sh
-#   aws s3 ls --profile dev_readonly1-mfa                   # then use the session
+#   aws s3 ls --profile dev_user1-mfa         # note: matches the base profile
 
 BASE_PROFILE="${AWS_MFA_BASE_PROFILE:-dev_readonly1}"
 SESSION_PROFILE="${AWS_MFA_SESSION_PROFILE:-${BASE_PROFILE}-mfa}"
