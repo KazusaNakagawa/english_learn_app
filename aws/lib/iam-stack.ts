@@ -138,6 +138,22 @@ const DENIED_IAM_WRITES = [
 ];
 
 /**
+ * Account-level writes no group should ever be able to make.
+ *
+ * Deliberately *not* `account:*`: read actions such as
+ * `account:GetAccountInformation` are part of AWSBillingReadOnlyAccess, and a
+ * deny here would reach a user's `billing` membership too.
+ */
+const ACCOUNT_LEVEL_WRITES = [
+  'account:CloseAccount',
+  'account:PutContactInformation',
+  'account:PutAlternateContact',
+  'account:DeleteAlternateContact',
+  'account:EnableRegion',
+  'account:DisableRegion',
+];
+
+/**
  * The subset of ALLOWED_WITHOUT_MFA that can name another user's resource.
  *
  * A `NotAction` exemption is not resource-scoped: it says "this action is not
@@ -365,6 +381,37 @@ export class IamStack extends cdk.Stack {
 
     this.addGroup('DevelopGroup', 'develop', [this.developWorkloadPolicy()]);
 
+    // ----------------------------------------------------------------
+    // Account-management tier
+    // ----------------------------------------------------------------
+    // PowerUserAccess covers everything except IAM, so group and role
+    // administration is granted separately.
+    this.addGroup('InfraGroup', 'infra', [
+      iam.ManagedPolicy.fromAwsManagedPolicyName('PowerUserAccess'),
+      this.infraAdministrationPolicy(),
+    ]);
+
+    // Cost review is a different audience from infra and should not require
+    // PowerUserAccess. Read-only: changing payment details is a root-level
+    // concern, not a routine one.
+    //
+    // Note the AWS managed policy for full billing access is
+    // `job-function/Billing`; a bare `Billing` ARN does not exist.
+    this.addGroup('BillingGroup', 'billing', [
+      iam.ManagedPolicy.fromAwsManagedPolicyName('AWSBillingReadOnlyAccess'),
+    ]);
+
+    // Break-glass. Expected to hold ZERO members in steady state.
+    //
+    // It must be granted to a **dedicated user that belongs to no other
+    // group**. Adding an existing developer here does not make them an
+    // administrator: `develop-workload` denies IAM writes and organizations,
+    // and an explicit deny beats AdministratorAccess. The emergency path would
+    // fail at the moment it is needed. Same reasoning applies to `infra`.
+    this.addGroup('AdminGroup', 'admin', [
+      iam.ManagedPolicy.fromAwsManagedPolicyName('AdministratorAccess'),
+    ]);
+
     // No `ope` group: it would be identical to `readonly` (see the original
     // requirement, which says as much). Operations staff get `readonly` plus a
     // narrow write policy if and when someone actually needs one — inventing
@@ -513,10 +560,16 @@ export class IamStack extends cdk.Stack {
           actions: DENIED_IAM_WRITES,
           resources: ['*'],
         }),
+        // Narrow on purpose. A deny inside a group policy applies to the *user*,
+        // so it also fires for every other group they belong to. `account:*`,
+        // `ce:*` and `aws-portal:*` were denied here originally, and
+        // AWSBillingReadOnlyAccess needs all three — so anyone in develop plus
+        // billing simply had no billing access. Only actions that no group
+        // should ever grant belong in a deny. See ACCOUNT_LEVEL_WRITES.
         new iam.PolicyStatement({
           sid: 'DenyAccountLevelControls',
           effect: iam.Effect.DENY,
-          actions: ['organizations:*', 'account:*', 'ce:*', 'aws-portal:*'],
+          actions: ['organizations:*', ...ACCOUNT_LEVEL_WRITES],
           resources: ['*'],
         }),
         // Blocks direct calls at pro. It does NOT block `cdk deploy -c env=pro`:
@@ -565,6 +618,62 @@ export class IamStack extends cdk.Stack {
               resourceName: 'VoicevoxStack-pro/*',
             }),
           ],
+        }),
+      ],
+    });
+  }
+
+  /**
+   * The IAM slice `infra` needs on top of PowerUserAccess.
+   *
+   * PowerUserAccess grants everything except IAM, so without this an infra
+   * member cannot onboard anyone or manage the service roles the stacks need.
+   */
+  private infraAdministrationPolicy(): iam.ManagedPolicy {
+    return new iam.ManagedPolicy(this, 'InfraAdministration', {
+      managedPolicyName: 'infra-administration',
+      description: 'IAM administration for the infra group, on top of PowerUserAccess.',
+      statements: [
+        new iam.PolicyStatement({
+          sid: 'AdministerUsersGroupsAndRoles',
+          actions: [
+            'iam:CreateUser',
+            'iam:DeleteUser',
+            'iam:UpdateUser',
+            'iam:CreateLoginProfile',
+            'iam:UpdateLoginProfile',
+            'iam:DeleteLoginProfile',
+            'iam:AddUserToGroup',
+            'iam:RemoveUserFromGroup',
+            'iam:CreateRole',
+            'iam:DeleteRole',
+            'iam:UpdateRole',
+            'iam:AttachRolePolicy',
+            'iam:DetachRolePolicy',
+            'iam:PutRolePolicy',
+            'iam:DeleteRolePolicy',
+            'iam:UpdateAssumeRolePolicy',
+            'iam:PassRole',
+            'iam:TagRole',
+            'iam:UntagRole',
+            'iam:CreatePolicy',
+            'iam:CreatePolicyVersion',
+            'iam:DeletePolicyVersion',
+            'iam:SetDefaultPolicyVersion',
+            'iam:Get*',
+            'iam:List*',
+          ],
+          resources: ['*'],
+        }),
+        // infra administers the account; it does not own the organization.
+        // Nothing in this stack grants organizations:*, so denying it here
+        // costs no group anything — the test for additive-group actions
+        // covers the cases where a deny would have reached too far.
+        new iam.PolicyStatement({
+          sid: 'DenyOrganizationAndAccountControl',
+          effect: iam.Effect.DENY,
+          actions: ['organizations:*', ...ACCOUNT_LEVEL_WRITES],
+          resources: ['*'],
         }),
       ],
     });

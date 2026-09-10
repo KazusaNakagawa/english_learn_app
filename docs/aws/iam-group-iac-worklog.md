@@ -994,6 +994,152 @@ $ npm run diff:iam
 
 ---
 
+## 2026-09-10 — #175 infra / billing / admin グループ
+
+### やったこと
+
+- `infra`（`PowerUserAccess` + `infra-administration`）、`billing`、`admin` を追加
+- **`develop` の Deny を訂正**（下記が本題）
+- CI/CD の OIDC ロールは**見送り**（判断を記録）
+
+### 最大の発見: グループの Deny は他のグループに波及する
+
+`billing` を作ろうとしてテストを書いたら、`develop` の既存 Deny に引っかかった。
+
+```console
+develop の Deny: ["account:*","aws-portal:*","ce:*","organizations:*"]
+```
+
+`AWSBillingReadOnlyAccess` が必要とするもの:
+
+```
+account:GetAccountInformation / aws-portal:ViewBilling / ce:GetCostAndUsage ...
+```
+
+**3 つとも重なっている。** つまり `develop` と `billing` の両方に所属するユーザは、
+**billing の権限が丸ごと効かない**状態だった。
+
+原因は IAM の基本的な性質:
+
+> **Deny はグループではなくユーザに対して評価される。**
+> あるグループのポリシーに書いた Deny は、そのユーザが所属する
+> **他のすべてのグループ**の Allow を打ち消す。
+
+つまり **グループポリシーの Deny は事実上そのユーザにとってアカウント全体の Deny**。
+「このグループでは使わせない」つもりで書いた Deny が、
+別グループの機能を殺す。
+
+#### 一般則として
+
+**Deny に書いてよいのは「どのグループも与えるべきでないもの」だけ。**
+「このグループには不要」程度のものを Deny すると、必ず組み合わせで壊れる。
+
+この観点で develop の Deny を見直した:
+
+| Deny していたもの | 判定 |
+| --- | --- |
+| `organizations:*` | 残す。どのグループも与えない |
+| `account:*` | **狭める**。読み取りは billing が必要。危険な書き込み 6 個の列挙に変更 |
+| `ce:*` | **削除**。billing の本体 |
+| `aws-portal:*` | **削除**。billing の本体 |
+| IAM 書き込み | 残す（ただし下記の制約が付く） |
+
+回帰防止として、追加グループが必要とするアクションを
+**どのポリシーも Deny していないこと**を不変条件テストにした:
+
+> `never denies ce:GetCostAndUsage, which the billing group needs`
+
+ワイルドカード（`ce:*`）での巻き込みも同時に検査している。
+
+### 帰結: グループは「ティア」と「追加」に分かれる
+
+Deny が波及する以上、**すべてのグループを自由に組み合わせられるわけではない**。
+
+| 種別 | グループ | 性質 |
+| --- | --- | --- |
+| ティア（排他） | `readonly` / `develop` / `infra` / `admin` | 互いの Deny が衝突する。1 人 1 つ |
+| 追加（併用可） | `audit` / `billing` | 何も Deny しない。任意のティアに重ねられる |
+
+具体的な衝突:
+
+- `develop` の IAM 書き込み Deny は `infra` の IAM 権限を殺す
+- `develop` の Deny は `admin` の `AdministratorAccess` すら殺す
+
+#### break-glass admin は専用ユーザでなければ機能しない
+
+これが実務上いちばん危ない。**既存の開発者を `admin` グループに追加しても管理者にならない。**
+その人が `develop` にも属していれば、`develop-workload` の Deny が
+`AdministratorAccess` を上書きするため。
+
+しかも**緊急時にそれが発覚する**。破られ方として最悪の部類。
+
+対策として `admin` は「他のどのグループにも属さない専用ユーザ」用と明記した
+（コードコメント + テスト + #176 の手順書）。
+これは break-glass の一般的な作法そのものでもある。
+
+### 判明した誤り: `arn:aws:iam::aws:policy/Billing` は存在しない
+
+Issue には「`Billing` + `AWSBillingReadOnlyAccess`」と書いていたが、
+前者の ARN は存在しない:
+
+```console
+$ aws iam get-policy --policy-arn arn:aws:iam::aws:policy/Billing
+An error occurred (NoSuchEntity) ... was not found.
+
+$ aws iam get-policy --policy-arn arn:aws:iam::aws:policy/job-function/Billing
+Billing
+```
+
+フルアクセス版は **`job-function/` 配下**にある。
+今回はコスト閲覧が目的なので `AWSBillingReadOnlyAccess` のみを採用した。
+支払い情報の変更は root 相当の関心事で、日常の閲覧者に配るものではない。
+
+### 判断: CI/CD の OIDC ロールは見送り
+
+推測で決めず、実際のワークフローを見た:
+
+```console
+$ ls .github/workflows/
+cdk-ci.yml.bk   ios-build.yml.bk      # どちらも .bk で無効化済み
+```
+
+```yaml
+      - name: CDK synth (dry-run)
+        run: npx cdk synth
+        env:
+          # CDK synth does not require real AWS credentials
+          AWS_ACCESS_KEY_ID: dummy
+          AWS_SECRET_ACCESS_KEY: dummy
+```
+
+**AWS に触れる CI は存在しない。** ダミー認証情報で synth するだけ。
+使われていない OIDC ロールを今作るのは、`ops-actions` を作らなかったのと同じ理由で見送る。
+
+発動条件だけ記録しておく:
+
+> CI から AWS へデプロイする必要が生じたら、**IAM ユーザのアクセスキーではなく
+> GitHub Actions OIDC ロール**を使う。長期キーを GitHub Secrets に置かない。
+
+なお `cdk-ci.yml.bk` を**そのまま復活させると落ちる**。
+`npx cdk synth` はスタックセレクタなしで `bin/app.ts` を合成するため、
+`VOICEVOX_API_KEY_POC` 未設定で `VoicevoxStack` の constructor が throw する（#171 参照）。
+復活させるときは `npm run synth:iam` を足すか、ダミーの API キーを env に足す必要がある。
+
+### 検証コマンドと結果
+
+```console
+$ npm test
+Tests:       164 passed, 164 total
+
+$ npm run diff:iam
+[+] AWS::IAM::ManagedPolicy InfraAdministration
+[+] AWS::IAM::Group InfraGroup
+[+] AWS::IAM::Group BillingGroup
+[+] AWS::IAM::Group AdminGroup
+```
+
+---
+
 <!--
 以降、PR ごとに追記する。テンプレート:
 
