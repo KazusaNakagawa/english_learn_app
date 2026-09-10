@@ -219,6 +219,28 @@ const ORGANIZATION_WRITES = [
  * able to rewrite them casually — least of all `infra`, which would otherwise
  * be one CreatePolicyVersion away from disabling the MFA baseline everywhere.
  */
+/**
+ * Groups whose membership `infra` may change.
+ *
+ * `admin` is absent on purpose. Its emptiness in steady state is the whole
+ * break-glass design — alerting on use assumes nobody is quietly a member — and
+ * `iam:AddUserToGroup` on '*' let any infra member join it in one call.
+ * The broader escalation (mint a role, assume it) is accepted and documented,
+ * but that one is loud in CloudTrail; silently joining `admin` is not.
+ */
+const INFRA_MANAGEABLE_GROUPS = ['readonly', 'audit', 'develop', 'infra', 'billing'];
+
+/**
+ * Roles `infra` may hand to an AWS service.
+ *
+ * Unrestricted `iam:PassRole` is an escalation path in its own right: pass a
+ * highly privileged role to a service you can invoke, and you run as that role.
+ * AWS's own guidance is to restrict it by ARN or by iam:PassedToService.
+ * Adding a role outside these patterns means extending this list on purpose,
+ * which is a visible, rare piece of friction rather than an ongoing tax.
+ */
+const INFRA_PASSABLE_ROLES = ['VoicevoxStack-*', 'voicevox-*-role-*', 'cdk-*'];
+
 const MANAGED_POLICY_NAMES = [
   'self-service-credentials',
   'deny-without-mfa',
@@ -699,8 +721,6 @@ export class IamStack extends cdk.Stack {
             'iam:CreateLoginProfile',
             'iam:UpdateLoginProfile',
             'iam:DeleteLoginProfile',
-            'iam:AddUserToGroup',
-            'iam:RemoveUserFromGroup',
             // Offboarding. IAM refuses DeleteUser while a user still has access
             // keys, MFA devices or attached policies, and self-service lets
             // every user create their own key — so without these, infra cannot
@@ -729,7 +749,6 @@ export class IamStack extends cdk.Stack {
             'iam:PutRolePolicy',
             'iam:DeleteRolePolicy',
             'iam:UpdateAssumeRolePolicy',
-            'iam:PassRole',
             'iam:TagRole',
             'iam:UntagRole',
             'iam:CreatePolicy',
@@ -740,6 +759,41 @@ export class IamStack extends cdk.Stack {
             'iam:List*',
           ],
           resources: ['*'],
+        }),
+        new iam.PolicyStatement({
+          sid: 'ManageMembershipOfOperationalGroups',
+          actions: ['iam:AddUserToGroup', 'iam:RemoveUserFromGroup'],
+          resources: INFRA_MANAGEABLE_GROUPS.map((name) =>
+            this.formatArn({ service: 'iam', region: '', resource: 'group', resourceName: name }),
+          ),
+        }),
+        new iam.PolicyStatement({
+          sid: 'PassProjectAndBootstrapRoles',
+          actions: ['iam:PassRole'],
+          resources: INFRA_PASSABLE_ROLES.map((name) =>
+            this.formatArn({ service: 'iam', region: '', resource: 'role', resourceName: name }),
+          ),
+        }),
+        // Scoping AddUserToGroup alone would be theatre: attaching
+        // AdministratorAccess straight to your own user reaches the same place.
+        // The resource of AttachUserPolicy is the *user*, so which policy gets
+        // attached can only be constrained by the iam:PolicyARN condition key.
+        new iam.PolicyStatement({
+          sid: 'DenyGrantingAdministratorAccess',
+          effect: iam.Effect.DENY,
+          actions: ['iam:AttachUserPolicy', 'iam:AttachGroupPolicy', 'iam:AttachRolePolicy'],
+          resources: ['*'],
+          conditions: {
+            ArnEquals: {
+              'iam:PolicyARN': this.formatArn({
+                service: 'iam',
+                region: '',
+                account: 'aws',
+                resource: 'policy',
+                resourceName: 'AdministratorAccess',
+              }),
+            },
+          },
         }),
         // infra administers the account; it does not own the organization.
         //

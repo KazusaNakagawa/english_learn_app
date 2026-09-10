@@ -98,6 +98,101 @@ describe('infra group', () => {
   });
 });
 
+describe('infra cannot promote itself', () => {
+  const infraStatements = () => managedPolicies()['infra-administration'];
+  const allowFor = (action: string) =>
+    infraStatements().find(
+      (st) => st.Effect === 'Allow' && asArray(st.Action).includes(action),
+    );
+
+  // [P1] iam:AddUserToGroup が Resource:'*' だと、infra ユーザは自分を
+  // admin に足すだけで AdministratorAccess を得られる。
+  // 一般的な昇格経路（自前ロール作成→assume）は許容したが、こちらは別物:
+  // **admin のメンバーが 0 人であること自体が break-glass 設計の前提**で、
+  // 静かに join されると監視も成立しなくなる。
+  it.each(['iam:AddUserToGroup', 'iam:RemoveUserFromGroup'])(
+    'scopes %s to operational groups only',
+    (action) => {
+      const groupArns = renderArns(allowFor(action)!.Resource);
+
+      expect(groupArns).not.toContain('*');
+      expect(groupArns.length).toBeGreaterThan(0);
+      for (const arn of groupArns) {
+        expect(arn).toMatch(/:group\//);
+      }
+    },
+  );
+
+  it.each(['readonly', 'audit', 'develop', 'infra', 'billing'])(
+    'can still manage membership of %s',
+    (group) => {
+      const groupArns = renderArns(allowFor('iam:AddUserToGroup')!.Resource);
+      expect(groupArns.some((arn) => arn.endsWith(`:group/${group}`))).toBe(true);
+    },
+  );
+
+  it('cannot add anyone to the admin group', () => {
+    const groupArns = renderArns(allowFor('iam:AddUserToGroup')!.Resource);
+    expect(groupArns.some((arn) => arn.endsWith(':group/admin'))).toBe(false);
+  });
+
+  // 一覧はハードコードなのでドリフトする。
+  // 新しいグループを足して一覧に入れ忘れると infra が運用できず、
+  // 逆に admin が紛れ込むと上のガードが無意味になる。
+  it('manages exactly the groups this stack creates, except admin', () => {
+    const expected = Object.keys(groups())
+      .filter((name) => name !== 'admin')
+      .sort();
+    const managed = renderArns(allowFor('iam:AddUserToGroup')!.Resource)
+      .map((arn) => arn.replace(/^.*:group\//, ''))
+      .sort();
+
+    expect(managed).toEqual(expected);
+  });
+
+  // グループ経路だけ塞いでも、同じユーザに AdministratorAccess を
+  // 直接アタッチできれば同じこと。Resource は「ユーザ」なので ARN では絞れず、
+  // どのポリシーを貼るかは iam:PolicyARN 条件でしか制限できない。
+  it.each(['iam:AttachUserPolicy', 'iam:AttachGroupPolicy'])(
+    'cannot use %s to attach AdministratorAccess',
+    (action) => {
+      const guard = infraStatements().find(
+        (st) => st.Effect === 'Deny' && asArray(st.Action).includes(action),
+      );
+
+      expect(guard).toBeDefined();
+      expect(JSON.stringify(guard!.Condition)).toContain('AdministratorAccess');
+    },
+  );
+
+  // [P1] PassRole が全ロール対象だと、強い権限のロールを任意のサービスへ渡せる。
+  // AWS も具体的な ARN かサービス条件での制限を推奨している。
+  it('scopes iam:PassRole to known role patterns', () => {
+    const roleArns = renderArns(allowFor('iam:PassRole')!.Resource);
+
+    expect(roleArns).not.toContain('*');
+    expect(roleArns.length).toBeGreaterThan(0);
+    for (const arn of roleArns) {
+      expect(arn).toMatch(/:role\//);
+      // `role/*` のような実質ワイルドカードを弾く
+      expect(arn).not.toMatch(/:role\/\*$/);
+    }
+  });
+
+  it.each(['VoicevoxStack-poc-SomeServiceRole', 'voicevox-engine-role-poc'])(
+    'can still pass the project role %s',
+    (roleName) => {
+      const roleArns = renderArns(allowFor('iam:PassRole')!.Resource);
+      const matches = roleArns.some((arn) => {
+        const pattern = arn.replace(/^.*:role\//, '');
+        return new RegExp(`^${pattern.replace(/\*/g, '.*')}$`).test(roleName);
+      });
+
+      expect(matches).toBe(true);
+    },
+  );
+});
+
 describe('policy self-protection', () => {
   // 上の Deny は名前のハードコード一覧に依存している。
   // 新しいポリシーを足して一覧に入れ忘れると、静かに無防備になる。

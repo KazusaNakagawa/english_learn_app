@@ -1205,11 +1205,69 @@ CloudTrail に目立つ 1 手が増える。自スタックのポリシー 5 本
 | admin の「余計なものが付いていない」テストが空振り | customer-managed policy は `{"Ref":...}` で出るため `startsWith('arn:')` が全部落としていた。件数と中身の厳密一致に変更 |
 | 不変条件テストの盲点 | `NotAction` 形式の Deny を見ていなかった。また `ce:*` の完全一致しか見ておらず `ce:Get*` を素通りさせた。glob 一致に変更し、MFA 条件付き Deny は除外 |
 
+### 人によるレビュー指摘（#188、P1 × 2）
+
+自動レビューが拾えなかった 2 件。どちらも infra の自己昇格経路。
+
+#### 1. infra は自分を `admin` グループに追加できた
+
+`iam:AddUserToGroup` が `Resource: '*'` だったため、
+**1 コマンドで `AdministratorAccess` を取得できる**状態だった。
+
+一般的な昇格経路（自前ロールを作って assume）は上で許容したのに、
+なぜこれは塞ぐのか — 性質が違うため:
+
+| 経路 | 性質 |
+| --- | --- |
+| ロール作成 → assume | セッション限り。CloudTrail に `AssumeRole` が目立って残る |
+| **admin に自分を追加** | **永続。しかも「admin はメンバー 0 人」という前提そのものを崩す** |
+
+`admin` のメンバーが 0 人であることは break-glass 設計の土台で、
+「使われたら通知する」という監視もそれに依存している。
+静かに join できると監視ごと無効化される。
+
+運用対象グループ（`readonly` / `audit` / `develop` / `infra` / `billing`）に限定し、
+**`admin` を除外**した。
+
+**ただしグループ経路だけ塞ぐのは張りぼて**だった。
+`iam:AttachUserPolicy` で自分のユーザに `AdministratorAccess` を直接貼れば同じ結果になる。
+`AttachUserPolicy` の Resource は「ユーザ」なので ARN では絞れず、
+**どのポリシーを貼るかは `iam:PolicyARN` 条件でしか制限できない**:
+
+```json
+{
+  "Sid": "DenyGrantingAdministratorAccess",
+  "Effect": "Deny",
+  "Action": ["iam:AttachUserPolicy", "iam:AttachGroupPolicy", "iam:AttachRolePolicy"],
+  "Condition": { "ArnEquals": { "iam:PolicyARN": "arn:aws:iam::aws:policy/AdministratorAccess" } }
+}
+```
+
+#### 2. `iam:PassRole` が全ロール対象だった
+
+強い権限のロールを自分が起動できるサービスに渡せば、そのロールとしてコードが動く。
+AWS の推奨どおり ARN で限定した（`VoicevoxStack-*` / `voicevox-*-role-*` / `cdk-*`）。
+
+この命名から外れるロールを作ったときは一覧の拡張が必要になるが、
+**明示的な `AccessDenied` として現れる稀な作業**であり、
+bootstrap ロールを絞ったときのような継続的コストにはならない。
+
+#### 一覧のハードコードにはドリフト検査を付けた
+
+`INFRA_MANAGEABLE_GROUPS` も `MANAGED_POLICY_NAMES` も手書きの一覧なので、
+グループやポリシーを足したときに入れ忘れる。
+
+- 入れ忘れ → infra が運用できない
+- `admin` が紛れ込む → 上のガードが無意味になる
+
+「このスタックが作るグループから `admin` を除いた集合と厳密に一致すること」を
+テストにし、グループを一時的に足して実際に落ちることも確認した。
+
 ### 検証コマンドと結果
 
 ```console
 $ npm test
-Tests:       184 passed, 184 total
+Tests:       198 passed, 198 total
 
 $ npm run diff:iam
 [+] AWS::IAM::ManagedPolicy InfraAdministration
