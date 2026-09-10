@@ -1,64 +1,12 @@
-import * as cdk from 'aws-cdk-lib';
-import { Template } from 'aws-cdk-lib/assertions';
-import { IamStack } from '../lib/iam-stack';
-
-const ACCOUNT = '123456789012';
-const ENV = { account: ACCOUNT, region: 'ap-northeast-1' };
-
-type Statement = {
-  NotResource?: unknown;
-  Sid?: string;
-  Effect: string;
-  Action?: string | string[];
-  NotAction?: string | string[];
-  Resource?: unknown;
-  Condition?: Record<string, Record<string, unknown>>;
-};
-
-function synth() {
-  const app = new cdk.App();
-  return Template.fromStack(new IamStack(app, 'IamStack', { env: ENV }));
-}
-
-/** Managed policy documents keyed by their ManagedPolicyName. */
-function managedPolicies(): Record<string, Statement[]> {
-  const found = synth().findResources('AWS::IAM::ManagedPolicy');
-  const byName: Record<string, Statement[]> = {};
-  for (const resource of Object.values(found) as any[]) {
-    byName[resource.Properties.ManagedPolicyName] =
-      resource.Properties.PolicyDocument.Statement;
-  }
-  return byName;
-}
+import { ACCOUNT, asArray, managedPolicies, renderArn, synth } from './support/synth';
 
 const SELF_SERVICE = 'self-service-credentials';
 const DENY_WITHOUT_MFA = 'deny-without-mfa';
 
-const asArray = (v: string | string[] | undefined): string[] =>
-  v === undefined ? [] : Array.isArray(v) ? v : [v];
-
-/**
- * ARNs come back as `Fn::Join` with a `Ref: AWS::Partition`, because
- * Stack.formatArn resolves the partition at deploy time rather than assuming
- * "aws". Flatten that to a plain string so assertions stay readable.
- */
-function renderArn(value: unknown): string {
-  if (typeof value === 'string') return value;
-  const join = (value as any)?.['Fn::Join'];
-  if (!join) return JSON.stringify(value);
-
-  const [delimiter, parts] = join as [string, unknown[]];
-  return parts
-    .map((part) =>
-      typeof part === 'string' ? part : `\${${(part as any).Ref}}`,
-    )
-    .join(delimiter);
-}
-
 describe('MFA baseline policies', () => {
-  it('creates exactly the two baseline managed policies', () => {
-    expect(Object.keys(managedPolicies()).sort()).toEqual(
-      [DENY_WITHOUT_MFA, SELF_SERVICE].sort(),
+  it('creates both baseline managed policies', () => {
+    expect(Object.keys(managedPolicies())).toEqual(
+      expect.arrayContaining([DENY_WITHOUT_MFA, SELF_SERVICE]),
     );
   });
 
@@ -243,9 +191,9 @@ describe('MFA baseline policies', () => {
     });
   });
 
-  // #173-#175 で追加されるグループへの不変条件。
-  // グループが 0 件の現時点では自明に通るが、
-  // ベースライン未付与のグループが足された瞬間に落ちる。
+  // 全グループへの不変条件。#173 で readonly / audit が入り、
+  // ここから実際に効き始める。ベースライン未付与のグループを
+  // 足した瞬間に落ちるので、#174-#175 でも効き続ける。
   it('attaches both baseline policies to every group in the stack', () => {
     const template = synth();
 

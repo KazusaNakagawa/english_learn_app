@@ -578,6 +578,128 @@ MFA 登録の入口そのものが塞がる。
 
 ---
 
+## 2026-09-10 — #173 readonly / audit グループ
+
+### やったこと
+
+- `readonly` グループ（`ReadOnlyAccess`）と `audit` グループ（`SecurityAudit`）を作成
+- `deny-secret-reads` ポリシーを新設し、両グループに付与
+- グループ生成を `addGroup()` 経由に限定し、MFA ベースラインの付け忘れを構造的に防止
+- **`ope` は作らない**（決定）
+
+### 見つけたこと: `ReadOnlyAccess` は Lambda の環境変数を平文で返す
+
+Issue には「秘密が漏れるデータプレーン読み取り」の例として
+`secretsmanager:GetSecretValue` / `ssm:GetParameter*` / `kms:Decrypt` を挙げていたが、
+**このプロジェクトは Secrets Manager も SSM も使っていない**。
+実際の漏洩経路は別にあった。
+
+`ReadOnlyAccess` は `lambda:GetFunctionConfiguration` を含む。
+これは環境変数ブロックをそのまま返す。そして `VoicevoxStack` は:
+
+| 関数 | 環境変数 | 中身 |
+| --- | --- | --- |
+| `voicevox-authorizer-{env}` | `API_KEY` | VOICEVOX API の認証キーそのもの |
+| `voicevox-slack-alert-{env}` | `SLACK_WEBHOOK_URL` | Slack へ投稿できる URL |
+
+つまり `readonly` に入れた「破壊的操作ができないはずの開発者」が、
+**API キーと Slack Webhook を読める**状態だった。
+
+対処として `deny-secret-reads` で該当関数に限定して
+`lambda:GetFunction` / `lambda:GetFunctionConfiguration` を Deny した。
+`voicevox-engine-{env}` は対象外にしている — 秘密を持たず、
+かつ障害調査で最も見たい関数なので、ここまで塞ぐと `readonly` の意味がなくなる。
+
+```ts
+const SECRET_BEARING_FUNCTIONS = ['voicevox-authorizer-*', 'voicevox-slack-alert-*'];
+```
+
+**ただしこれは対症療法**。本来は Lambda の環境変数に秘密を置くのをやめるべきで、
+それは `VoicevoxStack` 側の変更になるため別 Issue にした（#182）。
+
+`secretsmanager:GetSecretValue` と `kms:Decrypt` の Deny も入れてある。
+現時点では対象が存在しないが、将来 Secrets Manager を使い始めたときに
+`readonly` が自動的に緩まないようにするため。
+`kms:Decrypt` を止めておくと SSM SecureString の復号読み出しも同時に塞がる
+（復号なしの読み出しは暗号文しか返さないので害がない）。
+
+### 判断が分かれた点
+
+#### `ope` は作らない（確定）
+
+要件自体に「readonly と同等であれば作成不要」とあり、そのとおりにした。
+
+ただし Issue に書いていた代替案「`ops-actions` ポリシーを別途用意する」も**今回は作らない**。
+理由は、運用担当が実在しない（ユーザは 2 人ともに開発者）ため、
+必要なアクションが推測になるから。使われないポリシーが残ると、
+後から誰かが中身を検証せずに貼るリスクのほうが大きい。
+必要になった時点で、実際に落ちたコマンドを見てから作る。
+
+#### グループ生成をメソッド経由に限定した
+
+`addGroup(id, groupName, policies)` を private メソッドにして、
+中で必ず `this.baselinePolicies` を先頭に足すようにした。
+
+`new iam.Group(...)` を直接書けてしまうと、#174-#175 で
+MFA ベースラインを付け忘れたグループが静かに生まれる。
+不変条件テストでも落とせるが、**そもそも書けないほうが良い**。
+
+実際にテストが効くことは、ベースライン無しのグループを一時的に足して確認した:
+
+```console
+$ npx jest -t "attaches both baseline policies to every group"
+Tests:       1 failed, 70 skipped, 71 total
+```
+
+### ハマった点
+
+#### 前の Issue のテストが実態と合わなくなった
+
+#171 / #172 時点で「まだ 0 件」を主張していたテストが 3 件落ちた。
+
+```
+Expected 0 resources of type AWS::IAM::Group but found 2
+Expected 2 resources of type AWS::IAM::ManagedPolicy but found 3
+```
+
+スキャフォールド段階の「まだ無いこと」を固定するテストは、
+次の Issue で必ず落ちる。落ちたら書き換える前提で置くのは構わないが、
+**意図（何を守りたいのか）が残っていないと、単に数字を書き換えて通してしまう**。
+今回は「ユーザに直接ポリシーを貼らない」「ユーザ/ロールを作らない」という
+本来の意図に書き直した。
+
+#### テストヘルパの重複
+
+`renderArn` などを `mfa-baseline.test.ts` に書いていたが、
+`groups.test.ts` でも必要になったので `test/support/synth.ts` に切り出した。
+
+### 検証コマンドと結果
+
+```console
+$ npm test
+Tests:       71 passed, 71 total
+
+$ env -u VOICEVOX_API_KEY_POC -u VOICEVOX_API_KEY_DEV -u VOICEVOX_API_KEY_PRO \
+    DOTENV_CONFIG_PATH=/dev/null npm run synth:iam   # OK
+
+$ npm run diff:iam
+Resources
+[+] AWS::IAM::ManagedPolicy SelfServiceCredentials
+[+] AWS::IAM::ManagedPolicy DenyWithoutMfa
+[+] AWS::IAM::ManagedPolicy DenySecretReads
+[+] AWS::IAM::Group ReadonlyGroup
+[+] AWS::IAM::Group AuditGroup
+```
+
+すべて追加のみ。既存の `dev_readonly` / `dev_user` への変更はなし。
+
+### 未完了（デプロイが必要）
+
+#172 から持ち越した実機検証は**まだ実施していない**。
+デプロイは実アカウントへの変更なので、判断を待っている状態。
+
+---
+
 <!--
 以降、PR ごとに追記する。テンプレート:
 

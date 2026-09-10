@@ -25,19 +25,17 @@ describe('IamStack', () => {
     expect(stack.stackName).not.toMatch(/-(poc|dev|pro)$/);
   });
 
-  // 境界値: #172 で MFA ベースラインの ManagedPolicy 2 件が入った。
-  // グループ／ユーザ／ロールの実体は #173-#175 まで 0 件のまま。
-  it.each(['AWS::IAM::Group', 'AWS::IAM::User', 'AWS::IAM::Role'])(
-    'contains no %s yet',
-    (type) => {
-      synth().resourceCountIs(type, 0);
-    },
-  );
+  // 境界値: このスタックはユーザもロールも作らない。
+  // ユーザは手動作成しグループに入れる運用 (#176)、ロールは別スタックの責務。
+  it.each(['AWS::IAM::User', 'AWS::IAM::Role'])('contains no %s', (type) => {
+    synth().resourceCountIs(type, 0);
+  });
 
-  // このスタックがユーザに触れる唯一の手段はグループ経由であるべき。
-  // ポリシーを直接ユーザに貼ると移行時に取りこぼす (#178)。
-  it('creates only the two baseline managed policies for now', () => {
-    synth().resourceCountIs('AWS::IAM::ManagedPolicy', 2);
+  // 権限はグループ経由でのみ与える。
+  // ユーザに直接ポリシーを貼ると移行時に取りこぼす (#178)。
+  it('attaches no policy directly to a user', () => {
+    synth().resourceCountIs('AWS::IAM::UserPolicy', 0);
+    synth().resourceCountIs('AWS::IAM::Policy', 0);
   });
 
   // 失敗系に相当: VOICEVOX 側のリソースが混入していないこと (#171 受け入れ条件)
