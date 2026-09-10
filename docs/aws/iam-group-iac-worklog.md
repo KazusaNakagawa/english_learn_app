@@ -1602,6 +1602,86 @@ dev_user:     ["IAMFullAccess","PowerUserAccess"]
 
 ---
 
+## 2026-09-10 — #176 設計書と運用手順
+
+### やったこと
+
+- `docs/05.iam_group_design.md` を作成
+- `CLAUDE.md` に IAM スタックの位置づけと npm スクリプトを追記
+- **設計書が腐らないようにテストで固定**
+
+### ドキュメントをテストで縛った
+
+この Epic では**ドキュメントとコメントの腐りを何度も踏んだ**:
+
+- `SELF_TARGETED_WITHOUT_MFA` の docstring が別定数の上に取り残された（2 回）
+- 「Scaffold only」が groups 追加後も残っていた
+- `arn:aws:iam::aws:policy/Billing` という**存在しない ARN** を Issue に書いた
+- worklog の検証コマンドがそのままでは実行できない形だった
+
+設計書は「アクセスを申請する前に読むもの」なので、
+**腐ると存在しないより悪い**（自信を持って間違ったことを言う）。
+
+そこで `aws/test/design-doc.test.ts` を置き、グループ表を合成結果に固定した:
+
+| テスト | 防ぐ腐り方 |
+| --- | --- |
+| `documents exactly the groups the stack creates` | グループを足して表に書き忘れる |
+| `lists the right policies for <group>` | ポリシー構成が変わって表がずれる |
+| `never names a policy that does not exist` | `Billing` のような実在しない名前を書く |
+| `includes the runbook command <cmd>` | 手順から必要なコマンドが消える |
+
+3 パターンすべて、意図的に壊して落ちることを確認した:
+
+```console
+# 表のポリシー名を実体からずらす
+✕ lists the right policies for readonly
+# 存在しないポリシー名を書く（#175 の Billing 誤記の再現）
+✕ never names a policy that does not exist
+# 新グループを足して表に書き忘れる
+✕ documents exactly the groups the stack creates
+```
+
+**Markdown の表をパースしてテンプレートと突き合わせる**という素朴な方法だが、
+今回の腐り方はすべてこれで捕まる。
+
+### 設計書に何を書き、何を書かなかったか
+
+「グループ一覧」「オンボーディング」「オフボーディング」「デプロイ」は手順。
+その後ろに**「設計上の制約」**を置き、**知らずに触ると静かに壊れる 6 点**を書いた:
+
+1. Deny はグループではなくユーザに効く（3 回踏んだ）
+2. `admin` は専用ユーザにしか効かない（緊急時に発覚する）
+3. `infra` は実質管理者に近い（許容した判断とその帰結）
+4. pro の保護はスタック側（identity policy では止まらない）
+5. 名前でスコープできないリソースがある（API GW / CloudWatch）
+6. IAM は即時反映されない
+
+経緯や失敗の詳細はこの worklog に置き、設計書からリンクした。
+**設計書は現在形の手順書、worklog は過去形の記録**という #176 で決めた分担どおり。
+
+### オフボーディング手順は実際の失敗から書いた
+
+#188 のレビューで「infra がオフボーディングできない」と指摘され、
+`iam:DeleteAccessKey` 等を追加した経緯がある。
+手順書にも**なぜ子リソースから消すのか**を書いた:
+
+> IAM はアクセスキーや MFA デバイスが残っているユーザを削除できない（`DeleteConflict`）。
+> 全員が自分でキーを作れるので、必ず子リソースから消す。
+
+理由を書かないと、次に `DeleteConflict` を見た人がまた同じところで止まる。
+
+### 検証コマンドと結果
+
+```console
+$ npm test
+Tests:       214 passed, 214 total
+```
+
+設計書内のリンク、`CLAUDE.md` からのリンクともに切れなし。
+
+---
+
 <!--
 以降、PR ごとに追記する。テンプレート:
 

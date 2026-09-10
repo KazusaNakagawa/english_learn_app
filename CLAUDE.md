@@ -25,6 +25,7 @@ Requirements: macOS with Xcode 15+, iOS 17.0+ target.
 cd aws
 npm install
 npm run build          # Compile TypeScript
+npm test               # Jest (policy assertions against the synthesized template)
 
 # Multi-environment deploy (poc | dev | pro)
 npm run deploy:poc
@@ -36,14 +37,29 @@ npm run diff:poc       # Preview CloudFormation changes
 npm run synth:poc      # Generate CloudFormation template
 npm run destroy:poc    # Tear down stack
 
+# IAM groups — a single account-wide stack, no env suffix
+npm run diff:iam       # Always run before deploying
+npm run deploy:iam
+npm run synth:iam
+npm run destroy:iam
+
 npx cdk bootstrap      # One-time per AWS account/region
 ```
+
+There are **two CDK apps**. `bin/app.ts` holds `VoicevoxStack-{env}`; `bin/iam-app.ts`
+holds `IamStack`, and the `:iam` scripts point at it with `--app`. They are separate
+because a CDK app constructs every declared stack before the CLI applies a stack
+selector, and `VoicevoxStack` throws without `VOICEVOX_API_KEY_{ENV}` — sharing one
+entry would make IAM work depend on VOICEVOX credentials.
+
+`IamStack` has no environment suffix: IAM is account-global and poc/dev/pro share one
+account, so environment separation comes from ARN conditions inside the policies.
 
 ## Architecture
 
 ```text
 EnglishLearnApp/  (Swift/SwiftUI, iOS 17+)
-aws/              (AWS CDK, TypeScript — VOICEVOX TTS backend)
+aws/              (AWS CDK, TypeScript — VOICEVOX TTS backend + account IAM)
 docs/             (Architecture decisions, troubleshooting guides)
 ```
 
@@ -138,3 +154,17 @@ DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 ## Security
 
 The VOICEVOX API requires `x-api-key` header authentication. See [docs/02.voicevox_api_authentication.md](docs/02.voicevox_api_authentication.md) for details.
+
+Account access runs through IAM groups defined in `aws/lib/iam-stack.ts`. Read
+[docs/05.iam_group_design.md](docs/05.iam_group_design.md) before changing them —
+three constraints there are easy to break by accident:
+
+- **A deny in a group policy applies to the user**, so it cancels every other group
+  they belong to. Only deny what no group should ever grant.
+- **Groups are not freely combinable.** `readonly` / `audit` / `develop` / `infra` /
+  `admin` are tiers, one per person; only `billing` layers on top.
+- **Break-glass `admin` needs a dedicated user in no other group**, or that user's
+  tier denies beat `AdministratorAccess` — and it surfaces during an emergency.
+
+Every group enforces MFA. A long-lived access key carries no MFA context and is
+denied; use `./scripts/aws-mfa-session.sh` to obtain a session.
