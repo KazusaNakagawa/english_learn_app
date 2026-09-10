@@ -1602,6 +1602,214 @@ dev_user:     ["IAMFullAccess","PowerUserAccess"]
 
 ---
 
+## 2026-09-10 — #176 設計書と運用手順
+
+### やったこと
+
+- `docs/05.iam_group_design.md` を作成
+- `CLAUDE.md` に IAM スタックの位置づけと npm スクリプトを追記
+- **設計書が腐らないようにテストで固定**
+
+### ドキュメントをテストで縛った
+
+この Epic では**ドキュメントとコメントの腐りを何度も踏んだ**:
+
+- `SELF_TARGETED_WITHOUT_MFA` の docstring が別定数の上に取り残された（2 回）
+- 「Scaffold only」が groups 追加後も残っていた
+- `arn:aws:iam::aws:policy/Billing` という**存在しない ARN** を Issue に書いた
+- worklog の検証コマンドがそのままでは実行できない形だった
+
+設計書は「アクセスを申請する前に読むもの」なので、
+**腐ると存在しないより悪い**（自信を持って間違ったことを言う）。
+
+そこで `aws/test/design-doc.test.ts` を置き、グループ表を合成結果に固定した:
+
+| テスト | 防ぐ腐り方 |
+| --- | --- |
+| `documents exactly the groups the stack creates` | グループを足して表に書き忘れる |
+| `lists the right policies for <group>` | ポリシー構成が変わって表がずれる |
+| `never names a policy that does not exist` | `Billing` のような実在しない名前を書く |
+| `includes the runbook command <cmd>` | 手順から必要なコマンドが消える |
+
+3 パターンすべて、意図的に壊して落ちることを確認した:
+
+```console
+# 表のポリシー名を実体からずらす
+✕ lists the right policies for readonly
+# 存在しないポリシー名を書く（#175 の Billing 誤記の再現）
+✕ never names a policy that does not exist
+# 新グループを足して表に書き忘れる
+✕ documents exactly the groups the stack creates
+```
+
+**Markdown の表をパースしてテンプレートと突き合わせる**という素朴な方法だが、
+今回の腐り方はすべてこれで捕まる。
+
+### 設計書に何を書き、何を書かなかったか
+
+「グループ一覧」「オンボーディング」「オフボーディング」「デプロイ」は手順。
+その後ろに**「設計上の制約」**を置き、**知らずに触ると静かに壊れる 6 点**を書いた:
+
+1. Deny はグループではなくユーザに効く（3 回踏んだ）
+2. `admin` は専用ユーザにしか効かない（緊急時に発覚する）
+3. `infra` は実質管理者に近い（許容した判断とその帰結）
+4. pro の保護はスタック側（identity policy では止まらない）
+5. 名前でスコープできないリソースがある（API GW / CloudWatch）
+6. IAM は即時反映されない
+
+経緯や失敗の詳細はこの worklog に置き、設計書からリンクした。
+**設計書は現在形の手順書、worklog は過去形の記録**という #176 で決めた分担どおり。
+
+### オフボーディング手順は実際の失敗から書いた
+
+#188 のレビューで「infra がオフボーディングできない」と指摘され、
+`iam:DeleteAccessKey` 等を追加した経緯がある。
+手順書にも**なぜ子リソースから消すのか**を書いた:
+
+> IAM はアクセスキーや MFA デバイスが残っているユーザを削除できない（`DeleteConflict`）。
+> 全員が自分でキーを作れるので、必ず子リソースから消す。
+
+理由を書かないと、次に `DeleteConflict` を見た人がまた同じところで止まる。
+
+### レビュー指摘への対応（#191）
+
+Sourcery が予算上限だったのでローカルレビュー。6 件、すべて妥当だった。
+**うち 4 件は「手順どおりにやると失敗する」もの**で、書いた本人には見えていなかった。
+
+#### 1. パスワードを生成して捨てていた
+
+```bash
+--password "$(openssl rand -base64 24)"   # ← 誰も知らない
+```
+
+`create-login-profile` はパスワードを返さない。しかも `--password-reset-required` は
+**現在のパスワード入力を要求する**ので、本人はログインすらできない。
+変数に取って出力するよう修正。
+
+#### 2. 疎通確認の手順が成立しない
+
+```bash
+AWS_MFA_BASE_PROFILE=alice ./scripts/aws-mfa-session.sh
+```
+
+このスクリプトは**長期キーを持つ CLI プロファイル**を前提にしている
+（最初の呼び出しが `aws iam list-mfa-devices --profile "$BASE_PROFILE"`）。
+オンボーディング手順はコンソールログインしか作っていないので、
+`The config profile (alice) could not be found` で止まる。
+
+抜けていたのは 2 手:
+
+1. **MFA でサインインし直してから**アクセスキーを発行する
+   （`iam:CreateAccessKey` は MFA 免除リストに無いので、MFA セッションが要る）
+2. `aws configure --profile alice`
+
+`AWS_MFA_BASE_PROFILE` が**プロファイル名であってユーザ名ではない**点も明記した。
+今回はたまたま同名にしただけで、スクリプト自身のヘッダも
+「例からプロファイル名をコピーするな」と警告している。
+
+#### 3. オフボーディングが `admin` に効かない
+
+`iam:RemoveUserFromGroup` は新グループ 5 つにスコープしてあり、
+`admin` は自己昇格防止のため意図的に除外されている（#188）。
+
+つまり**「専用ユーザを作れ」と書いた当の break-glass ユーザを、
+その手順では削除できない**。しかもループに `set -e` が無いので
+`admin` の行だけ素通りし、最後の `delete-user` が
+「グループに所属したまま」で失敗する — 前書きで説明した
+`DeleteConflict`（キー / MFA）とは別原因なので、混乱する。
+
+最初は注意書き 1 つで済ませたが、レビューで
+「admin は専用経路として**手順を分けて明記する**か、削除を許可する設計にせよ」
+と指摘されて直した。注意書きだと「では何をすればよいか」が書かれていない —
+手順の `P` が `infra-user-mfa` 固定なので、読み手は差し替えに気付かない。
+`### break-glass（admin）ユーザのオフボーディング` を独立させ、
+実行者（別の `admin` か root）と `P` の差し替えを具体的に書いた。
+平時の `admin` はメンバー 0 なので、通常の答えは root のコンソール操作になる
+（root のアクセスキーは作らない）。
+
+設計側で許可する案（`RemoveUserFromGroup` だけ `admin` に広げる）は採らなかった。
+今の `ManageMembershipOfOperationalGroups` は `AddUserToGroup` と
+`RemoveUserFromGroup` を 1 ステートメントに束ねているので、
+資源に `admin` を足すだけでは `infra` の自己昇格をそのまま開けてしまう。
+ステートメントを分ければ削除だけ許可はできるが、それはそれで
+**`infra` が break-glass ユーザを `admin` から外せる**ことになり、
+緊急経路を平時に無効化できてしまう。年に数回あるかのオフボーディングのために
+開ける穴ではないと判断した。
+
+#### 4. テスト名が実際の検証内容と食い違っていた
+
+`never names a policy that does not exist` は、
+**正解をテンプレート自身から作っていた**ので実在確認になっていなかった。
+
+`fromAwsManagedPolicyName('Billing')` と書いて表もそう直せば 16 件すべて通り、
+落ちるのは `cdk deploy` 時の `NoSuchEntity`。
+つまり「#175 の再現を防げる」という主張が成立していなかった。
+
+分割した:
+
+| テスト | 何を見るか |
+| --- | --- |
+| `names only policies the stack actually references` | ドキュメント ↔ テンプレートの一致 |
+| `attaches only AWS managed policies verified to exist` | **実在確認済みの ARN 一覧に固定**（パス込み） |
+
+後者は `job-function/Billing` と `Billing` を別物として扱う
+（元の実装は `split('/').pop()` で潰していた）。
+実際に `Billing` を仕込んで落ちることを確認した。
+
+#### 5. 表のパーサが黙って行を落としていた
+
+ポリシー欄を「バッククォート付きの名前が並ぶ最初のセル」で探していたため、
+想定利用者欄にバッククォートが入ると別の列を掴む。
+文字クラスも `[A-Za-z-]` で、数字やアンダースコアを含む名前
+（`AmazonS3ReadOnlyAccess`、`AWSLambda_ReadOnlyAccess`）を弾いていた。
+
+列インデックス指定に変え、**パースできない行では例外を投げる**ようにした。
+黙って落とすと「グループが未記載」という**誤った失敗**として現れる。
+
+この修正は即座に役に立った。列番号を間違えて置いたところ、
+エラーがどのセルを掴んだかまで教えてくれた:
+
+```
+matrix row for `readonly` has an unparsable policy cell: "全リソースの参照"
+```
+
+#### 6. MFA 免除リストの説明が過小だった
+
+「MFA 未登録でも通るのは**自分自身の資格情報管理だけ**」と書いたが、
+`iam:ListVirtualMFADevices` と `iam:GetAccountPasswordPolicy` は
+リソース単位で絞れないため対象外になっている。
+つまり MFA 未登録のユーザでも**アカウント内の仮想 MFA デバイスを列挙できる**。
+
+絞ると登録の入口ごと塞がるための意図的な妥協なので、
+「だけ」を消して表に分け、絞れない 2 つを明示した。
+
+> ドキュメントを「腐らないようテストで固定した」PR で、
+> **テスト自身が検証していないことを検証していると名乗り、
+> 手順自身が通らなかった**。固定した対象が正しいとは限らない。
+
+### 検証コマンドと結果
+
+```console
+$ npm test
+Tests:       215 passed, 215 total
+```
+
+設計書内のリンク、`CLAUDE.md` からのリンクともに切れなし。
+
+### 実機検証は TBD のままマージした
+
+当初は #184（新規ユーザの MFA 登録を実機で通す）と一緒に出す方針だったが、
+**ドキュメントを人質に取る形になるので切り離した**。
+設計とテストは手元で検証済みで、`develop` に置いて困るものは無い。
+一方で手順 4 本（パスワードの受け渡し、コンソール MFA → アクセスキー、
+`AWS_MFA_BASE_PROFILE`、`admin` のオフボーディング）は
+**ポリシーを読んで導いただけで、誰も歩いていない**。
+
+設計書の冒頭にその旨を明記した。「検証済みに見える文書」が一番危ないため、
+未検証であることを文書自身に書かせてある。#184 を通した時点で外す。
+
+---
+
 <!--
 以降、PR ごとに追記する。テンプレート:
 
