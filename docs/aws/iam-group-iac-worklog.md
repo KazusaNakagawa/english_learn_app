@@ -787,14 +787,35 @@ CDK 経由で IAM ポリシー変数を通すのは、TypeScript のテンプレ
 巻き込まれる危険があった（#172 で定数に切り出した理由）。
 デプロイ後の実物を読んで、意図どおり展開されずに残っていることを確認した:
 
+ポリシー ARN とバージョン ID は固定値ではないので、まず解決する:
+
 ```console
-$ aws iam get-policy-version --policy-arn <deny-without-mfa> --version-id <default>
-...
-"NotResource": [
-  "arn:aws:iam::460*******:user/${aws:username}",
-  "arn:aws:iam::460*******:mfa/${aws:username}"
+$ POLICY_ARN=$(aws iam list-policies --scope Local \
+    --query "Policies[?PolicyName=='deny-without-mfa'].Arn | [0]" --output text)
+$ VERSION_ID=$(aws iam get-policy --policy-arn "$POLICY_ARN" \
+    --query 'Policy.DefaultVersionId' --output text)
+$ echo "$VERSION_ID"
+v1
+
+$ aws iam get-policy-version --policy-arn "$POLICY_ARN" --version-id "$VERSION_ID" \
+    --query 'PolicyVersion.Document.Statement[?Sid==`DenyOtherPeoplesCredentialsUnlessMfaAuthenticated`]'
+[
+  {
+    ...
+    "NotResource": [
+      "arn:aws:iam::460*******:user/${aws:username}",
+      "arn:aws:iam::460*******:mfa/${aws:username}"
+    ]
+  }
 ]
 ```
+
+> **補足**: IAM API そのものは `PolicyVersion.Document` を **URL エンコードして返す**。
+> ただし AWS CLI v2 はこれを自動でデコードするので、上のように
+> `Document.Statement[...]` と構造で辿れる（確認: aws-cli/2.27.2）。
+> SDK を直接使う場合はデコードが要る。
+> PR #185 のレビューで「デコード手順が抜けている」と指摘されたが、
+> CLI 経由なら不要 — レイヤの違いによる。
 
 アカウント ID は解決され、ポリシー変数は残っている。これが逆になっていたら、
 「自分のリソースだけ」という限定が効かない。**synth の確認だけでは分からない層**なので、
