@@ -54,6 +54,25 @@ const ALLOWED_WITHOUT_MFA = [
  * resource to match, so scoping them would deny them outright and close the
  * only route into MFA enrolment.
  */
+/**
+ * Lambda functions whose environment variables hold secrets in plaintext.
+ *
+ * `ReadOnlyAccess` includes `lambda:GetFunctionConfiguration`, which returns
+ * the environment block verbatim — so without an explicit deny, anyone in
+ * `readonly` can read these values:
+ *
+ *   voicevox-authorizer-*   → API_KEY            (the VOICEVOX API credential)
+ *   voicevox-slack-alert-*  → SLACK_WEBHOOK_URL  (post access to the channel)
+ *
+ * Wildcarded across environments because the stack names them `-{env}`.
+ * The engine function is deliberately absent: it holds no secret and is the
+ * main thing an investigator needs to look at.
+ *
+ * The real fix is to stop putting secrets in Lambda environment variables at
+ * all; that belongs to VoicevoxStack, so it is tracked in #182.
+ */
+const SECRET_BEARING_FUNCTIONS = ['voicevox-authorizer-*', 'voicevox-slack-alert-*'];
+
 const SELF_TARGETED_WITHOUT_MFA = [
   'iam:ChangePassword',
   'iam:GetUser',
@@ -182,5 +201,107 @@ export class IamStack extends cdk.Stack {
     });
 
     this.baselinePolicies = [selfServiceCredentials, denyWithoutMfa];
+
+    // ----------------------------------------------------------------
+    // Plug the secret-shaped holes in ReadOnlyAccess / SecurityAudit
+    // ----------------------------------------------------------------
+    const denySecretReads = new iam.ManagedPolicy(this, 'DenySecretReads', {
+      managedPolicyName: 'deny-secret-reads',
+      description:
+        'Blocks the reads through which AWS read-only policies would expose secret material.',
+      statements: [
+        new iam.PolicyStatement({
+          sid: 'DenySecretMaterial',
+          effect: iam.Effect.DENY,
+          actions: [
+            'secretsmanager:GetSecretValue',
+            // Covers SSM SecureString: GetParameter WithDecryption needs
+            // kms:Decrypt, and an undecrypted read returns only ciphertext.
+            // It does NOT cover plain String parameters — see below.
+            'kms:Decrypt',
+          ],
+          resources: ['*'],
+        }),
+        // kms:Decrypt says nothing about a secret stored in a plain String
+        // parameter, which is a common enough mistake to fail closed on.
+        // Denying by default costs nothing today: the account holds exactly one
+        // parameter, /cdk-bootstrap/hnb659fds/version, whose value is "30".
+        //
+        // Adding a legitimate non-secret parameter later means widening this
+        // exception on purpose, which is the point — an accidental secret in
+        // SSM should not silently become readable by everyone in `readonly`.
+        new iam.PolicyStatement({
+          sid: 'DenySsmParameterValues',
+          effect: iam.Effect.DENY,
+          actions: [
+            'ssm:GetParameter',
+            'ssm:GetParameters',
+            'ssm:GetParametersByPath',
+            'ssm:GetParameterHistory',
+          ],
+          notResources: [
+            this.formatArn({
+              service: 'ssm',
+              region: '*',
+              account: '*',
+              resource: 'parameter',
+              resourceName: 'cdk-bootstrap/*',
+              arnFormat: cdk.ArnFormat.SLASH_RESOURCE_NAME,
+            }),
+          ],
+        }),
+        new iam.PolicyStatement({
+          sid: 'DenyLambdaEnvironmentHoldingSecrets',
+          effect: iam.Effect.DENY,
+          actions: ['lambda:GetFunction', 'lambda:GetFunctionConfiguration'],
+          resources: SECRET_BEARING_FUNCTIONS.map((name) =>
+            this.formatArn({
+              service: 'lambda',
+              region: '*',
+              account: '*',
+              resource: 'function',
+              resourceName: name,
+              arnFormat: cdk.ArnFormat.COLON_RESOURCE_NAME,
+            }),
+          ),
+        }),
+      ],
+    });
+
+    // ----------------------------------------------------------------
+    // Groups
+    // ----------------------------------------------------------------
+    this.addGroup('ReadonlyGroup', 'readonly', [
+      iam.ManagedPolicy.fromAwsManagedPolicyName('ReadOnlyAccess'),
+      denySecretReads,
+    ]);
+
+    // Config-level review without ReadOnlyAccess's object-level data reads.
+    this.addGroup('AuditGroup', 'audit', [
+      iam.ManagedPolicy.fromAwsManagedPolicyName('SecurityAudit'),
+      denySecretReads,
+    ]);
+
+    // No `ope` group: it would be identical to `readonly` (see the original
+    // requirement, which says as much). Operations staff get `readonly` plus a
+    // narrow write policy if and when someone actually needs one — inventing
+    // it now would mean guessing at the actions.
+  }
+
+  /**
+   * Creates a group with the MFA baseline always attached.
+   *
+   * Groups are only ever created through here so that the baseline cannot be
+   * forgotten — a group without it would silently accept password-only access.
+   */
+  private addGroup(
+    id: string,
+    groupName: string,
+    managedPolicies: iam.IManagedPolicy[],
+  ): iam.Group {
+    return new iam.Group(this, id, {
+      groupName,
+      managedPolicies: [...this.baselinePolicies, ...managedPolicies],
+    });
   }
 }
