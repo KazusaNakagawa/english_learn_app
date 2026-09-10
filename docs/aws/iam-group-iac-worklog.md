@@ -1718,6 +1718,24 @@ AWS_MFA_BASE_PROFILE=alice ./scripts/aws-mfa-session.sh
 「グループに所属したまま」で失敗する — 前書きで説明した
 `DeleteConflict`（キー / MFA）とは別原因なので、混乱する。
 
+最初は注意書き 1 つで済ませたが、レビューで
+「admin は専用経路として**手順を分けて明記する**か、削除を許可する設計にせよ」
+と指摘されて直した。注意書きだと「では何をすればよいか」が書かれていない —
+手順の `P` が `infra-user-mfa` 固定なので、読み手は差し替えに気付かない。
+`### break-glass（admin）ユーザのオフボーディング` を独立させ、
+実行者（別の `admin` か root）と `P` の差し替えを具体的に書いた。
+平時の `admin` はメンバー 0 なので、通常の答えは root のコンソール操作になる
+（root のアクセスキーは作らない）。
+
+設計側で許可する案（`RemoveUserFromGroup` だけ `admin` に広げる）は採らなかった。
+今の `ManageMembershipOfOperationalGroups` は `AddUserToGroup` と
+`RemoveUserFromGroup` を 1 ステートメントに束ねているので、
+資源に `admin` を足すだけでは `infra` の自己昇格をそのまま開けてしまう。
+ステートメントを分ければ削除だけ許可はできるが、それはそれで
+**`infra` が break-glass ユーザを `admin` から外せる**ことになり、
+緊急経路を平時に無効化できてしまう。年に数回あるかのオフボーディングのために
+開ける穴ではないと判断した。
+
 #### 4. テスト名が実際の検証内容と食い違っていた
 
 `never names a policy that does not exist` は、
