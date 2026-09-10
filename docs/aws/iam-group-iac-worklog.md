@@ -1125,11 +1125,91 @@ cdk-ci.yml.bk   ios-build.yml.bk      # どちらも .bk で無効化済み
 `VOICEVOX_API_KEY_POC` 未設定で `VoicevoxStack` の constructor が throw する（#171 参照）。
 復活させるときは `npm run synth:iam` を足すか、ダミーの API キーを env に足す必要がある。
 
+### レビュー指摘への対応（#188）
+
+Sourcery が**レビュー予算上限**（7 日で 25 万 diff 文字）に到達したため、
+ローカルの `/code-review` で代替した。9 件（high 4 件）の指摘。
+
+#### 訂正 1: `audit` は「追加グループ」ではなかった
+
+自分で「Deny を持たないグループは任意のティアに重ねられる」と定義しておきながら、
+`audit` に `deny-secret-reads` を貼っていた（#173）。デプロイ済みの実物で確認:
+
+```console
+$ aws iam list-attached-group-policies --group-name audit
+["SecurityAudit","deny-without-mfa","deny-secret-reads","self-service-credentials"]
+```
+
+`infra` + `audit` のユーザは、PowerUserAccess を持ちながら
+`secretsmanager:GetSecretValue` も `kms:Decrypt` も通らなくなる。
+**billing で直したのと同じ欠陥が、audit で再発していた。**
+
+`audit` の `deny-secret-reads` は必要（SecurityAudit は `lambda:GetFunctionConfiguration` を含む =
+API キーが読める）なので、**`audit` をティアに分類し直した**。
+
+| 種別 | グループ |
+| --- | --- |
+| ティア（排他） | `readonly` / **`audit`** / `develop` / `infra` / `admin` |
+| 追加（併用可） | `billing` のみ |
+
+#### 訂正 2: `organizations:*` の Deny が SecurityAudit を潰す
+
+同じ根から出たもう 1 件。実物を読んで確認した:
+
+```console
+$ aws iam get-policy-version --policy-arn arn:aws:iam::aws:policy/SecurityAudit ...
+organizations:Describe*
+organizations:List*
+```
+
+`SecurityAudit` は組織の読み取りを含む。`organizations:*` を丸ごと Deny すると
+これを打ち消す。書き込み 24 個の列挙に変更した。
+
+**同じ過ちを 3 回繰り返している**（`iam:*` → `account:*`/`ce:*` → `organizations:*`）。
+ワイルドカードでの Deny は、書いた瞬間は簡潔で正しく見えるが、
+**そのサービスの読み取りを必要とする他グループを必ず巻き込む**。
+
+#### 決定: infra の昇格経路は許容し、明文化する
+
+`infra` は `iam:CreateRole` + `iam:AttachRolePolicy` を `*` に持つ。
+つまり自分を信頼するロールを作り `AdministratorAccess` を付けて assume すれば、
+**自身にかかった Deny をすべて回避できる**。
+assume 後は呼び出し元の identity policy が評価されないため（#179 と同じ性質）。
+
+したがって `DenyOrganizationAndAccountControl` は**境界ではなく速度抑制**。
+
+選択肢は Permissions Boundary で実際に縛るか、許容して明文化するか。
+**bootstrap ロールと同じ判断で後者を採った。** 境界ポリシーの維持コストが、
+infra という「管理するためのグループ」の目的と釣り合わない。
+
+帰結として **`infra` と `admin` の差は、防止ではなく CloudTrail での可視性**になる。
+これをコメント・worklog・#176 に明記した。
+
+#### 対応: ベースライン書き換えだけは塞ぐ
+
+一方で `iam:CreatePolicyVersion --set-as-default` を `deny-without-mfa` に対して撃つと、
+**アカウント全体の MFA 強制が 1 コマンドで無効化できる**。
+昇格経路が残る以上これも迂回可能だが、事故とカジュアルな変更は止まるし、
+CloudTrail に目立つ 1 手が増える。自スタックのポリシー 5 本を Deny 対象にした。
+
+名前のハードコード一覧はドリフトするので、
+**実際に生成されるポリシー集合と一致すること**をテストで固定している。
+
+#### その他の対応
+
+| 指摘 | 対応 |
+| --- | --- |
+| `ACCOUNT_LEVEL_WRITES` にアカウント乗っ取り経路が欠落 | `StartPrimaryEmailUpdate` / `AcceptPrimaryEmailUpdate` / `PutAccountName` を追加。プライマリメール変更 → root パスワードリセットで乗っ取りが成立する |
+| infra がオフボーディングできない | `DeleteAccessKey` 等を追加。自己管理で全員が自分のキーを作れるため、`DeleteUser` が `DeleteConflict` で落ちて**退職者のキーが生き残る**状態だった |
+| infra がポリシーを作れても貼れない | `CreateGroup` / `AttachGroupPolicy` / `AttachUserPolicy` 等を追加 |
+| admin の「余計なものが付いていない」テストが空振り | customer-managed policy は `{"Ref":...}` で出るため `startsWith('arn:')` が全部落としていた。件数と中身の厳密一致に変更 |
+| 不変条件テストの盲点 | `NotAction` 形式の Deny を見ていなかった。また `ce:*` の完全一致しか見ておらず `ce:Get*` を素通りさせた。glob 一致に変更し、MFA 条件付き Deny は除外 |
+
 ### 検証コマンドと結果
 
 ```console
 $ npm test
-Tests:       164 passed, 164 total
+Tests:       184 passed, 184 total
 
 $ npm run diff:iam
 [+] AWS::IAM::ManagedPolicy InfraAdministration

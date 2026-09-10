@@ -146,6 +146,12 @@ const DENIED_IAM_WRITES = [
  */
 const ACCOUNT_LEVEL_WRITES = [
   'account:CloseAccount',
+  // Changing the primary email hands over the root password-reset path, so
+  // these three are account takeover in three calls. The earlier `account:*`
+  // deny covered them; narrowing it for billing must not drop them.
+  'account:StartPrimaryEmailUpdate',
+  'account:AcceptPrimaryEmailUpdate',
+  'account:PutAccountName',
   'account:PutContactInformation',
   'account:PutAlternateContact',
   'account:DeleteAlternateContact',
@@ -171,6 +177,56 @@ const ACCOUNT_LEVEL_WRITES = [
  * resource to match, so scoping them would deny them outright and close the
  * only route into MFA enrolment.
  */
+/**
+ * Organization changes no group should be able to make.
+ *
+ * Deliberately *not* `organizations:*`: the AWS `SecurityAudit` policy behind
+ * the `audit` group grants `organizations:Describe*` and `organizations:List*`,
+ * and a blanket deny would cancel them for that user. Confirmed by reading the
+ * managed policy rather than assuming. Same lesson as `account:*` and billing.
+ */
+const ORGANIZATION_WRITES = [
+  'organizations:LeaveOrganization',
+  'organizations:DeleteOrganization',
+  'organizations:CreateAccount',
+  'organizations:CloseAccount',
+  'organizations:RemoveAccountFromOrganization',
+  'organizations:InviteAccountToOrganization',
+  'organizations:AcceptHandshake',
+  'organizations:DeclineHandshake',
+  'organizations:CancelHandshake',
+  'organizations:MoveAccount',
+  'organizations:CreateOrganizationalUnit',
+  'organizations:DeleteOrganizationalUnit',
+  'organizations:UpdateOrganizationalUnit',
+  'organizations:CreatePolicy',
+  'organizations:DeletePolicy',
+  'organizations:UpdatePolicy',
+  'organizations:AttachPolicy',
+  'organizations:DetachPolicy',
+  'organizations:EnablePolicyType',
+  'organizations:DisablePolicyType',
+  'organizations:EnableAWSServiceAccess',
+  'organizations:DisableAWSServiceAccess',
+  'organizations:RegisterDelegatedAdministrator',
+  'organizations:DeregisterDelegatedAdministrator',
+];
+
+/**
+ * Customer-managed policies this stack owns.
+ *
+ * They are the account's guard rails, so nothing inside the account should be
+ * able to rewrite them casually — least of all `infra`, which would otherwise
+ * be one CreatePolicyVersion away from disabling the MFA baseline everywhere.
+ */
+const MANAGED_POLICY_NAMES = [
+  'self-service-credentials',
+  'deny-without-mfa',
+  'deny-secret-reads',
+  'develop-workload',
+  'infra-administration',
+];
+
 const SELF_TARGETED_WITHOUT_MFA = [
   'iam:ChangePassword',
   'iam:GetUser',
@@ -569,7 +625,7 @@ export class IamStack extends cdk.Stack {
         new iam.PolicyStatement({
           sid: 'DenyAccountLevelControls',
           effect: iam.Effect.DENY,
-          actions: ['organizations:*', ...ACCOUNT_LEVEL_WRITES],
+          actions: [...ORGANIZATION_WRITES, ...ACCOUNT_LEVEL_WRITES],
           resources: ['*'],
         }),
         // Blocks direct calls at pro. It does NOT block `cdk deploy -c env=pro`:
@@ -645,6 +701,26 @@ export class IamStack extends cdk.Stack {
             'iam:DeleteLoginProfile',
             'iam:AddUserToGroup',
             'iam:RemoveUserFromGroup',
+            // Offboarding. IAM refuses DeleteUser while a user still has access
+            // keys, MFA devices or attached policies, and self-service lets
+            // every user create their own key — so without these, infra cannot
+            // actually remove a departing person and their key stays live.
+            'iam:DeleteAccessKey',
+            'iam:UpdateAccessKey',
+            'iam:DeactivateMFADevice',
+            'iam:DeleteVirtualMFADevice',
+            'iam:AttachUserPolicy',
+            'iam:DetachUserPolicy',
+            'iam:PutUserPolicy',
+            'iam:DeleteUserPolicy',
+            // Creating a policy is useless without being able to attach it.
+            'iam:CreateGroup',
+            'iam:DeleteGroup',
+            'iam:UpdateGroup',
+            'iam:AttachGroupPolicy',
+            'iam:DetachGroupPolicy',
+            'iam:PutGroupPolicy',
+            'iam:DeleteGroupPolicy',
             'iam:CreateRole',
             'iam:DeleteRole',
             'iam:UpdateRole',
@@ -666,14 +742,41 @@ export class IamStack extends cdk.Stack {
           resources: ['*'],
         }),
         // infra administers the account; it does not own the organization.
-        // Nothing in this stack grants organizations:*, so denying it here
-        // costs no group anything — the test for additive-group actions
-        // covers the cases where a deny would have reached too far.
+        //
+        // Read honestly: this is a speed bump, not a boundary. infra holds
+        // iam:CreateRole and iam:AttachRolePolicy on '*', so a member can mint
+        // a role that trusts them, attach AdministratorAccess and assume it —
+        // and an assumed-role session is not evaluated against the calling
+        // user's identity policy, so this deny no longer applies. Constraining
+        // that properly needs a permissions boundary, whose ongoing cost was
+        // judged not worth paying, the same call made for the CDK bootstrap
+        // roles in #174. What separates infra from admin is therefore
+        // CloudTrail visibility of the escalation, not prevention of it.
+        // Documented in docs/aws/iam-group-iac-worklog.md and #176.
         new iam.PolicyStatement({
           sid: 'DenyOrganizationAndAccountControl',
           effect: iam.Effect.DENY,
-          actions: ['organizations:*', ...ACCOUNT_LEVEL_WRITES],
+          actions: [...ORGANIZATION_WRITES, ...ACCOUNT_LEVEL_WRITES],
           resources: ['*'],
+        }),
+        // Without this, infra can call CreatePolicyVersion --set-as-default on
+        // deny-without-mfa with an empty document and switch off MFA
+        // enforcement for every group in the account, in one command.
+        // The escalation path above can still get there the long way; this
+        // stops the accidental and the casual version, and puts an extra,
+        // conspicuous step in CloudTrail before the baseline can move.
+        new iam.PolicyStatement({
+          sid: 'DenyRewritingThisStackPolicies',
+          effect: iam.Effect.DENY,
+          actions: [
+            'iam:CreatePolicyVersion',
+            'iam:SetDefaultPolicyVersion',
+            'iam:DeletePolicy',
+            'iam:DeletePolicyVersion',
+          ],
+          resources: MANAGED_POLICY_NAMES.map((name) =>
+            this.formatArn({ service: 'iam', region: '', resource: 'policy', resourceName: name }),
+          ),
         }),
       ],
     });
