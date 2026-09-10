@@ -37,24 +37,6 @@ const ALLOWED_WITHOUT_MFA = [
 ];
 
 /**
- * The subset of ALLOWED_WITHOUT_MFA that can name another user's resource.
- *
- * A `NotAction` exemption is not resource-scoped: it says "this action is not
- * denied", for *any* resource. On its own that is too generous, because a
- * principal that also holds broad IAM permissions (the existing `dev_user`
- * group carries `IAMFullAccess`) could then use a password-only session to
- * change someone else's password or attach an MFA device to their user.
- *
- * These actions are therefore denied again, this time with `NotResource`
- * limited to the caller's own ARNs, so the exemption really means
- * "manage your own credentials" rather than "manage anyone's".
- *
- * Account-level actions are excluded on purpose — `iam:ListVirtualMFADevices`,
- * `iam:GetAccountPasswordPolicy` and `sts:GetSessionToken` have no per-user
- * resource to match, so scoping them would deny them outright and close the
- * only route into MFA enrolment.
- */
-/**
  * Lambda functions whose environment variables hold secrets in plaintext.
  *
  * `ReadOnlyAccess` includes `lambda:GetFunctionConfiguration`, which returns
@@ -131,8 +113,48 @@ const DENIED_IAM_WRITES = [
   'iam:CreateSAMLProvider',
   'iam:CreateOpenIDConnectProvider',
   'iam:UpdateOpenIDConnectProviderThumbprint',
+  // Roles are the sharpest tool here: anyone able to create one can mint a
+  // principal with arbitrary permissions, which makes locking down users and
+  // groups alone fairly pointless.
+  'iam:CreateRole',
+  'iam:DeleteRole',
+  'iam:UpdateRole',
+  'iam:UpdateRoleDescription',
+  // Permissions boundaries are the mechanism a future design would use to cap
+  // what these roles can do; being able to detach one voids that in advance.
+  'iam:PutRolePermissionsBoundary',
+  'iam:DeleteRolePermissionsBoundary',
+  'iam:PutUserPermissionsBoundary',
+  'iam:DeleteUserPermissionsBoundary',
+  // Tags become an authorization surface the moment any policy conditions on
+  // aws:ResourceTag, at which point rewriting them is privilege escalation.
+  'iam:TagRole',
+  'iam:UntagRole',
+  'iam:TagUser',
+  'iam:UntagUser',
+  // Deliberately absent: iam:CreateServiceLinkedRole. AWS defines those roles
+  // and their policies, several services create them on first use, and denying
+  // it breaks legitimate work for no meaningful gain.
 ];
 
+/**
+ * The subset of ALLOWED_WITHOUT_MFA that can name another user's resource.
+ *
+ * A `NotAction` exemption is not resource-scoped: it says "this action is not
+ * denied", for *any* resource. On its own that is too generous, because a
+ * principal that also holds broad IAM permissions (the existing `dev_user`
+ * group carries `IAMFullAccess`) could then use a password-only session to
+ * change someone else's password or attach an MFA device to their user.
+ *
+ * These actions are therefore denied again, this time with `NotResource`
+ * limited to the caller's own ARNs, so the exemption really means
+ * "manage your own credentials" rather than "manage anyone's".
+ *
+ * Account-level actions are excluded on purpose — `iam:ListVirtualMFADevices`,
+ * `iam:GetAccountPasswordPolicy` and `sts:GetSessionToken` have no per-user
+ * resource to match, so scoping them would deny them outright and close the
+ * only route into MFA enrolment.
+ */
 const SELF_TARGETED_WITHOUT_MFA = [
   'iam:ChangePassword',
   'iam:GetUser',
@@ -156,7 +178,6 @@ const SELF_TARGETED_WITHOUT_MFA = [
  * resource-ARN conditions inside the group policies, not from separate stacks.
  * See docs/aws/iam-group-iac-worklog.md.
  *
- * Scaffold only — groups are added in follow-up issues (#172-#175).
  * The pre-existing hand-created groups (`dev_readonly`, `dev_user`) are NOT
  * touched here; CloudFormation cannot adopt an existing group by name and would
  * fail with AlreadyExists. Cutover is #178.
@@ -366,7 +387,6 @@ export class IamStack extends cdk.Stack {
       this.formatArn({
         service: 'cloudformation',
         region: '*',
-        account: '*',
         resource: 'stack',
         resourceName: `VoicevoxStack-${env}/*`,
       }),
@@ -374,11 +394,13 @@ export class IamStack extends cdk.Stack {
 
     const perEnv = (build: (env: string) => string) => DEVELOP_ENVS.map(build);
 
+    // account is left to default to this stack's account. Allows are narrowed;
+    // the production deny further down deliberately keeps account: '*', since a
+    // deny is only ever safer for being broader.
     const lambdaArns = perEnv((env) =>
       this.formatArn({
         service: 'lambda',
         region: '*',
-        account: '*',
         resource: 'function',
         resourceName: `voicevox-*-${env}`,
         arnFormat: cdk.ArnFormat.COLON_RESOURCE_NAME,
@@ -388,7 +410,6 @@ export class IamStack extends cdk.Stack {
       this.formatArn({
         service: 'ecr',
         region: '*',
-        account: '*',
         resource: 'repository',
         resourceName: `voicevox-*-${env}`,
       }),
@@ -397,14 +418,13 @@ export class IamStack extends cdk.Stack {
       this.formatArn({
         service: 'logs',
         region: '*',
-        account: '*',
         resource: 'log-group',
         resourceName: `/aws/lambda/voicevox-*-${env}*`,
         arnFormat: cdk.ArnFormat.COLON_RESOURCE_NAME,
       }),
     );
     const snsArns = perEnv((env) =>
-      this.formatArn({ service: 'sns', region: '*', account: '*', resource: `voicevox-*-${env}` }),
+      this.formatArn({ service: 'sns', region: '*', resource: `voicevox-*-${env}` }),
     );
 
     return new iam.ManagedPolicy(this, 'DevelopWorkload', {
@@ -471,13 +491,21 @@ export class IamStack extends cdk.Stack {
           sid: 'PassProjectRolesOnly',
           actions: ['iam:PassRole'],
           resources: [
+            // CDK-generated role names are prefixed with the stack name...
+            'VoicevoxStack-*',
+            // ...but the Lambda execution role is named explicitly in
+            // voicevox-stack.ts (`voicevox-engine-role-${stackEnv}`), so the
+            // stack-name pattern alone would miss the one role a direct
+            // function update actually needs to pass.
+            'voicevox-*-role-*',
+          ].map((roleName) =>
             this.formatArn({
               service: 'iam',
               region: '',
               resource: 'role',
-              resourceName: 'VoicevoxStack-*',
+              resourceName: roleName,
             }),
-          ],
+          ),
         }),
         new iam.PolicyStatement({
           sid: 'DenyIamAdministration',

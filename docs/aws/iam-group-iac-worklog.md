@@ -909,11 +909,81 @@ terminationProtection: props.terminationProtection ?? props.stackEnv === 'pro',
 **テンプレート本体は変わらない**。`VoicevoxStack-poc` のテンプレートが
 `develop` 時点とバイト一致することを確認済み。
 
+### レビュー指摘への対応（#187）
+
+3 件のうち **2 件が妥当、1 件は誤り**だった。判定は推測ではなく合成結果で行った。
+
+#### 妥当 1: `iam:PassRole` が実在のロールに一致していなかった
+
+`role/VoicevoxStack-*` に限定していたが、`VoicevoxStack` は Lambda 実行ロールに
+**名前を明示指定**している:
+
+```console
+$ grep -n "roleName" lib/voicevox-stack.ts
+84:      roleName: `voicevox-engine-role-${stackEnv}`,
+```
+
+合成テンプレート上の実際のロール名:
+
+| 論理 ID | RoleName |
+| --- | --- |
+| `VoicevoxFunctionRole...` | **`voicevox-engine-role-poc`** |
+| `ApiKeyAuthorizerServiceRole...` | (CDK 生成 = `VoicevoxStack-poc-...`) |
+
+つまり CDK 生成名は拾えるが、**肝心の実行ロールだけ渡せない**状態だった。
+`voicevox-*-role-*` を追加。「Lambda を直接更新できる」という触れ込みが
+実際には成立していなかったので、これは実害のあるバグ。
+
+#### 妥当 2: IAM 書き込みの列挙漏れ
+
+`iam:CreateRole` / `DeleteRole` / `UpdateRole`、権限境界、タグ操作が抜けていた。
+**ロールを作れれば任意の権限を持つプリンシパルを用意できる**ので、
+ユーザ・グループ系だけ塞いでも意味が薄い。11 個追加した。
+
+denylist 方式を採った時点で列挙漏れは織り込み済みのリスクだったが、
+「ロールを作れる」は最も大きい穴なので見落としは痛い。
+
+なお `iam:CreateServiceLinkedRole` は**意図的に Deny しない**。
+AWS が定義済みポリシーで作る限定的なロールで、初回利用時の自動作成が要る場面がある。
+これも「抜けている」と誤読されないようコメントとテストに明記した。
+
+#### 誤り: 「`sts:AssumeRole` の account が `*`」
+
+合成結果を見れば `*` ではない:
+
+```json
+"Resource": [{"Fn::Join": ["", ["arn:", {"Ref": "AWS::Partition"},
+  ":iam::", {"Ref": "AWS::AccountId"}, ":role/cdk-*-deploy-role-*"]]}, ...]
+```
+
+`formatArn` に `account` を渡さなければ**スタックのアカウントが既定で入る**。
+ソースに `account:` の記述がないことを「`*`」と読んだ誤りと思われる。
+
+ただし**指摘の周辺には本当の緩さがあった**。`lambda` / `ecr` / `logs` / `sns` /
+`cloudformation` の Allow 側では明示的に `account: '*'` と書いていた。これは外した。
+
+ここで **Allow と Deny で扱いを変えている**点を記録しておく:
+
+| | account | 理由 |
+| --- | --- | --- |
+| Allow | 当アカウント | 他アカウントの同名リソースまで許す理由がない |
+| Deny（pro 保護） | `*` のまま | Deny は広いほど安全。絞ると防御が外れる |
+
+### ハマった点: テストヘルパが ARN を誤って分解した
+
+account セグメントを `arn.split(':')[4]` で取ろうとしたら全部落ちた。
+**`${AWS::Partition}` 自体がコロンを含む**ため、区切り位置がずれる。
+
+さらに、テストではスタックに明示アカウントを渡しているので、
+ARN に入るのは `${AWS::AccountId}` ではなく**リテラルのアカウント ID**。
+実アカウントに対する synth 結果とテスト時の synth 結果で、
+同じコードでも ARN の見え方が変わる。
+
 ### 検証コマンドと結果
 
 ```console
 $ npm test
-Tests:       122 passed, 122 total
+Tests:       142 passed, 142 total
 
 $ npm run diff:iam
 [+] AWS::IAM::ManagedPolicy DevelopWorkload

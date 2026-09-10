@@ -101,8 +101,31 @@ describe(`${POLICY} — what a developer cannot do`, () => {
     'iam:CreatePolicyVersion',
     'iam:SetDefaultPolicyVersion',
     'iam:UpdateAssumeRolePolicy',
+    // #187 レビューで判明した列挙漏れ。
+    // ロールを作れれば任意の権限を持つプリンシパルを用意できるので、
+    // ユーザ/グループ系だけ塞いでも意味が薄い。
+    'iam:CreateRole',
+    'iam:DeleteRole',
+    'iam:UpdateRole',
+    // 権限境界を外せると、境界で縛る将来の設計が無効化される
+    'iam:PutRolePermissionsBoundary',
+    'iam:DeleteRolePermissionsBoundary',
+    'iam:PutUserPermissionsBoundary',
+    'iam:DeleteUserPermissionsBoundary',
+    // タグベースの認可を使い始めた場合、タグ書き換えは権限昇格そのもの
+    'iam:TagRole',
+    'iam:UntagRole',
+    'iam:TagUser',
+    'iam:UntagUser',
   ])('denies %s', (action) => {
     expect(denying(action).length).toBeGreaterThan(0);
+  });
+
+  // 意図的に Deny しないもの。
+  // サービスリンクロールは AWS が定義済みポリシーで作る限定的なもので、
+  // 初回利用時に自動作成が要る場面がある。塞ぐと正当な作業が止まる。
+  it('does NOT deny iam:CreateServiceLinkedRole', () => {
+    expect(denying('iam:CreateServiceLinkedRole')).toEqual([]);
   });
 
   // 最重要の境界値:
@@ -157,6 +180,54 @@ describe(`${POLICY} — what a developer cannot do`, () => {
     expect(arns).not.toContain('*');
     for (const arn of arns) {
       expect(arn).toMatch(/role\//);
+    }
+  });
+
+  // 境界値 (#187 レビュー指摘): VoicevoxStack は Lambda 実行ロールに
+  // roleName: `voicevox-engine-role-${stackEnv}` を明示指定している。
+  // `VoicevoxStack-*` だけでは CDK 生成名しか拾えず、肝心の実行ロールを渡せない。
+  it('covers the explicitly named Lambda execution role', () => {
+    const arns = allowedResources('iam:PassRole');
+    const matches = (roleName: string) =>
+      arns.some((arn) => {
+        const pattern = arn.replace(/^.*:role\//, '');
+        return new RegExp(`^${pattern.replace(/\*/g, '.*')}$`).test(roleName);
+      });
+
+    expect(matches('voicevox-engine-role-poc')).toBe(true);
+    // CDK が生成する名前はスタック名プレフィックスを持つ
+    expect(matches('VoicevoxStack-poc-ApiKeyAuthorizerServiceRoleABC123')).toBe(true);
+  });
+});
+
+describe(`${POLICY} — ARN account scoping`, () => {
+  // `${AWS::Partition}` 自体がコロンを含むので、素朴な split(':') では区切りを誤る。
+  // テストではスタックに明示アカウントを渡しているため、
+  // account セグメントはトークンではなくリテラル（ACCOUNT）で出てくる。
+  const accountOf = (arn: string) =>
+    arn.replace('${AWS::Partition}', 'PARTITION').split(':')[4];
+
+  // 許可は当アカウントに閉じる。他アカウントの同名リソースまで
+  // 許可する理由がない。
+  it.each(['sts:AssumeRole', 'iam:PassRole', 'lambda:*', 'ecr:*', 'logs:*', 'sns:*'])(
+    'scopes %s to this account, not every account',
+    (action) => {
+      const arns = allowedResources(action);
+
+      expect(arns.length).toBeGreaterThan(0);
+      for (const arn of arns) {
+        expect(accountOf(arn)).toBe(ACCOUNT);
+      }
+    },
+  );
+
+  // 逆に Deny は広いままにする。当アカウントに絞ると、
+  // 他アカウントの pro リソースに対する防御が外れる。Deny は広いほど安全。
+  it('keeps the production deny broad rather than account-scoped', () => {
+    const proDeny = statements().find((s) => s.Sid === 'DenyDirectCallsAgainstProduction')!;
+
+    for (const arn of renderArns(proDeny.Resource)) {
+      expect(accountOf(arn)).toBe('*');
     }
   });
 });
