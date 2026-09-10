@@ -1468,6 +1468,97 @@ $ npm run diff:iam
 削除後も `infra` 単独で実務が回ることを再確認（lambda 一覧 / IAM 読み取り /
 グループ運用の往復、いずれも成功）。
 
+### 追加検証: #184 の棚卸し（移行後に実施）
+
+移行が終わって実ユーザとグループが揃ったので、
+#184 に残していた項目のうち**人手が要らないものを潰した**。
+
+#### リソーススコープ Deny（#181）— `dev_user1` の平プロファイルで検証
+
+`dev_user1` の平プロファイルは MFA なしセッションそのものなので、
+テストユーザを作らなくても検証できた:
+
+| 操作 | 結果 |
+| --- | --- |
+| `list-mfa-devices --user-name dev_user1`（自分） | ✅ 成功（2 件） |
+| `list-mfa-devices --user-name dev_readonly1`（他人） | ✅ 明示的 Deny |
+| `get-user --user-name dev_readonly1`（他人） | ✅ 拒否 |
+
+`iam:ListMFADevices` は `NotAction` でグローバルに除外されているにもかかわらず、
+他人の ARN では拒否される。#181 のレビュー指摘に対する修正が実環境で効いている。
+
+**この 3 行が示すのは `ListMFADevices` の除外範囲だけ**であって、
+登録の逃げ道（`CreateVirtualMFADevice` / `EnableMFADevice`）の証明にはならない。
+`dev_user1` は既に 2 台登録済みなので、そもそも登録経路を通っていない。
+そちらは #184 に残っている（後述）。
+
+#### `deny-secret-reads`（#183）— audit に一時所属して検証
+
+`infra` は `deny-secret-reads` を持たないため、そのままでは検証できない。
+`audit` に一時的に所属させて確認し、直後に外した（`infra` の権限で可能・可逆）:
+
+| 操作 | 結果 |
+| --- | --- |
+| `/cdk-bootstrap/hnb659fds/version` | ✅ 読めた（値 `30`）— 除外が効いている |
+| それ以外の SSM パス | ✅ 明示的 Deny |
+| `secretsmanager:GetSecretValue` | ✅ 拒否 |
+
+**この結論は SSM と Secrets Manager に限る。**
+`deny-secret-reads` は `kms:Decrypt` も `*` に対して Deny しているが、
+そちらは検証できていない:
+
+```console
+$ aws kms decrypt --ciphertext-blob fileb:///dev/null
+An error occurred (ValidationException) when calling the Decrypt operation: ...
+```
+
+**入力検証が認可より先に走る**ため、拒否されたのか単に引数が不正なのかを区別できない。
+正しく検証するには実際の KMS 鍵と暗号文が要る。
+
+これは机上の話ではない。`kms:Decrypt` の Deny は影響範囲が秘密の読み取りより広く、
+**SSE-KMS の S3 オブジェクトを読むだけでも `readonly` / `audit` は失敗する**。
+最初に踏んだ人が「未検証だった」と分かるよう、ここに残す。
+
+#### 検証できなかったもの
+
+**Lambda 環境変数の Deny は対象が存在しない。**
+
+```console
+$ aws lambda list-functions --query 'length(Functions)'
+0
+```
+
+`VoicevoxStack-poc` が未デプロイで、そもそも関数が 1 つも無い
+（`list-functions` はリージョン単位だが、このアカウントは `ap-northeast-1` 単一）。
+
+**Deny 対象を取り違えないこと。** 実際の対象は 2 つ:
+
+```ts
+const SECRET_BEARING_FUNCTIONS = ['voicevox-authorizer-*', 'voicevox-slack-alert-*'];
+```
+
+`voicevox-engine-*` は**意図的に対象外**（秘密を持たず、障害調査で最も見たい関数）。
+検証時は「authorizer と slack-alert が Deny され、engine は読める」を確認する。
+`slack-alert` を落とすと、Deny を入れる動機だった `SLACK_WEBHOOK_URL` の露出が
+未検証のまま残る。
+
+#182（環境変数から秘密を外す）で前提が変わるため、**#182 の受け入れ条件に追加した**。
+prose で「そちらで見る」と書くだけでは、どちらの Issue も緑で閉じて
+誰も確認しないまま終わる。
+
+#### #184 に残ったもの
+
+**「MFA デバイスを 1 つも持たないユーザが、自力で登録を完了できるか」だけ。**
+
+既存 2 ユーザはベースライン導入前から MFA 登録済みで、
+**この経路を一度も通っていない**。ここが壊れていると、
+以降のすべての新規ユーザがオンボーディング時に詰む。
+QR 読み取りと TOTP は代替手段がないため、人の手が要る。
+
+> 棚卸しの効果: 当初 8 項目あった受け入れ条件が 6 項目に減り、
+> **人手が要るのは 1 経路だけ**と分かった。
+> 「人手が要る」で一括りにしていたが、実際には大半が自動で確認できた。
+
 ### soak を置かなかった理由
 
 #178 には「2 週間空グループのまま置いて切り戻し可能にする」と書いた。
