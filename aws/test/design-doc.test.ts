@@ -15,6 +15,27 @@ const DOC = path.join(__dirname, '../../docs/05.iam_group_design.md');
  */
 const readDoc = () => fs.readFileSync(DOC, 'utf8');
 
+/** 0-indexed position of the policy column in the group matrix. */
+const POLICY_COLUMN = 1;
+
+/**
+ * AWS managed policies this stack is allowed to attach, as they appear after
+ * `:iam::aws:policy/`. Pinned as literals on purpose: the template cannot tell
+ * you whether a name exists in AWS, and `arn:aws:iam::aws:policy/Billing` — a
+ * name that does not exist, full access lives at `job-function/Billing` — was
+ * written into an issue during #175 before anyone checked.
+ *
+ * Adding a policy means adding it here too, which is the moment to confirm the
+ * ARN resolves: `aws iam get-policy --policy-arn arn:aws:iam::aws:policy/<name>`.
+ */
+const ALLOWED_AWS_MANAGED_POLICIES = [
+  'AdministratorAccess',
+  'AWSBillingReadOnlyAccess',
+  'PowerUserAccess',
+  'ReadOnlyAccess',
+  'SecurityAudit',
+];
+
 /** Group name -> the policy names its row claims, from the matrix table. */
 function documentedMatrix(): Record<string, string[]> {
   const rows: Record<string, string[]> = {};
@@ -24,10 +45,24 @@ function documentedMatrix(): Record<string, string[]> {
     if (!match) continue;
 
     const [, group, rest] = match;
+    // 列位置で取る。`find` だと想定利用者欄にバッククォートが入った瞬間に
+    // 別の列を掴んでしまい、しかも黙って通る。
     const cells = rest.split('|').map((c) => c.trim());
-    // ポリシー欄は「バッククォート付きの名前がカンマ区切り」で書かれている唯一の列
-    const policyCell = cells.find((c) => /^`[A-Za-z-]+`(,\s*`[A-Za-z-]+`)*$/.test(c));
-    if (policyCell === undefined) continue;
+    const policyCell = cells[POLICY_COLUMN];
+
+    // ポリシー名には数字もアンダースコアも入りうる（AWSLambda_ReadOnlyAccess 等）。
+    // ベースラインのみのグループは `—` と書く。
+    if (policyCell === '—') {
+      rows[group] = [];
+      continue;
+    }
+    if (!/^`[\w-]+`(,\s*`[\w-]+`)*$/.test(policyCell)) {
+      throw new Error(
+        `matrix row for \`${group}\` has an unparsable policy cell: ${JSON.stringify(policyCell)}. ` +
+          'Expected backticked names separated by commas, or — for none. ' +
+          'Silently skipping it would surface later as "group not documented", which is misleading.',
+      );
+    }
 
     rows[group] = policyCell.split(',').map((p) => p.trim().replace(/`/g, ''));
   }
@@ -80,9 +115,10 @@ describe('docs/05.iam_group_design.md', () => {
     },
   );
 
-  // 失敗系: 存在しないポリシー名を書いていないこと。
-  // `Billing` のように「実在しない ARN」を書いてしまった前例がある (#175)。
-  it('never names a policy that does not exist', () => {
+  // 失敗系: 表に載る名前がスタックのポリシー集合に含まれること。
+  // これはドキュメントとテンプレートの一致確認であって、
+  // AWS 側にその名前が実在するかは見ていない（下のテストがそれを担う）。
+  it('names only policies the stack actually references', () => {
     const known = new Set([
       ...Object.values(synthesizedMatrix()).flat(),
       ...BASELINE,
@@ -97,6 +133,24 @@ describe('docs/05.iam_group_design.md', () => {
         });
       }
     }
+  });
+
+  // 失敗系: AWS 管理ポリシーの ARN が、実在すると確認済みのものだけであること。
+  //
+  // 上のテストはテンプレート自身を正解として使うので、
+  // `fromAwsManagedPolicyName('Billing')` と書いて表もそう直せば両方通ってしまい、
+  // 落ちるのは cdk deploy 時の NoSuchEntity になる。ここはパス込みで固定する。
+  it('attaches only AWS managed policies verified to exist', () => {
+    const attached = Object.values(synth().findResources('AWS::IAM::Group'))
+      .flatMap((g: any) => g.Properties.ManagedPolicyArns ?? [])
+      .filter((arn: any) => !arn?.Ref)
+      .map((arn: any) => renderArns(arn)[0])
+      .filter((arn: string) => arn.includes(':iam::aws:policy/'))
+      // パスを潰さない: `job-function/Billing` と `Billing` は別物
+      .map((arn: string) => arn.split(':iam::aws:policy/')[1]);
+
+    // 定数は人が読む順で書き、比較時に同じ基準で並べ直す
+    expect([...new Set(attached)].sort()).toEqual([...ALLOWED_AWS_MANAGED_POLICIES].sort());
   });
 
   // 運用手順が本文に含まれていること。

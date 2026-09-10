@@ -1671,11 +1671,109 @@ dev_user:     ["IAMFullAccess","PowerUserAccess"]
 
 理由を書かないと、次に `DeleteConflict` を見た人がまた同じところで止まる。
 
+### レビュー指摘への対応（#191）
+
+Sourcery が予算上限だったのでローカルレビュー。6 件、すべて妥当だった。
+**うち 4 件は「手順どおりにやると失敗する」もの**で、書いた本人には見えていなかった。
+
+#### 1. パスワードを生成して捨てていた
+
+```bash
+--password "$(openssl rand -base64 24)"   # ← 誰も知らない
+```
+
+`create-login-profile` はパスワードを返さない。しかも `--password-reset-required` は
+**現在のパスワード入力を要求する**ので、本人はログインすらできない。
+変数に取って出力するよう修正。
+
+#### 2. 疎通確認の手順が成立しない
+
+```bash
+AWS_MFA_BASE_PROFILE=alice ./scripts/aws-mfa-session.sh
+```
+
+このスクリプトは**長期キーを持つ CLI プロファイル**を前提にしている
+（最初の呼び出しが `aws iam list-mfa-devices --profile "$BASE_PROFILE"`）。
+オンボーディング手順はコンソールログインしか作っていないので、
+`The config profile (alice) could not be found` で止まる。
+
+抜けていたのは 2 手:
+
+1. **MFA でサインインし直してから**アクセスキーを発行する
+   （`iam:CreateAccessKey` は MFA 免除リストに無いので、MFA セッションが要る）
+2. `aws configure --profile alice`
+
+`AWS_MFA_BASE_PROFILE` が**プロファイル名であってユーザ名ではない**点も明記した。
+今回はたまたま同名にしただけで、スクリプト自身のヘッダも
+「例からプロファイル名をコピーするな」と警告している。
+
+#### 3. オフボーディングが `admin` に効かない
+
+`iam:RemoveUserFromGroup` は新グループ 5 つにスコープしてあり、
+`admin` は自己昇格防止のため意図的に除外されている（#188）。
+
+つまり**「専用ユーザを作れ」と書いた当の break-glass ユーザを、
+その手順では削除できない**。しかもループに `set -e` が無いので
+`admin` の行だけ素通りし、最後の `delete-user` が
+「グループに所属したまま」で失敗する — 前書きで説明した
+`DeleteConflict`（キー / MFA）とは別原因なので、混乱する。
+
+#### 4. テスト名が実際の検証内容と食い違っていた
+
+`never names a policy that does not exist` は、
+**正解をテンプレート自身から作っていた**ので実在確認になっていなかった。
+
+`fromAwsManagedPolicyName('Billing')` と書いて表もそう直せば 16 件すべて通り、
+落ちるのは `cdk deploy` 時の `NoSuchEntity`。
+つまり「#175 の再現を防げる」という主張が成立していなかった。
+
+分割した:
+
+| テスト | 何を見るか |
+| --- | --- |
+| `names only policies the stack actually references` | ドキュメント ↔ テンプレートの一致 |
+| `attaches only AWS managed policies verified to exist` | **実在確認済みの ARN 一覧に固定**（パス込み） |
+
+後者は `job-function/Billing` と `Billing` を別物として扱う
+（元の実装は `split('/').pop()` で潰していた）。
+実際に `Billing` を仕込んで落ちることを確認した。
+
+#### 5. 表のパーサが黙って行を落としていた
+
+ポリシー欄を「バッククォート付きの名前が並ぶ最初のセル」で探していたため、
+想定利用者欄にバッククォートが入ると別の列を掴む。
+文字クラスも `[A-Za-z-]` で、数字やアンダースコアを含む名前
+（`AmazonS3ReadOnlyAccess`、`AWSLambda_ReadOnlyAccess`）を弾いていた。
+
+列インデックス指定に変え、**パースできない行では例外を投げる**ようにした。
+黙って落とすと「グループが未記載」という**誤った失敗**として現れる。
+
+この修正は即座に役に立った。列番号を間違えて置いたところ、
+エラーがどのセルを掴んだかまで教えてくれた:
+
+```
+matrix row for `readonly` has an unparsable policy cell: "全リソースの参照"
+```
+
+#### 6. MFA 免除リストの説明が過小だった
+
+「MFA 未登録でも通るのは**自分自身の資格情報管理だけ**」と書いたが、
+`iam:ListVirtualMFADevices` と `iam:GetAccountPasswordPolicy` は
+リソース単位で絞れないため対象外になっている。
+つまり MFA 未登録のユーザでも**アカウント内の仮想 MFA デバイスを列挙できる**。
+
+絞ると登録の入口ごと塞がるための意図的な妥協なので、
+「だけ」を消して表に分け、絞れない 2 つを明示した。
+
+> ドキュメントを「腐らないようテストで固定した」PR で、
+> **テスト自身が検証していないことを検証していると名乗り、
+> 手順自身が通らなかった**。固定した対象が正しいとは限らない。
+
 ### 検証コマンドと結果
 
 ```console
 $ npm test
-Tests:       214 passed, 214 total
+Tests:       215 passed, 215 total
 ```
 
 設計書内のリンク、`CLAUDE.md` からのリンクともに切れなし。
