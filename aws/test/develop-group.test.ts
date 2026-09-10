@@ -151,10 +151,27 @@ describe(`${POLICY} — what a developer cannot do`, () => {
     expect(denying('iam:*')).toEqual([]);
   });
 
-  it.each(['organizations:*', 'account:*', 'ce:*'])(
+  it.each([
+    'organizations:LeaveOrganization',
+    'organizations:AttachPolicy',
+    'account:CloseAccount',
+    'account:StartPrimaryEmailUpdate',
+  ])(
     'denies account-level control %s',
     (action) => {
       expect(denying(action).length).toBeGreaterThan(0);
+    },
+  );
+
+  // #175 で判明した訂正:
+  // 当初は account:* / ce:* / aws-portal:* をまとめて Deny していた。
+  // だが Deny はユーザ単位で効くため、そのユーザが所属する *他の* グループにも波及する。
+  // AWSBillingReadOnlyAccess はこの 3 つすべてを必要とするので、
+  // develop + billing の組み合わせで billing が丸ごと死んでいた。
+  it.each(['ce:*', 'aws-portal:*', 'account:*', 'organizations:*'])(
+    'does NOT deny %s wholesale, which would break another group',
+    (action) => {
+      expect(denying(action)).toEqual([]);
     },
   );
 

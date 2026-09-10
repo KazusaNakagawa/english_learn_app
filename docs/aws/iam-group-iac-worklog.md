@@ -994,6 +994,290 @@ $ npm run diff:iam
 
 ---
 
+## 2026-09-10 — #175 infra / billing / admin グループ
+
+### やったこと
+
+- `infra`（`PowerUserAccess` + `infra-administration`）、`billing`、`admin` を追加
+- **`develop` の Deny を訂正**（下記が本題）
+- CI/CD の OIDC ロールは**見送り**（判断を記録）
+
+### 最大の発見: グループの Deny は他のグループに波及する
+
+`billing` を作ろうとしてテストを書いたら、`develop` の既存 Deny に引っかかった。
+
+```console
+develop の Deny: ["account:*","aws-portal:*","ce:*","organizations:*"]
+```
+
+`AWSBillingReadOnlyAccess` が必要とするもの:
+
+```
+account:GetAccountInformation / aws-portal:ViewBilling / ce:GetCostAndUsage ...
+```
+
+**3 つとも重なっている。** つまり `develop` と `billing` の両方に所属するユーザは、
+**billing の権限が丸ごと効かない**状態だった。
+
+原因は IAM の基本的な性質:
+
+> **Deny はグループではなくユーザに対して評価される。**
+> あるグループのポリシーに書いた Deny は、そのユーザが所属する
+> **他のすべてのグループ**の Allow を打ち消す。
+
+つまり **グループポリシーの Deny は事実上そのユーザにとってアカウント全体の Deny**。
+「このグループでは使わせない」つもりで書いた Deny が、
+別グループの機能を殺す。
+
+#### 一般則として
+
+**Deny に書いてよいのは「どのグループも与えるべきでないもの」だけ。**
+「このグループには不要」程度のものを Deny すると、必ず組み合わせで壊れる。
+
+この観点で develop の Deny を見直した:
+
+| Deny していたもの | 判定 |
+| --- | --- |
+| `organizations:*` | 残す。どのグループも与えない |
+| `account:*` | **狭める**。読み取りは billing が必要。危険な書き込み 6 個の列挙に変更 |
+| `ce:*` | **削除**。billing の本体 |
+| `aws-portal:*` | **削除**。billing の本体 |
+| IAM 書き込み | 残す（ただし下記の制約が付く） |
+
+回帰防止として、追加グループが必要とするアクションを
+**どのポリシーも Deny していないこと**を不変条件テストにした:
+
+> `never denies ce:GetCostAndUsage, which the billing group needs`
+
+ワイルドカード（`ce:*`）での巻き込みも同時に検査している。
+
+### 帰結: グループは「ティア」と「追加」に分かれる
+
+Deny が波及する以上、**すべてのグループを自由に組み合わせられるわけではない**。
+
+| 種別 | グループ | 性質 |
+| --- | --- | --- |
+| ティア（排他） | `readonly` / `develop` / `infra` / `admin` | 互いの Deny が衝突する。1 人 1 つ |
+| 追加（併用可） | `audit` / `billing` | 何も Deny しない。任意のティアに重ねられる |
+
+具体的な衝突:
+
+- `develop` の IAM 書き込み Deny は `infra` の IAM 権限を殺す
+- `develop` の Deny は `admin` の `AdministratorAccess` すら殺す
+
+#### break-glass admin は専用ユーザでなければ機能しない
+
+これが実務上いちばん危ない。**既存の開発者を `admin` グループに追加しても管理者にならない。**
+その人が `develop` にも属していれば、`develop-workload` の Deny が
+`AdministratorAccess` を上書きするため。
+
+しかも**緊急時にそれが発覚する**。破られ方として最悪の部類。
+
+対策として `admin` は「他のどのグループにも属さない専用ユーザ」用と明記した
+（コードコメント + テスト + #176 の手順書）。
+これは break-glass の一般的な作法そのものでもある。
+
+### 判明した誤り: `arn:aws:iam::aws:policy/Billing` は存在しない
+
+Issue には「`Billing` + `AWSBillingReadOnlyAccess`」と書いていたが、
+前者の ARN は存在しない:
+
+```console
+$ aws iam get-policy --policy-arn arn:aws:iam::aws:policy/Billing
+An error occurred (NoSuchEntity) ... was not found.
+
+$ aws iam get-policy --policy-arn arn:aws:iam::aws:policy/job-function/Billing
+Billing
+```
+
+フルアクセス版は **`job-function/` 配下**にある。
+今回はコスト閲覧が目的なので `AWSBillingReadOnlyAccess` のみを採用した。
+支払い情報の変更は root 相当の関心事で、日常の閲覧者に配るものではない。
+
+### 判断: CI/CD の OIDC ロールは見送り
+
+推測で決めず、実際のワークフローを見た:
+
+```console
+$ ls .github/workflows/
+cdk-ci.yml.bk   ios-build.yml.bk      # どちらも .bk で無効化済み
+```
+
+```yaml
+      - name: CDK synth (dry-run)
+        run: npx cdk synth
+        env:
+          # CDK synth does not require real AWS credentials
+          AWS_ACCESS_KEY_ID: dummy
+          AWS_SECRET_ACCESS_KEY: dummy
+```
+
+**AWS に触れる CI は存在しない。** ダミー認証情報で synth するだけ。
+使われていない OIDC ロールを今作るのは、`ops-actions` を作らなかったのと同じ理由で見送る。
+
+発動条件だけ記録しておく:
+
+> CI から AWS へデプロイする必要が生じたら、**IAM ユーザのアクセスキーではなく
+> GitHub Actions OIDC ロール**を使う。長期キーを GitHub Secrets に置かない。
+
+なお `cdk-ci.yml.bk` を**そのまま復活させると落ちる**。
+`npx cdk synth` はスタックセレクタなしで `bin/app.ts` を合成するため、
+`VOICEVOX_API_KEY_POC` 未設定で `VoicevoxStack` の constructor が throw する（#171 参照）。
+復活させるときは `npm run synth:iam` を足すか、ダミーの API キーを env に足す必要がある。
+
+### レビュー指摘への対応（#188）
+
+Sourcery が**レビュー予算上限**（7 日で 25 万 diff 文字）に到達したため、
+ローカルの `/code-review` で代替した。9 件（high 4 件）の指摘。
+
+#### 訂正 1: `audit` は「追加グループ」ではなかった
+
+自分で「Deny を持たないグループは任意のティアに重ねられる」と定義しておきながら、
+`audit` に `deny-secret-reads` を貼っていた（#173）。デプロイ済みの実物で確認:
+
+```console
+$ aws iam list-attached-group-policies --group-name audit
+["SecurityAudit","deny-without-mfa","deny-secret-reads","self-service-credentials"]
+```
+
+`infra` + `audit` のユーザは、PowerUserAccess を持ちながら
+`secretsmanager:GetSecretValue` も `kms:Decrypt` も通らなくなる。
+**billing で直したのと同じ欠陥が、audit で再発していた。**
+
+`audit` の `deny-secret-reads` は必要（SecurityAudit は `lambda:GetFunctionConfiguration` を含む =
+API キーが読める）なので、**`audit` をティアに分類し直した**。
+
+| 種別 | グループ |
+| --- | --- |
+| ティア（排他） | `readonly` / **`audit`** / `develop` / `infra` / `admin` |
+| 追加（併用可） | `billing` のみ |
+
+#### 訂正 2: `organizations:*` の Deny が SecurityAudit を潰す
+
+同じ根から出たもう 1 件。実物を読んで確認した:
+
+```console
+$ aws iam get-policy-version --policy-arn arn:aws:iam::aws:policy/SecurityAudit ...
+organizations:Describe*
+organizations:List*
+```
+
+`SecurityAudit` は組織の読み取りを含む。`organizations:*` を丸ごと Deny すると
+これを打ち消す。書き込み 24 個の列挙に変更した。
+
+**同じ過ちを 3 回繰り返している**（`iam:*` → `account:*`/`ce:*` → `organizations:*`）。
+ワイルドカードでの Deny は、書いた瞬間は簡潔で正しく見えるが、
+**そのサービスの読み取りを必要とする他グループを必ず巻き込む**。
+
+#### 決定: infra の昇格経路は許容し、明文化する
+
+`infra` は `iam:CreateRole` + `iam:AttachRolePolicy` を `*` に持つ。
+つまり自分を信頼するロールを作り `AdministratorAccess` を付けて assume すれば、
+**自身にかかった Deny をすべて回避できる**。
+assume 後は呼び出し元の identity policy が評価されないため（#179 と同じ性質）。
+
+したがって `DenyOrganizationAndAccountControl` は**境界ではなく速度抑制**。
+
+選択肢は Permissions Boundary で実際に縛るか、許容して明文化するか。
+**bootstrap ロールと同じ判断で後者を採った。** 境界ポリシーの維持コストが、
+infra という「管理するためのグループ」の目的と釣り合わない。
+
+帰結として **`infra` と `admin` の差は、防止ではなく CloudTrail での可視性**になる。
+これをコメント・worklog・#176 に明記した。
+
+#### 対応: ベースライン書き換えだけは塞ぐ
+
+一方で `iam:CreatePolicyVersion --set-as-default` を `deny-without-mfa` に対して撃つと、
+**アカウント全体の MFA 強制が 1 コマンドで無効化できる**。
+昇格経路が残る以上これも迂回可能だが、事故とカジュアルな変更は止まるし、
+CloudTrail に目立つ 1 手が増える。自スタックのポリシー 5 本を Deny 対象にした。
+
+名前のハードコード一覧はドリフトするので、
+**実際に生成されるポリシー集合と一致すること**をテストで固定している。
+
+#### その他の対応
+
+| 指摘 | 対応 |
+| --- | --- |
+| `ACCOUNT_LEVEL_WRITES` にアカウント乗っ取り経路が欠落 | `StartPrimaryEmailUpdate` / `AcceptPrimaryEmailUpdate` / `PutAccountName` を追加。プライマリメール変更 → root パスワードリセットで乗っ取りが成立する |
+| infra がオフボーディングできない | `DeleteAccessKey` 等を追加。自己管理で全員が自分のキーを作れるため、`DeleteUser` が `DeleteConflict` で落ちて**退職者のキーが生き残る**状態だった |
+| infra がポリシーを作れても貼れない | `CreateGroup` / `AttachGroupPolicy` / `AttachUserPolicy` 等を追加 |
+| admin の「余計なものが付いていない」テストが空振り | customer-managed policy は `{"Ref":...}` で出るため `startsWith('arn:')` が全部落としていた。件数と中身の厳密一致に変更 |
+| 不変条件テストの盲点 | `NotAction` 形式の Deny を見ていなかった。また `ce:*` の完全一致しか見ておらず `ce:Get*` を素通りさせた。glob 一致に変更し、MFA 条件付き Deny は除外 |
+
+### 人によるレビュー指摘（#188、P1 × 2）
+
+自動レビューが拾えなかった 2 件。どちらも infra の自己昇格経路。
+
+#### 1. infra は自分を `admin` グループに追加できた
+
+`iam:AddUserToGroup` が `Resource: '*'` だったため、
+**1 コマンドで `AdministratorAccess` を取得できる**状態だった。
+
+一般的な昇格経路（自前ロールを作って assume）は上で許容したのに、
+なぜこれは塞ぐのか — 性質が違うため:
+
+| 経路 | 性質 |
+| --- | --- |
+| ロール作成 → assume | セッション限り。CloudTrail に `AssumeRole` が目立って残る |
+| **admin に自分を追加** | **永続。しかも「admin はメンバー 0 人」という前提そのものを崩す** |
+
+`admin` のメンバーが 0 人であることは break-glass 設計の土台で、
+「使われたら通知する」という監視もそれに依存している。
+静かに join できると監視ごと無効化される。
+
+運用対象グループ（`readonly` / `audit` / `develop` / `infra` / `billing`）に限定し、
+**`admin` を除外**した。
+
+**ただしグループ経路だけ塞ぐのは張りぼて**だった。
+`iam:AttachUserPolicy` で自分のユーザに `AdministratorAccess` を直接貼れば同じ結果になる。
+`AttachUserPolicy` の Resource は「ユーザ」なので ARN では絞れず、
+**どのポリシーを貼るかは `iam:PolicyARN` 条件でしか制限できない**:
+
+```json
+{
+  "Sid": "DenyGrantingAdministratorAccess",
+  "Effect": "Deny",
+  "Action": ["iam:AttachUserPolicy", "iam:AttachGroupPolicy", "iam:AttachRolePolicy"],
+  "Condition": { "ArnEquals": { "iam:PolicyARN": "arn:aws:iam::aws:policy/AdministratorAccess" } }
+}
+```
+
+#### 2. `iam:PassRole` が全ロール対象だった
+
+強い権限のロールを自分が起動できるサービスに渡せば、そのロールとしてコードが動く。
+AWS の推奨どおり ARN で限定した（`VoicevoxStack-*` / `voicevox-*-role-*` / `cdk-*`）。
+
+この命名から外れるロールを作ったときは一覧の拡張が必要になるが、
+**明示的な `AccessDenied` として現れる稀な作業**であり、
+bootstrap ロールを絞ったときのような継続的コストにはならない。
+
+#### 一覧のハードコードにはドリフト検査を付けた
+
+`INFRA_MANAGEABLE_GROUPS` も `MANAGED_POLICY_NAMES` も手書きの一覧なので、
+グループやポリシーを足したときに入れ忘れる。
+
+- 入れ忘れ → infra が運用できない
+- `admin` が紛れ込む → 上のガードが無意味になる
+
+「このスタックが作るグループから `admin` を除いた集合と厳密に一致すること」を
+テストにし、グループを一時的に足して実際に落ちることも確認した。
+
+### 検証コマンドと結果
+
+```console
+$ npm test
+Tests:       198 passed, 198 total
+
+$ npm run diff:iam
+[+] AWS::IAM::ManagedPolicy InfraAdministration
+[+] AWS::IAM::Group InfraGroup
+[+] AWS::IAM::Group BillingGroup
+[+] AWS::IAM::Group AdminGroup
+```
+
+---
+
 <!--
 以降、PR ごとに追記する。テンプレート:
 

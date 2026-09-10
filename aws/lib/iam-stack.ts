@@ -138,6 +138,28 @@ const DENIED_IAM_WRITES = [
 ];
 
 /**
+ * Account-level writes no group should ever be able to make.
+ *
+ * Deliberately *not* `account:*`: read actions such as
+ * `account:GetAccountInformation` are part of AWSBillingReadOnlyAccess, and a
+ * deny here would reach a user's `billing` membership too.
+ */
+const ACCOUNT_LEVEL_WRITES = [
+  'account:CloseAccount',
+  // Changing the primary email hands over the root password-reset path, so
+  // these three are account takeover in three calls. The earlier `account:*`
+  // deny covered them; narrowing it for billing must not drop them.
+  'account:StartPrimaryEmailUpdate',
+  'account:AcceptPrimaryEmailUpdate',
+  'account:PutAccountName',
+  'account:PutContactInformation',
+  'account:PutAlternateContact',
+  'account:DeleteAlternateContact',
+  'account:EnableRegion',
+  'account:DisableRegion',
+];
+
+/**
  * The subset of ALLOWED_WITHOUT_MFA that can name another user's resource.
  *
  * A `NotAction` exemption is not resource-scoped: it says "this action is not
@@ -155,6 +177,78 @@ const DENIED_IAM_WRITES = [
  * resource to match, so scoping them would deny them outright and close the
  * only route into MFA enrolment.
  */
+/**
+ * Organization changes no group should be able to make.
+ *
+ * Deliberately *not* `organizations:*`: the AWS `SecurityAudit` policy behind
+ * the `audit` group grants `organizations:Describe*` and `organizations:List*`,
+ * and a blanket deny would cancel them for that user. Confirmed by reading the
+ * managed policy rather than assuming. Same lesson as `account:*` and billing.
+ */
+const ORGANIZATION_WRITES = [
+  'organizations:LeaveOrganization',
+  'organizations:DeleteOrganization',
+  'organizations:CreateAccount',
+  'organizations:CloseAccount',
+  'organizations:RemoveAccountFromOrganization',
+  'organizations:InviteAccountToOrganization',
+  'organizations:AcceptHandshake',
+  'organizations:DeclineHandshake',
+  'organizations:CancelHandshake',
+  'organizations:MoveAccount',
+  'organizations:CreateOrganizationalUnit',
+  'organizations:DeleteOrganizationalUnit',
+  'organizations:UpdateOrganizationalUnit',
+  'organizations:CreatePolicy',
+  'organizations:DeletePolicy',
+  'organizations:UpdatePolicy',
+  'organizations:AttachPolicy',
+  'organizations:DetachPolicy',
+  'organizations:EnablePolicyType',
+  'organizations:DisablePolicyType',
+  'organizations:EnableAWSServiceAccess',
+  'organizations:DisableAWSServiceAccess',
+  'organizations:RegisterDelegatedAdministrator',
+  'organizations:DeregisterDelegatedAdministrator',
+];
+
+/**
+ * Customer-managed policies this stack owns.
+ *
+ * They are the account's guard rails, so nothing inside the account should be
+ * able to rewrite them casually — least of all `infra`, which would otherwise
+ * be one CreatePolicyVersion away from disabling the MFA baseline everywhere.
+ */
+/**
+ * Groups whose membership `infra` may change.
+ *
+ * `admin` is absent on purpose. Its emptiness in steady state is the whole
+ * break-glass design — alerting on use assumes nobody is quietly a member — and
+ * `iam:AddUserToGroup` on '*' let any infra member join it in one call.
+ * The broader escalation (mint a role, assume it) is accepted and documented,
+ * but that one is loud in CloudTrail; silently joining `admin` is not.
+ */
+const INFRA_MANAGEABLE_GROUPS = ['readonly', 'audit', 'develop', 'infra', 'billing'];
+
+/**
+ * Roles `infra` may hand to an AWS service.
+ *
+ * Unrestricted `iam:PassRole` is an escalation path in its own right: pass a
+ * highly privileged role to a service you can invoke, and you run as that role.
+ * AWS's own guidance is to restrict it by ARN or by iam:PassedToService.
+ * Adding a role outside these patterns means extending this list on purpose,
+ * which is a visible, rare piece of friction rather than an ongoing tax.
+ */
+const INFRA_PASSABLE_ROLES = ['VoicevoxStack-*', 'voicevox-*-role-*', 'cdk-*'];
+
+const MANAGED_POLICY_NAMES = [
+  'self-service-credentials',
+  'deny-without-mfa',
+  'deny-secret-reads',
+  'develop-workload',
+  'infra-administration',
+];
+
 const SELF_TARGETED_WITHOUT_MFA = [
   'iam:ChangePassword',
   'iam:GetUser',
@@ -365,6 +459,37 @@ export class IamStack extends cdk.Stack {
 
     this.addGroup('DevelopGroup', 'develop', [this.developWorkloadPolicy()]);
 
+    // ----------------------------------------------------------------
+    // Account-management tier
+    // ----------------------------------------------------------------
+    // PowerUserAccess covers everything except IAM, so group and role
+    // administration is granted separately.
+    this.addGroup('InfraGroup', 'infra', [
+      iam.ManagedPolicy.fromAwsManagedPolicyName('PowerUserAccess'),
+      this.infraAdministrationPolicy(),
+    ]);
+
+    // Cost review is a different audience from infra and should not require
+    // PowerUserAccess. Read-only: changing payment details is a root-level
+    // concern, not a routine one.
+    //
+    // Note the AWS managed policy for full billing access is
+    // `job-function/Billing`; a bare `Billing` ARN does not exist.
+    this.addGroup('BillingGroup', 'billing', [
+      iam.ManagedPolicy.fromAwsManagedPolicyName('AWSBillingReadOnlyAccess'),
+    ]);
+
+    // Break-glass. Expected to hold ZERO members in steady state.
+    //
+    // It must be granted to a **dedicated user that belongs to no other
+    // group**. Adding an existing developer here does not make them an
+    // administrator: `develop-workload` denies IAM writes and organizations,
+    // and an explicit deny beats AdministratorAccess. The emergency path would
+    // fail at the moment it is needed. Same reasoning applies to `infra`.
+    this.addGroup('AdminGroup', 'admin', [
+      iam.ManagedPolicy.fromAwsManagedPolicyName('AdministratorAccess'),
+    ]);
+
     // No `ope` group: it would be identical to `readonly` (see the original
     // requirement, which says as much). Operations staff get `readonly` plus a
     // narrow write policy if and when someone actually needs one — inventing
@@ -513,10 +638,16 @@ export class IamStack extends cdk.Stack {
           actions: DENIED_IAM_WRITES,
           resources: ['*'],
         }),
+        // Narrow on purpose. A deny inside a group policy applies to the *user*,
+        // so it also fires for every other group they belong to. `account:*`,
+        // `ce:*` and `aws-portal:*` were denied here originally, and
+        // AWSBillingReadOnlyAccess needs all three — so anyone in develop plus
+        // billing simply had no billing access. Only actions that no group
+        // should ever grant belong in a deny. See ACCOUNT_LEVEL_WRITES.
         new iam.PolicyStatement({
           sid: 'DenyAccountLevelControls',
           effect: iam.Effect.DENY,
-          actions: ['organizations:*', 'account:*', 'ce:*', 'aws-portal:*'],
+          actions: [...ORGANIZATION_WRITES, ...ACCOUNT_LEVEL_WRITES],
           resources: ['*'],
         }),
         // Blocks direct calls at pro. It does NOT block `cdk deploy -c env=pro`:
@@ -565,6 +696,141 @@ export class IamStack extends cdk.Stack {
               resourceName: 'VoicevoxStack-pro/*',
             }),
           ],
+        }),
+      ],
+    });
+  }
+
+  /**
+   * The IAM slice `infra` needs on top of PowerUserAccess.
+   *
+   * PowerUserAccess grants everything except IAM, so without this an infra
+   * member cannot onboard anyone or manage the service roles the stacks need.
+   */
+  private infraAdministrationPolicy(): iam.ManagedPolicy {
+    return new iam.ManagedPolicy(this, 'InfraAdministration', {
+      managedPolicyName: 'infra-administration',
+      description: 'IAM administration for the infra group, on top of PowerUserAccess.',
+      statements: [
+        new iam.PolicyStatement({
+          sid: 'AdministerUsersGroupsAndRoles',
+          actions: [
+            'iam:CreateUser',
+            'iam:DeleteUser',
+            'iam:UpdateUser',
+            'iam:CreateLoginProfile',
+            'iam:UpdateLoginProfile',
+            'iam:DeleteLoginProfile',
+            // Offboarding. IAM refuses DeleteUser while a user still has access
+            // keys, MFA devices or attached policies, and self-service lets
+            // every user create their own key — so without these, infra cannot
+            // actually remove a departing person and their key stays live.
+            'iam:DeleteAccessKey',
+            'iam:UpdateAccessKey',
+            'iam:DeactivateMFADevice',
+            'iam:DeleteVirtualMFADevice',
+            'iam:AttachUserPolicy',
+            'iam:DetachUserPolicy',
+            'iam:PutUserPolicy',
+            'iam:DeleteUserPolicy',
+            // Creating a policy is useless without being able to attach it.
+            'iam:CreateGroup',
+            'iam:DeleteGroup',
+            'iam:UpdateGroup',
+            'iam:AttachGroupPolicy',
+            'iam:DetachGroupPolicy',
+            'iam:PutGroupPolicy',
+            'iam:DeleteGroupPolicy',
+            'iam:CreateRole',
+            'iam:DeleteRole',
+            'iam:UpdateRole',
+            'iam:AttachRolePolicy',
+            'iam:DetachRolePolicy',
+            'iam:PutRolePolicy',
+            'iam:DeleteRolePolicy',
+            'iam:UpdateAssumeRolePolicy',
+            'iam:TagRole',
+            'iam:UntagRole',
+            'iam:CreatePolicy',
+            'iam:CreatePolicyVersion',
+            'iam:DeletePolicyVersion',
+            'iam:SetDefaultPolicyVersion',
+            'iam:Get*',
+            'iam:List*',
+          ],
+          resources: ['*'],
+        }),
+        new iam.PolicyStatement({
+          sid: 'ManageMembershipOfOperationalGroups',
+          actions: ['iam:AddUserToGroup', 'iam:RemoveUserFromGroup'],
+          resources: INFRA_MANAGEABLE_GROUPS.map((name) =>
+            this.formatArn({ service: 'iam', region: '', resource: 'group', resourceName: name }),
+          ),
+        }),
+        new iam.PolicyStatement({
+          sid: 'PassProjectAndBootstrapRoles',
+          actions: ['iam:PassRole'],
+          resources: INFRA_PASSABLE_ROLES.map((name) =>
+            this.formatArn({ service: 'iam', region: '', resource: 'role', resourceName: name }),
+          ),
+        }),
+        // Scoping AddUserToGroup alone would be theatre: attaching
+        // AdministratorAccess straight to your own user reaches the same place.
+        // The resource of AttachUserPolicy is the *user*, so which policy gets
+        // attached can only be constrained by the iam:PolicyARN condition key.
+        new iam.PolicyStatement({
+          sid: 'DenyGrantingAdministratorAccess',
+          effect: iam.Effect.DENY,
+          actions: ['iam:AttachUserPolicy', 'iam:AttachGroupPolicy', 'iam:AttachRolePolicy'],
+          resources: ['*'],
+          conditions: {
+            ArnEquals: {
+              'iam:PolicyARN': this.formatArn({
+                service: 'iam',
+                region: '',
+                account: 'aws',
+                resource: 'policy',
+                resourceName: 'AdministratorAccess',
+              }),
+            },
+          },
+        }),
+        // infra administers the account; it does not own the organization.
+        //
+        // Read honestly: this is a speed bump, not a boundary. infra holds
+        // iam:CreateRole and iam:AttachRolePolicy on '*', so a member can mint
+        // a role that trusts them, attach AdministratorAccess and assume it —
+        // and an assumed-role session is not evaluated against the calling
+        // user's identity policy, so this deny no longer applies. Constraining
+        // that properly needs a permissions boundary, whose ongoing cost was
+        // judged not worth paying, the same call made for the CDK bootstrap
+        // roles in #174. What separates infra from admin is therefore
+        // CloudTrail visibility of the escalation, not prevention of it.
+        // Documented in docs/aws/iam-group-iac-worklog.md and #176.
+        new iam.PolicyStatement({
+          sid: 'DenyOrganizationAndAccountControl',
+          effect: iam.Effect.DENY,
+          actions: [...ORGANIZATION_WRITES, ...ACCOUNT_LEVEL_WRITES],
+          resources: ['*'],
+        }),
+        // Without this, infra can call CreatePolicyVersion --set-as-default on
+        // deny-without-mfa with an empty document and switch off MFA
+        // enforcement for every group in the account, in one command.
+        // The escalation path above can still get there the long way; this
+        // stops the accidental and the casual version, and puts an extra,
+        // conspicuous step in CloudTrail before the baseline can move.
+        new iam.PolicyStatement({
+          sid: 'DenyRewritingThisStackPolicies',
+          effect: iam.Effect.DENY,
+          actions: [
+            'iam:CreatePolicyVersion',
+            'iam:SetDefaultPolicyVersion',
+            'iam:DeletePolicy',
+            'iam:DeletePolicyVersion',
+          ],
+          resources: MANAGED_POLICY_NAMES.map((name) =>
+            this.formatArn({ service: 'iam', region: '', resource: 'policy', resourceName: name }),
+          ),
         }),
       ],
     });
