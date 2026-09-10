@@ -823,8 +823,104 @@ $ aws iam get-policy-version --policy-arn "$POLICY_ARN" --version-id "$VERSION_I
 
 ---
 
-<!--
-以降、PR ごとに追記する。テンプレート:
+## 2026-09-10 — #174 develop グループ
+
+### やったこと
+
+- `develop` グループと `develop-workload` ポリシーを追加
+- `VoicevoxStack` の `pro` にだけ削除保護（`terminationProtection`）を有効化
+- スタックポリシーは CDK が非対応のため #186 に分離
+
+### 最大の罠: `Deny iam:*` を書くと MFA ベースラインが壊れる
+
+Issue には「`iam:*` の書き込みを全部 Deny、ただし `iam:PassRole` は除く」と書いていた。
+これを素直に書くと**壊れる**。
+
+**明示的 Deny はあらゆる Allow に優先する。** `develop` に `Deny iam:*` を置くと、
+同じユーザに付いている `self-service-credentials`（#172）の Allow を上書きし、
+**develop の全員が MFA 登録もパスワード変更もアクセスキー交換もできなくなる**。
+
+しかも既存メンバーは MFA 登録済みなので気づかない。
+**新しく入った人が登録できずに詰んで初めて発覚する**タイプの障害になる。
+
+「`iam:*` から一部を除く」は IAM では書けない:
+
+| 書き方 | 結果 |
+| --- | --- |
+| `Action: "iam:*"` | 除外を表現できない |
+| `NotAction: [除外したいもの]` | **IAM 以外の全アクション**まで Deny される |
+
+そこで**危険な IAM 書き込みアクションを明示列挙**する方式にした（34 個）。
+列挙漏れのリスクはあるが、ベースラインを巻き込む事故よりはるかに軽い。
+
+回帰防止として、自己管理系 9 アクションが **Deny されていないこと**を個別にテストしている:
+
+> `does NOT deny iam:ChangePassword, which would break the MFA baseline`
+
+### 気づいたこと: 同じ性質が逆方向に働く
+
+`iam:CreateRole` などを Deny すると `cdk deploy` が壊れるのでは、と思ったが**壊れない**。
+
+理由は #179 で踏んだのと同じ性質。CloudFormation はロールを
+**assume した bootstrap ロール経由**で作るので、呼び出し元ユーザの identity policy は
+そのセッションでは評価されない。
+
+- `*-pro` の Deny が効かなかったのも同じ理由（守れない側）
+- `iam:*` の Deny がデプロイを壊さないのも同じ理由（助かる側）
+
+同じ挙動が、片方では穴になり、片方では救いになる。
+
+### 名前でスコープできないリソースがある
+
+`lambda` / `ecr` / `logs` / `sns` は ARN に名前が入るので `-poc` / `-dev` に限定できた。
+一方で**限定できないものが 2 つ**ある:
+
+| サービス | 理由 |
+| --- | --- |
+| API Gateway v2 | ARN が `/apis/<生成 ID>` 形式。名前も環境も入らない |
+| CloudWatch アラーム | CDK 生成のサフィックスが付き、環境名で一意に切れない |
+
+この 2 つはアカウント全体（= pro を含む）に対する許可になっている。
+`develop` が「信頼済みグループ」である以上は許容範囲だが、
+**環境分離に実在する穴**なので、糊塗せずコメントとテストに残した。
+
+### pro の保護
+
+削除保護は `VoicevoxStack` 側に置いた。`bin/app.ts` に書くとテストしづらいため。
+
+```ts
+terminationProtection: props.terminationProtection ?? props.stackEnv === 'pro',
+```
+
+`poc` / `dev` は日常的に作り直すので保護しない。ここを一律 `true` にすると
+`npm run destroy:poc` が落ちるようになる（境界値テストで固定した）。
+
+**ただし削除保護だけでは足りない。** 防げるのは*削除*であって*更新*ではないので、
+誤った `deploy:pro` によるリソース置換は依然として通る。
+それを止めるのがスタックポリシーだが:
+
+- **CDK が非対応**。`cdk.StackProps` に `terminationProtection` はあるが `stackPolicy` はなく、
+  L1 構成も存在しない。CloudFormation の `SetStackPolicy` API 経由でしか設定できない
+- **`VoicevoxStack-pro` が未デプロイ**。貼る対象がまだない
+
+→ #186 に分離した。
+
+なお `terminationProtection` はスタックのマニフェスト側の属性なので、
+**テンプレート本体は変わらない**。`VoicevoxStack-poc` のテンプレートが
+`develop` 時点とバイト一致することを確認済み。
+
+### 検証コマンドと結果
+
+```console
+$ npm test
+Tests:       122 passed, 122 total
+
+$ npm run diff:iam
+[+] AWS::IAM::ManagedPolicy DevelopWorkload
+[+] AWS::IAM::Group DevelopGroup
+```
+
+追加のみ。デプロイ済みの `readonly` / `audit` / ベースライン 3 本には変更なし。
 
 ---
 
