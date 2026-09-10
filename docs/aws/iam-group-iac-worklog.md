@@ -1278,6 +1278,105 @@ $ npm run diff:iam
 
 ---
 
+## 2026-09-10 — #178 移行の準備（実移行の手前で停止）
+
+### やったこと
+
+- `IamStack` を再デプロイ。6 グループすべてがアカウントに存在する状態に
+- `scripts/aws-mfa-session.sh` の MFA デバイス選択を修正
+- #178 の手順の**順序が誤っていた**ので訂正
+- **メンバーシップ変更の手前で停止**（理由は下記）
+
+### 訂正: 「重複所属は無害」は誤りだった
+
+#178 に当初こう書いていた:
+
+> 2. `dev_user1` を新グループに追加する。**旧グループに残したまま**でよい —
+>    重複所属は問題ない。IAM は権限を union する
+> 3. MFA セッションプロファイルを先に用意する
+
+**順序が逆で、しかも 2 の説明が誤っている。**
+
+union が成り立つのは *Allow* の話。新グループに入った瞬間 `deny-without-mfa` も
+付いてくる。そして**長期アクセスキーは MFA コンテキストを持たない**ので、
+`BoolIfExists` の条件に合致して Deny される。
+
+つまり `dev_user1` を新グループに追加した瞬間、
+**現在使っている `dev_user1` プロファイルが即座に死ぬ**。
+しかも `dev_user1` はアカウント内で唯一 `IAMFullAccess` を持つ ID。
+
+救いは設計どおり効いている。`sts:GetSessionToken` と `iam:ListMFADevices` は
+除外リストに入れてあるので、**その状態からでも MFA セッションは取得できる**（#172）。
+逃げ道を残した判断がここで効く。
+
+正しい順序:
+
+1. デプロイ（済）
+2. **MFA セッションプロファイルを作って検証**（← 人の手が要る）
+3. `infra` に追加（この時点で平プロファイルは死ぬ）
+4. MFA プロファイル経由で検証
+5. 旧グループから外す
+
+### 見つけた地雷: MFA デバイスの選択が運任せだった
+
+`scripts/aws-mfa-session.sh` は `MFADevices[0].SerialNumber` を使っていた。
+`dev_user1` には 2 種類登録されている:
+
+```console
+$ aws iam list-mfa-devices --user-name dev_user1 --query 'MFADevices[].SerialNumber'
+[
+    "arn:aws:iam::460*******:mfa/dev_user1",                    # 仮想 MFA (TOTP)
+    "arn:aws:iam::460*******:u2f/user/dev_user1/dev_user1-..."  # FIDO セキュリティキー
+]
+```
+
+`sts:GetSessionToken` は 6 桁の TOTP を要求するので、**FIDO キーでは通らない**。
+`[0]` が今たまたま仮想 MFA を返しているだけで、**API は順序を保証していない**。
+
+ARN に `:mfa/` を含むものを明示的に選ぶよう変更した:
+
+```bash
+--query 'MFADevices[?contains(SerialNumber, `:mfa/`)].SerialNumber | [0]'
+```
+
+仮想 MFA が 1 台も無い場合は、登録済みデバイス一覧を出して落ちるようにした
+（「セキュリティキーだけでは CLI 用のセッションは取れない」と分かるように）。
+
+`dev_readonly1` は仮想 MFA 1 台のみなので、こちらは元から問題なかった。
+
+### 停止した理由
+
+次の一手（`dev_user1` を `infra` に追加）は:
+
+- **人の手が必要** — TOTP コードは代行できない
+- **後戻りしにくい** — 実行順を誤ると、唯一の管理者 ID が締め出される
+
+前提となる MFA プロファイルの検証が済むまで、メンバーシップには触れない。
+
+### 検証コマンドと結果
+
+```console
+$ npm run deploy:iam -- --require-approval never
+✨  Deployment time: 74.37s
+
+$ for g in dev_readonly dev_user readonly audit develop infra billing admin; do ... done
+dev_readonly: ["dev_readonly1"]
+dev_user    : ["dev_user1"]
+readonly    : []      audit  : []      develop : []
+infra       : []      billing: []      admin   : []
+```
+
+既存グループは無傷:
+
+```console
+dev_readonly: ["ReadOnlyAccess"]
+dev_user:     ["IAMFullAccess","PowerUserAccess"]
+```
+
+新グループはメンバー 0 人なので、**この時点で誰の実効権限も変わっていない。**
+
+---
+
 <!--
 以降、PR ごとに追記する。テンプレート:
 

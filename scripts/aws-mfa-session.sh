@@ -1,28 +1,45 @@
 #!/bin/bash
 set -euo pipefail
-# Obtain an MFA-authenticated session for the read-only investigation profile.
+# Obtain an MFA-authenticated session for an IAM user profile.
 #
-# The group `dev_readonly` denies every action unless MFA is present, except for
-# a small allowlist that keeps the user from locking itself out. That allowlist
-# includes sts:GetSessionToken (otherwise no session could ever be obtained) and
-# iam:ListMFADevices (so the device serial below can be resolved). Everything
-# else requires the session this script produces.
+# Every group in IamStack carries `deny-without-mfa`, which denies all actions
+# unless the session is MFA-authenticated, except a small allowlist that keeps
+# users from locking themselves out. That allowlist includes sts:GetSessionToken
+# (otherwise no session could ever be obtained) and iam:ListMFADevices (so the
+# device serial below can be resolved). Everything else needs this session.
+#
+# A long-lived access key carries no MFA context at all, so once a user joins
+# any of those groups their plain profile stops working — run this first.
 #
 # Usage:
-#   ./scripts/aws-mfa-session.sh            # prompts for the 6-digit code
-#   ./scripts/aws-mfa-session.sh 123456     # non-interactive
-#   aws s3 ls --profile dev_readonly1-mfa   # then use the session profile
+#   ./scripts/aws-mfa-session.sh                            # prompts for the code
+#   ./scripts/aws-mfa-session.sh 123456                     # non-interactive
+#   AWS_MFA_BASE_PROFILE=dev_user1 ./scripts/aws-mfa-session.sh
+#   aws s3 ls --profile dev_readonly1-mfa                   # then use the session
 
 BASE_PROFILE="${AWS_MFA_BASE_PROFILE:-dev_readonly1}"
 SESSION_PROFILE="${AWS_MFA_SESSION_PROFILE:-${BASE_PROFILE}-mfa}"
 DURATION="${AWS_MFA_DURATION:-43200}"  # 12h (IAM user range: 900-129600s)
 CREDENTIALS_FILE="${AWS_SHARED_CREDENTIALS_FILE:-$HOME/.aws/credentials}"
 
+# Pick the *virtual* MFA device specifically, not simply the first one.
+#
+# sts:GetSessionToken needs a 6-digit TOTP code, which only a virtual MFA device
+# produces. A FIDO/U2F security key is also listed by list-mfa-devices — its ARN
+# reads `:u2f/user/...` rather than `:mfa/` — but it works for console sign-in
+# only, and passing its serial here fails with an unhelpful error.
+#
+# dev_user1 has both kinds registered, and the API does not promise an order, so
+# `MFADevices[0]` was a coin flip that happened to be landing the right way up.
 MFA_SERIAL="$(aws iam list-mfa-devices --profile "$BASE_PROFILE" \
-  --query 'MFADevices[0].SerialNumber' --output text)"
+  --query 'MFADevices[?contains(SerialNumber, `:mfa/`)].SerialNumber | [0]' --output text)"
 
 if [ -z "$MFA_SERIAL" ] || [ "$MFA_SERIAL" = "None" ]; then
-  echo "❌ No MFA device registered for profile $BASE_PROFILE" >&2
+  echo "❌ No virtual MFA device registered for profile $BASE_PROFILE" >&2
+  echo "   A FIDO/security key alone is not enough: the CLI needs a TOTP code." >&2
+  echo "   Registered devices:" >&2
+  aws iam list-mfa-devices --profile "$BASE_PROFILE" \
+    --query 'MFADevices[].SerialNumber' --output text >&2 || true
   exit 1
 fi
 
