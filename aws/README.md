@@ -91,6 +91,21 @@ npm install
 npx cdk bootstrap
 ```
 
+### 初回のみ: シークレットの作成
+
+API キーと Slack Webhook URL は Secrets Manager で管理する（#182）。
+スタックはシークレット名だけを持ち、Lambda が実行時に値を読むため、
+デプロイする人の手元に秘密は不要。環境ごとに 1 回だけ作成する。
+
+```bash
+aws secretsmanager create-secret \
+  --name /englishlearn/poc/voicevox/api-key \
+  --secret-string "$(openssl rand -hex 32)" \
+  --region ap-northeast-1
+```
+
+詳細は [docs/02.voicevox_api_authentication.md](../docs/02.voicevox_api_authentication.md)。
+
 ### 差分確認
 
 ```bash

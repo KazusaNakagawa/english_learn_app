@@ -44,21 +44,33 @@ const ALLOWED_WITHOUT_MFA = [
 ];
 
 /**
- * Lambda functions whose environment variables hold secrets in plaintext.
+ * Lambda functions that handle a secret at runtime.
  *
  * `ReadOnlyAccess` includes `lambda:GetFunctionConfiguration`, which returns
- * the environment block verbatim — so without an explicit deny, anyone in
- * `readonly` can read these values:
+ * the environment block verbatim. Until #182 that block held the values
+ * themselves, so anyone in `readonly` could read them:
  *
  *   voicevox-authorizer-*   → API_KEY            (the VOICEVOX API credential)
  *   voicevox-slack-alert-*  → SLACK_WEBHOOK_URL  (post access to the channel)
+ *
+ * Both now hold only the *name* of a Secrets Manager secret, and the deny that
+ * matters is `DenySecretMaterial` above — so this statement no longer stops a
+ * disclosure on its own. It is kept, narrowed to the same two functions, for
+ * two reasons:
+ *
+ *   1. The live check the two-list design rests on has never run: it needs a
+ *      deployed `VoicevoxStack-poc`, which has never existed (#184, #182).
+ *      Dropping an unverified control and its verification in one step would
+ *      leave nothing to check afterwards. Tracked in #196.
+ *   2. A function named `-authorizer-` or `-slack-alert-` is where a secret
+ *      would land again if someone reached for an environment variable.
  *
  * Wildcarded across environments because the stack names them `-{env}`.
  * The engine function is deliberately absent: it holds no secret and is the
  * main thing an investigator needs to look at.
  *
- * The real fix is to stop putting secrets in Lambda environment variables at
- * all; that belongs to VoicevoxStack, so it is tracked in #182.
+ * Remove this statement once #196 has exercised the deny against a deployed
+ * stack and the result is in docs/aws/iam-group-iac-worklog.md.
  */
 const SECRET_BEARING_FUNCTIONS = ['voicevox-authorizer-*', 'voicevox-slack-alert-*'];
 

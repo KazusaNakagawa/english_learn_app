@@ -1808,6 +1808,194 @@ Tests:       215 passed, 215 total
 設計書の冒頭にその旨を明記した。「検証済みに見える文書」が一番危ないため、
 未検証であることを文書自身に書かせてある。#184 を通した時点で外す。
 
+## 2026-09-12 — #182 Lambda 環境変数から秘密を外す
+
+### やったこと
+
+`voicevox-authorizer-{env}` の `API_KEY` と `voicevox-slack-alert-{env}` の
+`SLACK_WEBHOOK_URL` を Secrets Manager に移した。Lambda 環境変数に残るのは
+**シークレットの名前だけ**（`API_KEY_SECRET_ID` / `SLACK_WEBHOOK_SECRET_ID`）。
+
+| シークレット | 読む関数 | 付与 |
+| --- | --- | --- |
+| `/englishlearn/{env}/voicevox/api-key` | `voicevox-authorizer-{env}` | `GetSecretValue` を自分の 1 本のみ |
+| `/englishlearn/{env}/voicevox/slack-webhook-url` | `voicevox-slack-alert-{env}` | 同上 |
+
+名前は `docs/web/aws/03.db-design.md` が既に決めていた規約に合わせた。
+
+- Authorizer を `Code.fromInline` から `aws/lambda/api-key-authorizer/` に出した
+  （実行時にシークレットを読む以上、ユニットテストできる形にしたかった）
+- 両関数に 5 分 TTL のシークレットキャッシュを入れた
+- `VOICEVOX_API_KEY_{ENV}` が無いと throw する処理を削除した。
+  **デプロイする人の手元に秘密が不要になった**ため、`aws/.env` からも消した
+- `deny-secret-reads` の関数名 denylist は**残した**（後述）
+- 影響範囲のドキュメントを更新: `docs/02`, `docs/04`, `docs/05`, `CLAUDE.md`,
+  `aws/README.md`, `aws/.env.example`, `.claude/skills/deploy/SKILL.md`,
+  `AppConfig.swift.example`
+
+### ハマった点
+
+**1. Annotations の API を間違えた。**
+
+```
+test/lambda-secrets.test.ts:211:40 - error TS2339: Property 'fromStack' does not exist on type 'typeof Annotations'.
+
+    211       const warnings = cdk.Annotations.fromStack(stack).findWarning(
+                                               ~~~~~~~~~
+```
+
+`cdk.Annotations`（`Annotations.of(scope)` で警告を*出す*側）と
+`aws-cdk-lib/assertions` の `Annotations`（`fromStack()` で*読む*側）は別物。
+正解は `Annotations.fromStack(stack).hasNoWarning('*', Match.stringLikeRegexp('SLACK'))`。
+
+**2. alert-to-slack のテストが、実装前から 3 件 green だった。**
+
+「シークレットが読めなければ通知をスキップして return」を期待したテストが、
+旧実装の「`SLACK_WEBHOOK_URL` 未設定なら return」でもそのまま通った。
+観測結果が同じなので red にならない。red を確認できたのは残りの 3 件だけで、
+キャッシュとポスト先 URL のテストがそれに当たる。
+**テストが緑な理由は、落ちるところを見ないと確定しない。**
+
+**3. `DockerImageAsset` があっても jest から synth できた。**
+
+テストで `Template.fromStack(VoicevoxStack)` を呼ぶと数 GB の docker build が
+走ると思っていたが、走らない。`DockerImageAsset` が synth 時にやるのは
+ディレクトリの fingerprint 計算だけで、`docker build` は `cdk deploy`
+（cdk-assets）側。#192 で aws/ の Jest を CI に載せるとき、
+**docker を用意する必要はない**。
+
+**4. リージョンが黙って `us-east-1` になった。**
+
+手元で `npx cdk synth -c env=poc` した結果、シークレットの ARN が
+`arn:aws:secretsmanager:us-east-1:...` になった。`bin/app.ts` は
+`process.env.CDK_DEFAULT_REGION ?? 'ap-northeast-1'` なので、
+CLI が解決したリージョンが優先される。`~/.aws/config` の default プロファイルは
+`region` がコメントアウトされていて、プロファイル未指定だと CLI が
+`us-east-1` を渡してくる。
+
+今までは「意図しないリージョンにデプロイされる」だけだったが、
+今回から**シークレットはスタックと同じリージョンに必要**になったので、
+食い違うと Authorizer が全拒否して終わる（fail closed）。
+`--profile` を付ける、あるいは `CDK_DEFAULT_REGION` を明示する。
+
+### 判断が分かれた点
+
+**1. Secrets Manager か SSM Parameter Store SecureString か。**
+
+SSM SecureString は無料、Secrets Manager は 1 本あたり月 $0.40。
+2 種 × 3 環境で月 $2.4 かかる。コストだけなら SSM が正しい。
+
+それでも Secrets Manager にした。`docs/web/aws/03.db-design.md` が
+「API キーは Secrets Manager、非機密な設定値は SSM」と既に決めていて、
+Web 版が同じ API キーを参照する。同じ値を SSM と Secrets Manager に
+置き分ける状態が一番まずい。`deny-secret-reads` は
+`secretsmanager:GetSecretValue` と `kms:Decrypt`（= SSM SecureString の復号）を
+どちらも塞いでいるので、readonly / audit からの防御は同等。
+
+**2. シークレットを CDK で作るか、手で作って import するか。← 一番効いた判断**
+
+CDK で作れば「デプロイ一発」で気持ちよく終わる。採らなかった理由が 2 つ。
+
+- **poc は `cdk destroy` を日常的にやる。** Secrets Manager の削除は
+  7〜30 日の復旧待機期間に入り、その間は**同名で作り直せない**。
+  CDK 所有にすると destroy → deploy が壊れる。
+- `new Secret({ secretStringValue })` に値を渡せば、**テンプレートに平文が載る**。
+  #182 が問題にしていたことそのもの。
+  （`aws/cdk.json` に `@aws-cdk/core:checkSecretUsage: true` が入っているので
+  `secretValue.toString()` 経路は CDK 自身が止めるが、止まらない書き方もある）
+
+→ `Secret.fromSecretNameV2` で import。スタックは名前しか知らない。
+代償は「先に作る」手順が増えること。未作成でもデプロイは通り、
+Authorizer が fail closed する（全拒否 + CloudWatch Logs に理由）形にした。
+
+**3. キャッシュはコールドスタート 1 回だけか、TTL 付きか。**
+
+Issue は「コールドスタートで取得してキャッシュ」と書いていた。素直にやると、
+コンテナが生きている限り旧キーが通り続ける（数時間ありうる）。
+「ローテーションに再デプロイが要らない」という #182 の売りが半分死ぬ。
+
+→ 5 分 TTL にした。Authorizer の `resultsCacheTtl`（5 分）と同じ数字にして、
+「反映まで最大 5 分 + 5 分」と 1 つの数字で説明できるようにした。
+毎回読む案は却下（1 リクエストごとに往復 + Secrets Manager のスロットリング）。
+
+読み直しが失敗したときは**直近の値を使い続ける**。一時的な throttling で
+API 全体が 403 になる方が被害が大きい。`cachedAt` を進めないので次の呼び出しで
+再試行する。キャッシュが空のときだけ fail closed。
+
+**4. `deny-secret-reads` の関数名 denylist を外すか。**
+
+Issue 本文は「同じ PR で narrow か drop、denylist を残すな」と書いている。
+一方で AC は「**外す前に、その deny が効いていることを実機で示せ**」とも書いていて、
+これは #184 からの持ち越し。後者を満たせない:
+`VoicevoxStack-poc` は一度もデプロイされておらず、Lambda 関数が 0 個の
+アカウントでは readonly セッションからの拒否確認ができない（#196 に分離）。
+
+→ 残した。AC の「残すなら理由をコメントに書く」側を選び、
+`SECRET_BEARING_FUNCTIONS` のコメントに
+(a) 値はもう入っていない、(b) これは「また環境変数に置いた場合」の二重の網、
+(c) 実機確認後に外す、を明記した。
+未検証の制御と、その検証手段を同時に捨てると、後から確かめようがなくなる。
+
+**5. Lambda に AWS SDK を同梱するか、ランタイム同梱の v3 を使うか。**
+
+AWS のガイダンスは「SDK をデプロイパッケージに同梱してバージョンを固定する」。
+ランタイム側の SDK は予告付きで更新されるので、同梱しないとバージョンを握れない。
+
+同梱しない方を選んだ。2 本の関数は依存 0 のまま `Code.fromAsset` で zip できており、
+同梱すると esbuild などのバンドル手順（`NodejsFunction` 等）が入る。
+使っている API は `GetSecretValue` 1 つだけで、v3 内の breaking change に当たる面が薄い。
+
+見直す条件を決めておく: 関数が他の SDK クライアントを使い始めたとき、または
+ランタイムを上げて SDK 由来の挙動差が出たとき。そのときは同梱に切り替える。
+
+（#193 のレビューで挙がった論点。動作上の問題ではないという判断で一致）
+
+### レビューで出た補足（#193）
+
+- `logRetention` の deprecation 警告は #182 の変更前から出ていたもので、直すと
+  LogRetention カスタムリソースが消えてテンプレートの形が変わる。この PR に混ぜず
+  **#195** に切り出した。あわせて `voicevox-engine-*` / `voicevox-authorizer-*` の
+  ロググループが「無期限保持」のままであることもそこで直す。
+
+### 検証コマンドと結果
+
+```console
+$ npx jest
+Test Suites: 11 passed, 11 total
+Tests:       255 passed, 255 total        # #191 時点では 215
+
+$ npx tsc --noEmit
+（出力なし）
+
+$ npx cdk synth -c env=poc --quiet        # VOICEVOX_API_KEY_* を渡さずに成功
+$ grep -n "API_KEY\|SLACK_WEBHOOK" cdk.out/VoicevoxStack-poc.template.json
+540:      "API_KEY_SECRET_ID": "/englishlearn/poc/voicevox/api-key"
+1050:      "SLACK_WEBHOOK_SECRET_ID": "/englishlearn/poc/voicevox/slack-webhook-url"
+（値そのものは 1 か所も無い）
+
+# aws/.env に残っている旧 API キー(64桁 hex)がテンプレートに載っていないこと
+$ grep -ro "$VOICEVOX_API_KEY_POC" cdk.out/ | wc -l
+0
+
+# 各関数の付与範囲（account id はマスク）
+ApiKeyAuthorizerServiceRoleDefaultPolicy    secretsmanager:DescribeSecret,GetSecretValue
+  → arn:aws:secretsmanager:<region>:<account>:secret:/englishlearn/poc/voicevox/api-key-??????
+SlackAlertFunctionServiceRoleDefaultPolicy  secretsmanager:DescribeSecret,GetSecretValue
+  → arn:aws:secretsmanager:<region>:<account>:secret:/englishlearn/poc/voicevox/slack-webhook-url-??????
+```
+
+### 実機で未確認のこと（#182 の AC の残り）
+
+- `aws lambda get-function-configuration` の実物で環境変数を確認
+- 正しいキーで 200 / 誤ったキーで 403、Slack 通知の到達
+- readonly / audit セッションからの `lambda:GetFunctionConfiguration` 拒否確認
+  （`voicevox-engine-poc` は読めること、他 2 本は拒否されること）
+
+いずれも `VoicevoxStack-poc` のデプロイ（docker build + MFA セッション）が前提。
+#184 はその後 #194 で完了したが、**Lambda 関数が 0 個のアカウントでは踏めない**という
+条件は残ったままで、この PR でも踏めていない。宙に浮かせないよう **#196** に切り出した。
+`SECRET_BEARING_FUNCTIONS` のコメントからもそこを指している。
+
 ---
 
 ## 2026-09-12 — #184 MFA 登録の実機検証（新規ユーザ 1 名を通しに歩いた）

@@ -2,6 +2,55 @@
 
 const https = require('https');
 const url = require('url');
+const {
+  SecretsManagerClient,
+  GetSecretValueCommand,
+} = require('@aws-sdk/client-secrets-manager');
+
+const client = new SecretsManagerClient({});
+
+/**
+ * How long a resolved secret is reused before it is read again.
+ *
+ * Not "forever": rotating the webhook (a leaked URL is re-issued, the channel
+ * changes) is supposed to take effect without a redeploy (#182), and a warm
+ * container can outlive the rotation by hours. Not per invocation either —
+ * alarms arrive in bursts, and every read costs a round trip.
+ *
+ * Same five minutes as the authorizer, so one number describes both.
+ */
+const SECRET_TTL_MS = 5 * 60 * 1000;
+
+let cachedWebhookUrl;
+let cachedAt = 0;
+
+/**
+ * The webhook URL is post access to the channel, so it is kept in Secrets
+ * Manager rather than in an environment variable, which `ReadOnlyAccess`
+ * can read through `lambda:GetFunctionConfiguration` (#182).
+ */
+async function webhookUrlFromSecret() {
+  const fresh = cachedWebhookUrl !== undefined && Date.now() - cachedAt < SECRET_TTL_MS;
+  if (fresh) return cachedWebhookUrl;
+
+  const secretId = process.env.SLACK_WEBHOOK_SECRET_ID;
+  try {
+    const response = await client.send(new GetSecretValueCommand({ SecretId: secretId }));
+
+    if (!response.SecretString) {
+      throw new Error(`Secret ${secretId} holds no string value`);
+    }
+    cachedWebhookUrl = response.SecretString;
+    cachedAt = Date.now();
+  } catch (err) {
+    // Losing the ability to re-read should not silence an alarm we can still
+    // deliver. `cachedAt` stays put, so the next alarm retries the read.
+    if (cachedWebhookUrl === undefined) throw err;
+    console.error(`Reusing the cached webhook URL: ${secretId} could not be re-read`, err);
+  }
+
+  return cachedWebhookUrl;
+}
 
 /**
  * SNS → Slack Webhook forwarder for CloudWatch Alarms.
@@ -9,9 +58,14 @@ const url = require('url');
  * Slack message using Incoming Webhooks.
  */
 exports.handler = async (event) => {
-  const webhookUrl = process.env.SLACK_WEBHOOK_URL;
-  if (!webhookUrl) {
-    console.error('SLACK_WEBHOOK_URL is not set');
+  let webhookUrl;
+  try {
+    webhookUrl = await webhookUrlFromSecret();
+  } catch (err) {
+    // A missing webhook secret means notifications are not configured yet.
+    // Throwing here would make SNS retry an alarm nobody can receive, so the
+    // failure is logged and the alarm is dropped — same as before the move.
+    console.error('Slack webhook URL unavailable; skipping notification', err);
     return;
   }
 

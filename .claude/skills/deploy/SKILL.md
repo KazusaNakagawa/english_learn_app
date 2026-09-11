@@ -61,30 +61,26 @@ VOICEVOX TTS バックエンドを指定環境にデプロイします。
 
 - AWS CLI が設定済み
 - `npx cdk bootstrap` が実行済み（初回のみ）
-- **`VOICEVOX_API_KEY_{POC|DEV|PRO}` が設定済み**
+- **Secrets Manager に API キーのシークレットが作成済み**（環境ごとに 1 回だけ）
 
-API キーが未設定だと `aws/lib/voicevox-stack.ts` が synth の時点で例外を投げ、
-デプロイは必ず失敗する。
-
-```
-API key not found. Set environment variable: VOICEVOX_API_KEY_POC
-```
-
-`aws/bin/*.ts` が `dotenv/config` を読み込むため、`aws/.env` に置けばよい。
+API キーは環境変数では渡さない (#182)。スタックはシークレット名だけを持ち、
+Authorizer Lambda が実行時に値を読む。そのため**未作成でも synth / deploy は成功する**が、
+Authorizer が全リクエストを拒否し、CloudWatch Logs に
+`Failed to read the API key secret` が出る。
 
 ```bash
-# aws/.env （git 管理外）
-VOICEVOX_API_KEY_POC=<64桁の hex>
+# 環境ごとに 1 回だけ（スタックと同じリージョンに作る）
+aws secretsmanager create-secret \
+  --name /englishlearn/poc/voicevox/api-key \
+  --secret-string "$(openssl rand -hex 32)" \
+  --region ap-northeast-1
 ```
 
-未作成なら生成する。
+Slack 通知を使う場合は `/englishlearn/{env}/voicevox/slack-webhook-url` も作る。
+未作成でもデプロイは通るが、アラート通知が飛ばなくなる（Lambda はログのみ出力）。
 
-```bash
-echo "VOICEVOX_API_KEY_POC=$(openssl rand -hex 32)" >> aws/.env
-```
-
-`VOICEVOX_SLACK_WEBHOOK_{ENV}` は未設定でも警告のみでデプロイは通るが、
-アラート通知が飛ばなくなる。
+シークレットの値を変えるときは `put-secret-value` のみ。**再デプロイは不要**
+（反映は API キーで最大約 10 分 — docs/02 参照）。
 
 ## 注意
 

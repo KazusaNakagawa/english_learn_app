@@ -8,25 +8,10 @@ function stackFor(stackEnv: string): VoicevoxStack {
   return new VoicevoxStack(app, `VoicevoxStack-${stackEnv}`, { env: ENV, stackEnv });
 }
 
+// #182 以降、constructor は API キーを要求しない（秘密は Secrets Manager から
+// 実行時に読む）。そのためダミーの環境変数を置く必要はない。
+// 「何も設定されていなくても合成できる」ことは test/lambda-secrets.test.ts で見る。
 describe('VoicevoxStack deletion protection', () => {
-  const saved: Record<string, string | undefined> = {};
-  const KEYS = ['VOICEVOX_API_KEY_POC', 'VOICEVOX_API_KEY_DEV', 'VOICEVOX_API_KEY_PRO'];
-
-  beforeAll(() => {
-    // constructor が API キーを要求するため、合成用のダミーを置く。
-    for (const key of KEYS) {
-      saved[key] = process.env[key];
-      process.env[key] = 'dummy-for-synth';
-    }
-  });
-
-  afterAll(() => {
-    for (const key of KEYS) {
-      if (saved[key] === undefined) delete process.env[key];
-      else process.env[key] = saved[key];
-    }
-  });
-
   // 成功系: pro だけは誤削除から守る。
   // develop グループは CDK bootstrap ロールを assume できるため、
   // identity policy 側の Deny では pro を守れない (#174)。

@@ -119,8 +119,10 @@ describe(DENY_SECRET_READS, () => {
   });
 
   // このリポジトリ固有の実害:
-  // ReadOnlyAccess の lambda:GetFunctionConfiguration で環境変数が平文で読める。
-  // voicevox-authorizer は API_KEY を、voicevox-slack-alert は SLACK_WEBHOOK_URL を持つ。
+  // ReadOnlyAccess の lambda:GetFunctionConfiguration は環境変数を平文で返す。
+  // #182 で値そのものは Secrets Manager に移したので、この Deny は
+  // 「また環境変数に秘密を置いた場合」の二重の網として残している。
+  // 外すのはデプロイ済みスタックに対して実効性を確認してから (#182 の AC)。
   describe('lambda environment variables holding secrets', () => {
     const lambdaDeny = () =>
       statements().find((s) =>
