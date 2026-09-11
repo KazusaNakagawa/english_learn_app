@@ -12,7 +12,7 @@
 ///   2. Deploy the CDK stack: cd aws && npm run deploy:poc
 ///   3. Get API endpoint from deployment output (VoicevoxApiEndpoint)
 ///   4. Set voicevoxBaseURL below
-///   5. Set voicevoxApiKey (from CDK deployment output or environment variable)
+///   5. Set voicevoxApiKey (read it from Secrets Manager, see below)
 enum AppConfig {
     /// Base URL for the VOICEVOX engine API (no trailing slash).
     /// Example: https://abc123xyz.execute-api.ap-northeast-1.amazonaws.com
@@ -21,8 +21,10 @@ enum AppConfig {
     /// API key for authenticating with the VOICEVOX backend.
     ///
     /// This key is managed by the developer (not user-configurable).
-    /// Get the value from CDK deployment output or environment variable:
-    ///   echo $VOICEVOX_API_KEY_POC
+    /// Get the value from Secrets Manager (not from a CDK output):
+    ///   aws secretsmanager get-secret-value \
+    ///     --secret-id /englishlearn/poc/voicevox/api-key \
+    ///     --query SecretString --output text
     ///
     /// ⚠️ WARNING: This key will be embedded in the app binary.
     static let voicevoxApiKey = ""

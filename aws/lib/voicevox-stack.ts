@@ -6,6 +6,7 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as sns_subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import * as apigatewayv2 from 'aws-cdk-lib/aws-apigatewayv2';
@@ -130,41 +131,47 @@ export class VoicevoxStack extends cdk.Stack {
     // ----------------------------------------------------------------
     // Lambda Authorizer: API Key validation
     // ----------------------------------------------------------------
-    // Read API key from environment variable (set before deployment)
-    // Example: export VOICEVOX_API_KEY_POC="your-secret-key-here"
-    const apiKeyEnvVar = `VOICEVOX_API_KEY_${stackEnv.toUpperCase()}`;
-    const apiKeyValue = process.env[apiKeyEnvVar];
+    // The key itself never passes through this stack (#182). The functions
+    // below receive the *name* of a secret and read the value at runtime
+    // (cached for five minutes), so it appears neither in a Lambda environment
+    // variable — which `ReadOnlyAccess` can read via
+    // lambda:GetFunctionConfiguration — nor in the synthesized template,
+    // cdk.out, or the deploying shell's history.
+    //
+    // The secrets are imported, not created here: `cdk destroy` on poc is
+    // routine, and a CDK-owned secret would be scheduled for deletion with a
+    // 7-to-30-day recovery window, during which it cannot be re-created under
+    // the same name. Create them once per environment by hand:
+    //
+    //   aws secretsmanager create-secret \
+    //     --name /englishlearn/poc/voicevox/api-key \
+    //     --secret-string "$(openssl rand -hex 32)"
+    //
+    // See docs/02.voicevox_api_authentication.md. Rotation is then a
+    // put-secret-value away — no redeploy.
+    const secretName = (name: string) => `/englishlearn/${stackEnv}/voicevox/${name}`;
 
-    if (!apiKeyValue) {
-      throw new Error(
-        `API key not found. Set environment variable: ${apiKeyEnvVar}\n` +
-        `Example: export ${apiKeyEnvVar}="$(openssl rand -hex 32)"`
-      );
-    }
+    const apiKeySecret = secretsmanager.Secret.fromSecretNameV2(
+      this,
+      'ApiKeySecret',
+      secretName('api-key'),
+    );
 
     const authorizerFn = new lambda.Function(this, 'ApiKeyAuthorizer', {
       functionName: `voicevox-authorizer-${stackEnv}`,
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'index.handler',
-      code: lambda.Code.fromInline(`
-        exports.handler = async (event) => {
-          // Safely access headers with optional chaining to prevent TypeError
-          const apiKey = event.headers?.['x-api-key'];
-          const expectedKey = process.env.API_KEY;
-
-          // Only authorize if both keys exist and match
-          const isAuthorized = Boolean(apiKey && expectedKey && apiKey === expectedKey);
-
-          return {
-            isAuthorized: isAuthorized,
-          };
-        };
-      `),
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/api-key-authorizer')),
       environment: {
-        API_KEY: apiKeyValue,
+        // A secret id, not a secret: safe to read from the function config.
+        API_KEY_SECRET_ID: apiKeySecret.secretName,
       },
       description: `API key authorizer for VOICEVOX (${stackEnv})`,
     });
+
+    // This one secret only — the Slack webhook lives in a secret of its own,
+    // and this function has no business reading it.
+    apiKeySecret.grantRead(authorizerFn);
 
     // ----------------------------------------------------------------
     // API Gateway: HTTP API
@@ -267,15 +274,13 @@ export class VoicevoxStack extends cdk.Stack {
       displayName: `VOICEVOX API Alerts (${stackEnv})`,
     });
 
-    // Slack Webhook URL は環境変数から取得
-    // Example: export VOICEVOX_SLACK_WEBHOOK_POC="https://hooks.slack.com/services/..."
-    const slackWebhookEnvVar = `VOICEVOX_SLACK_WEBHOOK_${stackEnv.toUpperCase()}`;
-    const slackWebhookUrl = process.env[slackWebhookEnvVar];
-    if (!slackWebhookUrl) {
-      cdk.Annotations.of(this).addWarning(
-        `${slackWebhookEnvVar} is not set. Slack notifications will be skipped.`
-      );
-    }
+    // Webhook URL はチャンネルへの投稿権限そのものなので Secrets Manager に置く。
+    // 未作成でもデプロイは通り、Lambda が通知をスキップしてログを残す。
+    const slackWebhookSecret = secretsmanager.Secret.fromSecretNameV2(
+      this,
+      'SlackWebhookSecret',
+      secretName('slack-webhook-url'),
+    );
 
     const slackAlertFn = new lambda.Function(this, 'SlackAlertFunction', {
       functionName: `voicevox-slack-alert-${stackEnv}`,
@@ -283,13 +288,14 @@ export class VoicevoxStack extends cdk.Stack {
       handler: 'index.handler',
       code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/alert-to-slack')),
       environment: {
-        // Webhook URL が未設定の場合、Lambda は通知をスキップしてログのみ出力する
-        SLACK_WEBHOOK_URL: slackWebhookUrl ?? '',
+        SLACK_WEBHOOK_SECRET_ID: slackWebhookSecret.secretName,
       },
       timeout: cdk.Duration.seconds(10),
       logRetention: logs.RetentionDays.ONE_WEEK,
       description: `Forwards CloudWatch Alarm notifications to Slack (${stackEnv})`,
     });
+
+    slackWebhookSecret.grantRead(slackAlertFn);
 
     // SNS → Lambda サブスクリプション
     alertTopic.addSubscription(
@@ -352,9 +358,10 @@ export class VoicevoxStack extends cdk.Stack {
       description: 'VOICEVOX Lambda function ARN',
     });
 
-    // API key output removed for security:
-    // - CloudFormation Outputs are visible in AWS Console and CLI
-    // - API key is already known from the environment variable used during deployment
-    // - Use the value of VOICEVOX_API_KEY_{ENV} instead
+    // The API key is deliberately not an Output: CloudFormation Outputs are
+    // visible in the console and to anyone who can describe the stack.
+    // Read it from its secret instead:
+    //   aws secretsmanager get-secret-value \
+    //     --secret-id /englishlearn/{env}/voicevox/api-key --query SecretString
   }
 }

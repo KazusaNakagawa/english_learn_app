@@ -4,8 +4,9 @@ import * as path from 'path';
 const IAM_APP = '../bin/iam-app';
 const IAM_APP_FILE = path.join(__dirname, '../bin/iam-app.ts');
 
-// VoicevoxStack の constructor はこれらが未設定だと throw する。
-// IAM 側の操作がその影響を受けないことが、このスタックを分けた理由そのもの (#171)。
+// #171 でエントリを分けた時点では、VoicevoxStack の constructor がこれらの
+// 未設定で throw していた。#182 でその依存は消えたが、IAM 側の操作が
+// VOICEVOX 側の事情に一切左右されないことは引き続き守りたい保証なので残す。
 const VOICEVOX_KEYS = [
   'VOICEVOX_API_KEY_POC',
   'VOICEVOX_API_KEY_DEV',
@@ -33,8 +34,9 @@ describe('IAM app entry (bin/iam-app.ts)', () => {
     }
   });
 
-  // 失敗系→成功系: VOICEVOX の資格情報が一切ない環境でも IAM 操作が通ること。
-  // 分離前は "Error: API key not found. Set environment variable: VOICEVOX_API_KEY_POC" で落ちていた。
+  // 成功系: VOICEVOX の資格情報が一切ない環境でも IAM 操作が通ること。
+  // 分離前は "Error: API key not found. Set environment variable: VOICEVOX_API_KEY_POC"
+  // で落ちていた (#171)。
   it('constructs with no VOICEVOX_API_KEY_* set', () => {
     expect(() => require(IAM_APP)).not.toThrow();
   });
