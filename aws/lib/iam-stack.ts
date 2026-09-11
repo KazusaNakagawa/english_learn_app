@@ -22,6 +22,13 @@ const OWN_USERNAME = '${aws:username}';
  * administrator to recover. It stays safe because AWS requires an *assigned*
  * device to be deactivated before deletion, and `iam:DeactivateMFADevice` is
  * NOT exempt — so a password-only attacker still cannot strip an active MFA.
+ *
+ * #184 walked that path and found the caller is not the user but the *console*:
+ * reopening the MFA wizard fires DeleteVirtualMFADevice then
+ * CreateVirtualMFADevice a second apart, under the user's own credentials. A
+ * pending device is never listed in the console, so a human could not delete it
+ * by hand even if they wanted to — without this action the retry itself breaks,
+ * which is how enrolment failures end up on an administrator's desk.
  */
 const ALLOWED_WITHOUT_MFA = [
   'iam:ChangePassword',

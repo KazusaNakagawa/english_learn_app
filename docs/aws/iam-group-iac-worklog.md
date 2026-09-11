@@ -1810,6 +1810,240 @@ Tests:       215 passed, 215 total
 
 ---
 
+## 2026-09-12 — #184 MFA 登録の実機検証（新規ユーザ 1 名を通しに歩いた）
+
+### やったこと
+
+`docs/05.iam_group_design.md` §オンボーディングを**手順書として**歩いた。
+検証用ユーザ `mfa-test` を `readonly` で作り、パスワードのみの状態から
+MFA 登録 → アクセスキー発行 → MFA セッション取得 → `aws s3 ls` まで到達し、
+§オフボーディングで削除した。受け入れ条件は 4 つとも取得できた。
+
+ベースラインの挙動自体は #178 で証跡が取れていたので、残っていたのは
+「**MFA デバイスを 1 つも持たないユーザが、自力で登録し切れるか**」の 1 点だけ。
+既存 2 ユーザはベースライン導入前から MFA 済みで、この経路を誰も通っていなかった。
+
+結論としては**通る**。ただし手順書に書いていないことを 5 つ補わないと通らなかった。
+
+### ハマった点
+
+#### 1. コンソールは Deny の理由を隠す
+
+MFA 未登録のまま S3 → 汎用バケット を開いたときの表示:
+
+```
+バケットを一覧表示するアクセス許可がありません
+お客様または AWS 管理者が s3:ListAllMyBuckets アクションを許可するように
+アクセス許可を更新してから、このページを更新します。
+```
+
+`readonly` は `ReadOnlyAccess` を持つので `s3:ListAllMyBuckets` は**本来許可されている**。
+拒否の原因は `deny-without-mfa` だが、コンソールはポリシー名を出さない。
+同じ拒否を CLI で見るとこうなる:
+
+```console
+$ aws s3 ls --profile mfa-test
+An error occurred (AccessDenied) when calling the ListBuckets operation:
+User: arn:aws:iam::<account>:user/mfa-test is not authorized to perform:
+s3:ListAllMyBuckets with an explicit deny in an identity-based policy:
+arn:aws:iam::<account>:policy/deny-without-mfa
+```
+
+**文面に従うと「管理者に S3 の権限を足してもらう」に向かう。** 正しい対処は MFA の登録。
+新規ユーザが最初に踏むのがこの画面なので、設計書の「MFA ベースライン」に
+両方を並べて載せた。
+
+#### 2. 有効化の失敗も「許可が必要です」と表示される
+
+MFA デバイスの割り当てで「MFA を追加」を押したときの表示:
+
+```
+許可が必要です
+この操作を実行するために必要な許可がありません。許可を追加するように管理者に依頼してください。
+・Authentication code for device is not valid.
+```
+
+実際の原因は TOTP の不一致で、権限ではない。見出しだけ読むと管理者案件に見える。
+1 と同じ誤誘導が、登録の最終段階でもう一度出る。
+
+#### 3. #172 の「自分で削除できる」は、主体が人間ではなかった ★
+
+ここが今回いちばん学びのあった箇所。
+
+デバイスは作成されているのに `EnableDate` が `null` のままだったので、
+最初は「保留中のデバイスがコンソールの一覧に出ない → 本人には削除経路が無い →
+`iam:DeleteVirtualMFADevice` を allowlist に入れても実際には使えない」と結論した。
+**これは間違いだった。** CloudTrail（us-east-1）が実際の並びを出した:
+
+```
+21:42:52  CreateVirtualMFADevice   成功
+21:47:36  DeleteVirtualMFADevice   成功
+21:47:37  CreateVirtualMFADevice   成功
+21:48:07  EnableMFADevice          InvalidAuthenticationCodeException
+                                   Authentication code for device is not valid.
+```
+
+削除を実行したのは人間ではなく**コンソール**。ウィザードを開き直すと、
+保留中のデバイスを消してから作り直す（1 秒差）。呼び出しはユーザ自身の資格情報で走る。
+
+したがって保留中のデバイスが一覧に出ないことは問題にならない。逆に
+`iam:DeleteVirtualMFADevice` が無ければ 21:47:36 が `AccessDenied` で落ち、
+同名で作り直せず `EntityAlreadyExists` で詰み、`infra` 依頼になる。
+**「MFA 登録に失敗して infra に削除を依頼した」という現場でよくある事象は、
+この権限が無い環境で起きるもの**で、#172 はそれを先回りして塞いでいた。
+
+判断としては #172 は正しかったが、**コメントの書き方は正確ではなかった**。
+「ユーザが自分で消せる」と読めるが、正しくは「コンソールの再試行フローが消せる」。
+権限を持つ主体の記述としては同じでも、運用手順としての意味が違う
+（本人に削除操作を案内する必要は無い）。`iam-stack.ts` のコメントに追記した。
+
+#### 4. 作り直されるとシークレットも変わる
+
+3 の作り直しで QR とシークレットが変わる。認証アプリに前回のエントリが残っていると、
+そこから読んだコードは新しいデバイスと一致せず、何度やっても `not valid` になる。
+**やり直す前にアプリ側のエントリを消す**必要がある。手順書に書いていなかった。
+
+#### 5. オフボーディング手順が zsh で 1 行も実行されない ★
+
+設計書のオフボーディングは `P="--profile infra-user-mfa"` を各行に `$P` で
+展開する書き方だった。これは bash 前提で、**zsh では動かない**。
+未クォート変数を単語分割しないため、`--profile infra-user-mfa` が 1 引数として渡る:
+
+```console
+$ U=mfa-test; P="--profile dev_user1-mfa"; for g in $(aws iam list-groups-for-user \
+    --user-name "$U" --query 'Groups[].GroupName' --output text $P); do \
+    aws iam remove-user-from-group --user-name "$U" --group-name "$g" $P; done
+
+usage: aws [options] <command> <subcommand> [<subcommand> ...] [parameters]
+Unknown options: --profile dev_user1-mfa
+```
+
+macOS の既定シェルは zsh なので、手順書を読んだ人がそのまま貼れば必ず踏む。
+しかも落ちているのは**コマンド置換の側**で、グループ名が 1 つも返らないため
+ループ本体は 0 回実行される。**エラーは 1 行しか出ないのに、何も外れていない。**
+急いでいる人が「1 個だけ失敗したのかな」と流すと、権限が残ったまま
+片付けたつもりになる。`$P` をやめて `export AWS_PROFILE` に統一した。
+
+なお、このセッションでは検証を始める前に私（作業者）自身が同じ書き方をして
+同じエラーを踏んでいる。手順書を書いた人間が、手順書を使う前に踏んだ。
+
+#### 6. 無効化を飛ばすと削除できない（手順書が正しかった例）
+
+貼り付け時の事故で `deactivate-mfa-device` が実行されないまま削除に進んだところ:
+
+```console
+An error occurred (DeleteConflict) when calling the DeleteVirtualMFADevice
+operation: MFA VirtualDevice in use. Must deactivate first.
+```
+
+手順書が「無効化してから削除」と順序を明記している根拠が実機で裏付けられた。
+設計書に実際のエラー文を足しておいた。
+
+#### 7. アクセスキーの発行は成功しても赤くなる
+
+MFA でサインインし直してアクセスキーを作ると、キーは `Active` で作成されるのに
+画面上部にこれが出る:
+
+```
+許可が必要です
+User: arn:aws:iam::<account>:user/mfa-test is not authorized to perform:
+iam:TagUser on resource: user mfa-test because no identity-based policy
+allows the iam:TagUser action.
+```
+
+ウィザードの任意項目「ステップ 2 - オプション: 説明タグを設定」が `iam:TagUser` を
+呼ぶだけで、キー作成は成功している。**やり直すとキーが 2 本になり、
+3 本目は上限で作れなくなる。**
+
+`iam:TagUser` を `self-service-credentials` に足すべきか検討したが、足さないことにした。
+タグは省略可能で、キー作成は成功している。手順書に「この赤は無視してよい」と
+書くほうが、権限を広げるより安い。
+
+副次的な収穫がひとつ。この文面は `because no identity-based policy allows`
+（暗黙の拒否）であって `explicit deny ... deny-without-mfa` ではない。
+MFA 未認証なら `deny-without-mfa` が `iam:TagUser` を明示的に拒否するはずなので、
+**エラー文面そのものが「MFA でサインインし直せている」ことの証跡**になっている。
+手順書ステップ 3 の主張はこれで裏付けられた。
+
+#### 8. セキュリティ認証情報のページは赤だらけになる
+
+MFA 未認証でこのページを開くと、以下が軒並み `AccessDenied` になる:
+`iam:GetLoginProfile` / `iam:ListAccessKeys` / `iam:ListUserTags` /
+`iam:ListSigningCertificates` / `iam:ListAccountAliases` / `iam:GetAccountSummary` /
+`sso:DescribeRegisteredRegions` / `freetier:GetAccountPlanState`。
+
+いずれも allowlist 外なので設計どおりだが、初見のユーザには「このページは壊れている」
+と映る。MFA の登録操作だけは通るので、手順書に「この赤は正常」と明記した。
+なお 1・2 と違い、こちらのエラーはポリシー名まで出す親切な文面だった。
+
+### 判断が分かれた点
+
+**`iam:TagUser` を allowlist に足すか** → 足さない（上記 7）。
+
+**設計書の警告文を「検証済み」に置き換えるか** → 置き換えたうえで、
+`admin` のオフボーディングだけ「未検証」と明示して残した。実行者が別の `admin` か
+root に限られ、平時のメンバーが 0 なので歩けない。4 本の手順のうち 3 本が
+歩けたからといって、残り 1 本を黙って検証済みの見た目にするのが一番危ない。
+
+**コンソールの誤誘導を設計書に書くか、それとも別の FAQ にするか** → 設計書に書いた。
+1 と 2 は「MFA ベースラインとは何か」を理解していないと誤読する類のもので、
+ベースラインの説明の直後に置くのが一番読まれる。
+
+### 検証コマンドと結果
+
+受け入れ条件 4 つの証跡（識別子はマスク済み）:
+
+```console
+# 条件 1: MFA 未登録で allowlist 外が拒否される
+$ aws s3 ls --profile mfa-test
+An error occurred (AccessDenied) ... with an explicit deny in an
+identity-based policy: arn:aws:iam::<account>:policy/deny-without-mfa
+
+# 条件 2: 自力で仮想 MFA デバイスを作成・有効化できる
+$ aws iam list-mfa-devices --user-name mfa-test
+{"MFADevices": [{"UserName": "mfa-test",
+  "SerialNumber": "arn:aws:iam::<account>:mfa/mfa-test",
+  "EnableDate": "2026-09-11T21:56:35+00:00"}]}
+
+# 条件 3: aws-mfa-session.sh がセッションを発行する
+$ AWS_MFA_BASE_PROFILE=mfa-test ./scripts/aws-mfa-session.sh
+MFA code for mfa-test:
+✅ Session profile 'mfa-test-mfa' updated (expires 2026-09-12T10:03:47+00:00)
+
+# 条件 4: そのセッションで s3 ls が通る
+$ aws s3 ls --profile mfa-test-mfa
+2026-04-29 16:59:21 cdk-hnb659fds-assets-<account>-ap-northeast-1
+```
+
+後片付け後の確認:
+
+```console
+$ aws iam get-user --user-name mfa-test
+An error occurred (NoSuchEntity) ... The user with name mfa-test cannot be found.
+
+$ aws iam list-virtual-mfa-devices --query 'VirtualMFADevices[].SerialNumber'
+arn:aws:iam::<account>:mfa/root_user.wp2018
+arn:aws:iam::<account>:mfa/dev_user1
+arn:aws:iam::<account>:mfa/dev_readonly1
+```
+
+ローカルの `~/.aws/{credentials,config}` からも `mfa-test` / `mfa-test-mfa` を削除した。
+
+```console
+$ npm test
+Tests:       215 passed, 215 total
+```
+
+設計書の表をテストで固定してあるが、今回の修正は表に触れていないため影響なし。
+`iam-stack.ts` への変更はコメントのみで、テンプレートは変わっていない。
+
+### 残していること
+
+`admin` のオフボーディングだけ歩けていない。実行者が別の `admin` か root に限られ、
+平時のメンバーが 0 のため。設計書の該当節に未検証である旨を明記した。
+
+---
+
 <!--
 以降、PR ごとに追記する。テンプレート:
 
