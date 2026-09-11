@@ -1928,7 +1928,7 @@ Issue 本文は「同じ PR で narrow か drop、denylist を残すな」と書
 一方で AC は「**外す前に、その deny が効いていることを実機で示せ**」とも書いていて、
 これは #184 からの持ち越し。後者を満たせない:
 `VoicevoxStack-poc` は一度もデプロイされておらず、Lambda 関数が 0 個の
-アカウントでは readonly セッションからの拒否確認ができない。
+アカウントでは readonly セッションからの拒否確認ができない（#196 に分離）。
 
 → 残した。AC の「残すなら理由をコメントに書く」側を選び、
 `SECRET_BEARING_FUNCTIONS` のコメントに
@@ -1991,10 +1991,10 @@ SlackAlertFunctionServiceRoleDefaultPolicy  secretsmanager:DescribeSecret,GetSec
 - readonly / audit セッションからの `lambda:GetFunctionConfiguration` 拒否確認
   （`voicevox-engine-poc` は読めること、他 2 本は拒否されること）
 
-いずれも `VoicevoxStack-poc` のデプロイ（docker build + MFA セッション）が前提で、
-#184 が詰まっているのと同じ理由でこの PR では踏めない。Issue に残す。
-
----
+いずれも `VoicevoxStack-poc` のデプロイ（docker build + MFA セッション）が前提。
+#184 はその後 #194 で完了したが、**Lambda 関数が 0 個のアカウントでは踏めない**という
+条件は残ったままで、この PR でも踏めていない。宙に浮かせないよう **#196** に切り出した。
+`SECRET_BEARING_FUNCTIONS` のコメントからもそこを指している。
 
 ---
 

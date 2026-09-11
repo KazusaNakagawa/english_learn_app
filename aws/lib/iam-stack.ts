@@ -61,7 +61,7 @@ const ALLOWED_WITHOUT_MFA = [
  *   1. The live check the two-list design rests on has never run: it needs a
  *      deployed `VoicevoxStack-poc`, which has never existed (#184, #182).
  *      Dropping an unverified control and its verification in one step would
- *      leave nothing to check afterwards.
+ *      leave nothing to check afterwards. Tracked in #196.
  *   2. A function named `-authorizer-` or `-slack-alert-` is where a secret
  *      would land again if someone reached for an environment variable.
  *
@@ -69,7 +69,7 @@ const ALLOWED_WITHOUT_MFA = [
  * The engine function is deliberately absent: it holds no secret and is the
  * main thing an investigator needs to look at.
  *
- * Remove this statement once the deny has been exercised against a deployed
+ * Remove this statement once #196 has exercised the deny against a deployed
  * stack and the result is in docs/aws/iam-group-iac-worklog.md.
  */
 const SECRET_BEARING_FUNCTIONS = ['voicevox-authorizer-*', 'voicevox-slack-alert-*'];
