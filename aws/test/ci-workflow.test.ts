@@ -70,7 +70,15 @@ describe('CDK CI workflow', () => {
     // 成功系: このスイート自体と、それが守る設計書の両方で発火すること。
     // docs/05 は design-doc.test.ts が守っている当のファイルで、
     // aws/** だけのフィルタでは doc だけの PR がすり抜ける (#192)。
-    it.each(['aws/**', 'docs/05.iam_group_design.md', '.github/workflows/cdk-ci.yml'])(
+    // scripts/apply-stack-policy.sh も同じ理由で必要 (#186)。
+    // stack-policy.test.ts がこのスクリプトの実行ビットと参照先パスを固定しており、
+    // スクリプトだけ触る PR は aws/** フィルタをすり抜ける。
+    it.each([
+      'aws/**',
+      'docs/05.iam_group_design.md',
+      'scripts/apply-stack-policy.sh',
+      '.github/workflows/cdk-ci.yml',
+    ])(
       'runs when %s changes',
       (target) => {
         for (const globs of pathFilters()) {

@@ -13,12 +13,17 @@ on:
       # IamStack. A doc-only PR is exactly the case that test exists for, and
       # exactly the case an `aws/**`-only filter would skip.
       - 'docs/05.iam_group_design.md'
+      # stack-policy.test.ts pins this script's exec bit and the policy path it
+      # reads. A script-only PR is the exact drift those assertions exist for,
+      # and the exact PR an `aws/**` filter would skip (#186).
+      - 'scripts/apply-stack-policy.sh'
       - '.github/workflows/cdk-ci.yml'
   pull_request:
     branches: [develop, main]
     paths:
       - 'aws/**'
       - 'docs/05.iam_group_design.md'
+      - 'scripts/apply-stack-policy.sh'
       - '.github/workflows/cdk-ci.yml'
 
 # A follow-up push should replace the run in flight, not race it.
@@ -46,11 +51,21 @@ jobs:
       AWS_DEFAULT_REGION: ap-northeast-1
 
     steps:
+      # v4 runs on Node 20, which GitHub's runners now force onto Node 24 and
+      # warn about on every run. v5 of both actions is the Node 24 release;
+      # v6/v7 are on top of that.
+      #
+      # The breaking changes in between do not reach this job: setup-node v5
+      # caches automatically when package.json has a `packageManager` field and
+      # v6 narrowed that to npm — this job asks for `cache: 'npm'` explicitly
+      # either way. checkout v7 refuses to check out a fork's head for
+      # `pull_request_target` / `workflow_run`; this workflow triggers on
+      # `pull_request`, which checks out the merge ref and is unaffected.
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: 'npm'
