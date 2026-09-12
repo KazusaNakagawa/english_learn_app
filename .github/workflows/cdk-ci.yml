@@ -13,12 +13,17 @@ on:
       # IamStack. A doc-only PR is exactly the case that test exists for, and
       # exactly the case an `aws/**`-only filter would skip.
       - 'docs/05.iam_group_design.md'
+      # stack-policy.test.ts pins this script's exec bit and the policy path it
+      # reads. A script-only PR is the exact drift those assertions exist for,
+      # and the exact PR an `aws/**` filter would skip (#186).
+      - 'scripts/apply-stack-policy.sh'
       - '.github/workflows/cdk-ci.yml'
   pull_request:
     branches: [develop, main]
     paths:
       - 'aws/**'
       - 'docs/05.iam_group_design.md'
+      - 'scripts/apply-stack-policy.sh'
       - '.github/workflows/cdk-ci.yml'
 
 # A follow-up push should replace the run in flight, not race it.

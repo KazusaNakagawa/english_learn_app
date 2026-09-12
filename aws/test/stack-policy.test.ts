@@ -45,6 +45,8 @@ const actionsWith = (effect: string): string[] =>
     .filter((s) => s.Effect === effect)
     .flatMap((s) => asArray(s.Action));
 
+const scriptText = (): string => fs.readFileSync(SCRIPT, 'utf8');
+
 const packageScripts = (): Record<string, string> =>
   JSON.parse(fs.readFileSync(path.join(AWS_DIR, 'package.json'), 'utf8')).scripts;
 
@@ -121,7 +123,35 @@ describe('VoicevoxStack-pro stack policy', () => {
 
     // 失敗系: ファイル名を変えただけでスクリプトが黙って何も適用しなくなるのを防ぐ。
     it('points at the policy file that exists', () => {
-      expect(fs.readFileSync(SCRIPT, 'utf8')).toContain('voicevox-${STACK_ENV}.json');
+      expect(scriptText()).toContain('voicevox-${STACK_ENV}.json');
+    });
+
+    // 失敗系: 本番安全用スクリプトの env を既定値にしない。
+    // `${1:-pro}` だと、引数を渡し忘れた将来の postdeploy:dev が
+    // dev デプロイの最中に pro のポリシーを pro に貼り直してしまう。
+    it('requires the environment to be named explicitly', () => {
+      expect(scriptText()).not.toMatch(/STACK_ENV="\$\{1:-/);
+    });
+
+    // 失敗系: describe-stacks の stderr を捨てると、AccessDenied も
+    // MFA 期限切れも「スタックが無い」と同じ扱いになる。#174 の経路で
+    // pro がポリシー無しで動いている状態が、その誤報の裏に隠れる。
+    it('does not discard the stderr of its describe-stacks probe', () => {
+      expect(scriptText()).toMatch(/describe-stacks[\s\S]{0,200}?2>&1 >\/dev\/null/);
+      expect(scriptText()).toContain('AccessDenied');
+    });
+
+    // 境界値: リージョンは CLI の既定解決に任せず、aws/bin/app.ts と同じ順で
+    // 解決して明示的に渡す。未設定プロファイルだと CDK は ap-northeast-1 に
+    // 作る一方、フックは別を見て「スタックが無い」と誤報告する。
+    it('pins the region the way the CDK app resolves it', () => {
+      expect(scriptText()).toContain('ap-northeast-1');
+      expect(scriptText()).toContain('aws configure get region');
+      for (const call of ['describe-stacks', 'set-stack-policy', 'get-stack-policy']) {
+        const index = scriptText().indexOf(call);
+        expect(index).toBeGreaterThan(-1);
+        expect(scriptText().slice(index, index + 200)).toContain('--region "$REGION"');
+      }
     });
 
     // 境界値: poc / dev の deploy に紛れ込んでいないこと。
@@ -133,12 +163,31 @@ describe('VoicevoxStack-pro stack policy', () => {
   // 意図的な本番変更の手順が書かれていること。
   // 手順が無いと、最初に困った人がポリシーを外して終わる。
   describe('documentation', () => {
+    const doc = () => fs.readFileSync(DOC, 'utf8');
+
     it.each([
       'aws cloudformation set-stack-policy',
       'aws cloudformation get-stack-policy',
       '--stack-policy-during-update-body',
     ])('documents %s', (command) => {
-      expect(fs.readFileSync(DOC, 'utf8')).toContain(command);
+      expect(doc()).toContain(command);
+    });
+
+    // 失敗系: 緩和の解除を postdeploy:pro フックに任せる手順を書かないこと。
+    // npm はデプロイが失敗すると postdeploy を走らせないので、置換デプロイが
+    // 転んだ瞬間に Update:* が本番に貼られたまま残る。
+    it('restores the policy from a trap, not from the postdeploy hook', () => {
+      expect(doc()).toContain("trap 'scripts/apply-stack-policy.sh pro' EXIT INT TERM");
+    });
+
+    // 失敗系: --use-previous-template はデプロイ済みテンプレートの再適用なので、
+    // 「置換を伴う変更」を運べない。地の文で仕組みを説明するのは良いが、
+    // コピペできる手順として置くと、動かないものを案内することになる。
+    it('offers no update-stack recipe that cannot carry the change', () => {
+      const fenced = doc().match(/```[\s\S]*?```/g) ?? [];
+      for (const block of fenced) {
+        expect(block).not.toContain('update-stack');
+      }
     });
   });
 });

@@ -2419,6 +2419,191 @@ docker build + MFA セッション + 実費がかかる。chore PR の副作用�
 
 ---
 
+## 2026-09-12 — #186 スタックポリシーの PR レビュー対応（PR #201）
+
+### やったこと
+
+`/code-review 201` で挙がった 5 件を潰した。ポリシー文書そのもの
+（`Update:Modify` の Allow ＋ `Update:Replace` / `Update:Delete` の明示 Deny）は
+指摘なし。落ちていたのは**その周りの運用と検出**だった。
+
+| # | 深刻度 | 直したもの |
+| --- | --- | --- |
+| 1 | HIGH | 緩和手順が、デプロイ失敗時に本番を全開のまま放置していた |
+| 2 | MEDIUM | `describe-stacks` の stderr 握り潰しで AccessDenied が「スタックが無い」に化ける |
+| 3 | MEDIUM | スクリプトがリージョンを固定していなかった（CDK 側はしている） |
+| 4 | MEDIUM-LOW | `--use-previous-template` の手順が、目的の変更をそもそも運べない |
+| 5 | MEDIUM-LOW | スクリプトを守るテストが、スクリプトだけ触る PR で走らない |
+
+### ハマった点
+
+**1. `postdeploy` は失敗時に走らない。**
+
+元の手順はこうだった。
+
+```bash
+aws cloudformation set-stack-policy --stack-policy-body file:///tmp/allow-once.json
+AWS_PROFILE=infra-user-mfa npm run deploy:pro   # 完了後、フックが厳しい側に戻す
+```
+
+npm が `postdeploy:pro` を実行するのは `deploy:pro` が**成功したときだけ**。
+そして置換を伴うデプロイは、まさに失敗・ロールバックしやすい
+（イメージビルド失敗、Lambda が安定しない、MFA セッション切れ、Ctrl-C）。
+つまり「保護が一番必要な瞬間に保護が外れたまま残り、誰も気づかない」。
+`get-stack-policy` を叩くまで表に出ない種類の事故で、
+このスタックポリシーを入れた理由そのものが消える。
+
+`trap ... EXIT INT TERM` を張ったサブシェルに置き換えて、
+成否・中断にかかわらず戻るようにした。
+
+**2. `2>&1` が全部の失敗を「存在しない」に潰していた。**
+
+```bash
+if ! aws cloudformation describe-stacks --stack-name "$STACK" "$@" >/dev/null 2>&1; then
+  echo "Stack ${STACK} does not exist, or is not visible with these credentials." >&2
+```
+
+AccessDenied も MFA 期限切れもリージョン違いも、全部これになる。
+実害があるのは #174 で分かっている経路で、`develop` グループのメンバーは
+共有の CDK bootstrap ロール経由で `deploy:pro` を**通せてしまう**一方、
+identity policy 側は `VoicevoxStack-pro` への `cloudformation:*` を Deny している。
+
+- デプロイ: 成功する
+- フック: AccessDenied
+- 表示: 「そんなスタックはありません」
+- 実態: **pro は動いていて、ポリシーだけが付いていない**
+
+stderr を捕捉して `ValidationError` / `does not exist` と
+それ以外を分け、後者では #174 の可能性を名指しするようにした。
+スタブ CLI を用意して両分岐を実際に踏んで確認した（下記）。
+
+**3. リージョン解決が CDK とスクリプトで別だった。**
+
+`aws/bin/app.ts:22` は `CDK_DEFAULT_REGION ?? 'ap-northeast-1'` とハードコードの
+フォールバックを持つ。スクリプトは CLI の既定解決に任せていた。
+プロファイルに `region` が無いと CDK は `ap-northeast-1` に作り、
+フックは別を見るかエラーになり、それが 2 に飲み込まれて「無い」と表示される。
+`AWS_REGION` → `AWS_DEFAULT_REGION` → `CDK_DEFAULT_REGION` →
+`aws configure get region` → `ap-northeast-1` の順に解決して明示的に渡す形にした。
+`--region` は `"$@"` より前に置くので、呼び出し側の `--region` が勝つ。
+
+**4. 動かないコマンドを手順として載せていた。**
+
+```bash
+aws cloudformation update-stack --stack-name VoicevoxStack-pro \
+  --use-previous-template \
+  --stack-policy-during-update-body file:///tmp/allow-once.json
+```
+
+`--use-previous-template` は**デプロイ済みのテンプレートの再適用**なので、
+「置換が必要な CDK の変更」を構造的に運べない。おまけにテンプレートも
+パラメータも変わらないので `No updates are to be performed` で即死し、
+named IAM role を作るスタックなので `--capabilities CAPABILITY_NAMED_IAM` も要る。
+手順ではなく「`--stack-policy-during-update-body` とは何か」の説明に書き換えた。
+
+**5. ガードが対象 PR で走らない。**
+
+`.github/workflows/cdk-ci.yml` の `paths:` は `aws/**` /
+`docs/05.iam_group_design.md` / ワークフロー自身のみ。
+`stack-policy.test.ts` はスクリプトの実行ビットと参照先パスを固定しているのに、
+**スクリプトだけ触る PR では CI が起動しない**。
+`docs/05` を同じ理由で足したコメントが既に書いてあったのに、
+スクリプトには適用し忘れていた。
+
+### 判断が分かれた点
+
+**1. 緩和手順を「専用スクリプト」にするか、doc のスニペットのままにするか。**
+
+スニペットのままにした。`trap` 込みで 10 行に収まるし、
+本番を一時的に全開にする操作は、中身が目の前に書いてあるほうがいい。
+スクリプトにすると「引数 1 個で本番を無防備にできるもの」がリポジトリに増える。
+
+**2. `STACK_ENV="${1:-pro}"` の既定値を残すか。**
+
+外して必須にした。本番安全用スクリプトの既定値が本番なのは向きが逆で、
+引数を渡し忘れた将来の `postdeploy:dev` が、dev デプロイの最中に
+pro のポリシーを pro へ貼り直す。ついでに `--profile` を env 名として
+解釈していた挙動も、先頭が `-` なら弾くようにした。
+
+**3. リージョンを `ap-northeast-1` 決め打ちで渡すか。**
+
+やめた。プロファイルに `region` が設定されていればそれが CDK の行き先なので、
+決め打ちするとそちらを壊す。`aws configure get region` を挟んで
+「app.ts と同じ順」にするのが正しい。フォールバック値だけを揃える。
+
+### 検証コマンドと結果
+
+```console
+$ npx jest --ci --runInBand
+Test Suites: 13 passed, 13 total
+Tests:       292 passed, 292 total          # 286 → 292（回帰テスト 6 本追加）
+
+$ bash -n scripts/apply-stack-policy.sh
+（出力なし）
+
+$ /bin/bash --version | head -1
+GNU bash, version 3.2.57(1)-release (arm64-apple-darwin25)   # macOS 標準
+
+$ ./scripts/apply-stack-policy.sh
+usage: scripts/apply-stack-policy.sh <env> [extra aws-cli args...]
+exit=1
+
+$ ./scripts/apply-stack-policy.sh --profile x
+First argument must be the environment name (e.g. 'pro'), got '--profile'.
+exit=1
+```
+
+`describe-stacks` の 2 分岐は、スタブの `aws` を PATH の先頭に置いて踏んだ。
+
+```console
+$ FAKE_MODE=validation ./scripts/apply-stack-policy.sh pro
+Stack VoicevoxStack-pro does not exist in ap-northeast-1.
+A stack policy attaches to an existing stack; deploy it first.
+exit=1
+
+$ FAKE_MODE=denied ./scripts/apply-stack-policy.sh pro
+Could not read VoicevoxStack-pro in ap-northeast-1, and this is not 'no such stack':
+  An error occurred (AccessDenied) when calling the DescribeStacks operation: ...
+
+AccessDenied here is the #174 case: a develop-group member CAN deploy
+pro through the shared CDK bootstrap role, but their identity policy
+denies cloudformation:* on VoicevoxStack-pro — so the deploy succeeded
+and VoicevoxStack-pro may now be running with NO stack policy attached.
+Re-run this script with infra/admin credentials.
+exit=1
+```
+
+リージョン解決とフラグの受け渡しも、スタブへの引数をログに取って確認した。
+
+```console
+$ env -u AWS_REGION -u AWS_DEFAULT_REGION -u CDK_DEFAULT_REGION \
+    ./scripts/apply-stack-policy.sh pro          # プロファイルに region 無し
+aws configure get region
+aws cloudformation describe-stacks  --stack-name VoicevoxStack-pro --region ap-northeast-1
+aws cloudformation set-stack-policy --stack-name VoicevoxStack-pro --region ap-northeast-1 ...
+aws cloudformation get-stack-policy --stack-name VoicevoxStack-pro --region ap-northeast-1 ...
+
+$ AWS_REGION=us-east-1 ./scripts/apply-stack-policy.sh pro --profile infra
+aws cloudformation set-stack-policy --stack-name VoicevoxStack-pro --region us-east-1 ... --profile infra
+```
+
+追加した 6 本が本当に効くかは、直した箇所を 5 つ壊して確かめた
+（`--region` を外す / `${1:-pro}` に戻す / `trap` を消す /
+fenced block に `update-stack` を戻す / workflow のフィルタから削る）。
+
+```console
+Tests:       5 failed, 287 passed, 292 total
+```
+
+戻して 292 passed に復帰。
+
+### 実機で未確認のこと
+
+#200 の 3 件（`get-stack-policy` の読み戻し、置換の拒否、in-place の通過）は
+そのまま。今回の修正はどれも `VoicevoxStack-pro` の存在を前提にしないので、
+状況は変わっていない。
+
+
 ---
 
 <!--
