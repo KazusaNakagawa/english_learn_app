@@ -10,6 +10,7 @@
     "deploy:poc": "cdk deploy -c env=poc",
     "deploy:dev": "cdk deploy -c env=dev",
     "deploy:pro": "cdk deploy -c env=pro",
+    "postdeploy:pro": "../scripts/apply-stack-policy.sh pro",
     "deploy:iam": "cdk deploy IamStack --app 'npx ts-node --prefer-ts-exts bin/iam-app.ts'",
     "diff:poc": "cdk diff -c env=poc",
     "diff:dev": "cdk diff -c env=dev",

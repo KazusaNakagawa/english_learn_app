@@ -1,0 +1,18 @@
+{
+  "Statement": [
+    {
+      "Sid": "AllowInPlaceUpdates",
+      "Effect": "Allow",
+      "Action": "Update:Modify",
+      "Principal": "*",
+      "Resource": "*"
+    },
+    {
+      "Sid": "DenyReplaceAndDelete",
+      "Effect": "Deny",
+      "Action": ["Update:Replace", "Update:Delete"],
+      "Principal": "*",
+      "Resource": "*"
+    }
+  ]
+}

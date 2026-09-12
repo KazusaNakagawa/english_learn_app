@@ -2313,6 +2313,112 @@ pull_request の paths 判定は PR の変更ファイル全体に対して効�
 
 ---
 
+## 2026-09-12 — #186 pro のスタックポリシー
+
+### やったこと
+
+#174 で「pro の保護はスタック側」と決めたうちの、**更新を止める半分**。
+削除保護（#174 で実装済み）は削除しか止めないので、誤った `deploy:pro` が
+Lambda や API Gateway を置換する経路が残っていた。
+
+- `aws/stack-policies/voicevox-pro.json` — `Update:Modify` を Allow、
+  `Update:Replace` / `Update:Delete` を Deny（`Principal` / `Resource` は `*`）
+- `scripts/apply-stack-policy.sh` — `SetStackPolicy` + **読み戻して一致確認**。
+  ポリシー未存在・スタック未存在はそれぞれ明示的に落とす
+- `aws/package.json` に `postdeploy:pro` フック（`npm run deploy:pro` の後に自動実行）
+- `docs/05.iam_group_design.md` 設計上の制約 §4 を書き換え
+- `aws/test/stack-policy.test.ts` 19 件（文書の内容・フックの結線・doc の手順）
+
+CDK では設定できない。`cdk.StackProps` に `stackPolicy` が無く L1 も無いため、
+CloudFormation の `SetStackPolicy` を別に呼ぶしかない。だからこそ
+「コンソールで一度やって終わり」にせず、文書をリポジトリに置いてフックで毎回貼る。
+
+### ハマった点 / 先に踏んでおいた罠
+
+**1. `npm run deploy:pro -- --profile x` はフックにプロファイルを渡さない。**
+
+`--` 以降は `cdk deploy` にしか渡らないので、`postdeploy:pro` は既定プロファイルで動く。
+結果は「デプロイは成功、直後にフックだけがスタックを見つけられず落ちる」。
+`AWS_PROFILE=... npm run deploy:pro` で渡すこととし、スクリプト冒頭と doc に書いた。
+この doc には既に「`--profile x` を変数展開で渡すと 1 引数になる」という別の罠が
+書かれていて（#176）、`--profile` は渡し方を間違えやすい引数だという傾向がある。
+
+**2. スタックポリシーは deny-by-default。**
+
+1 本アタッチした瞬間、既存リソースへの更新は**明示的に Allow したものしか通らない**。
+つまり `Update:Modify` の Allow が保護の要で、ここを `Update:*` に広げると
+`Update:Replace` / `Update:Delete` まで含んで**保護が黙って消える**。
+Deny 文は deny-by-default 下では冗長だが、将来 Allow を広げたときの二重の網として残し、
+「Allow に `Update:*` を書かない」もテストで固定した。
+新規リソースの追加は常に許可される（ポリシーの対象外）ことも doc に明記。
+
+**3. npm が任意のスクリプト名で post を走らせるか、先に確認した。**
+
+走らないなら `deploy:pro` 自体をラッパーにする必要があった。npm 11.13.0 で確認:
+
+```console
+$ npm run zz:probe
+> echo MAIN
+MAIN
+> echo POST-RAN
+POST-RAN
+```
+
+### 判断が分かれた点
+
+**1. Deny の粒度: 全リソース一律か、リソース単位か。**
+
+一律にした。pro に何が載るかは今後変わるし、`LogicalResourceId` を列挙する形は
+**新しく足したリソースが無防備**という抜けを作る。運用してうるさければ
+「ポリシーを外す」ではなく「粒度を絞る」方向で見直す、と doc に書いた。
+
+**2. フックで貼るか、手順書に書くだけにするか。**
+
+フック。スタックポリシーは更新では消えないが、**スタックを作り直すと消える**。
+手順書だけだと再作成のときに確実に忘れる。Issue 側も「覚えておくのではなく
+再適用しろ」と書いていた。
+
+**3. poc / dev にもポリシーを置くか。**
+
+置かない。日常的に作り直す環境で置換が拒否されると開発が止まる。
+テストで「ポリシーは pro のみ」を固定した（将来 poc 用を足すとテストが落ちる）。
+
+### 検証コマンドと結果
+
+```console
+$ npx jest
+Test Suites: 13 passed, 13 total
+Tests:       286 passed, 286 total
+
+$ bash -n scripts/apply-stack-policy.sh
+（出力なし）
+
+$ ./scripts/apply-stack-policy.sh poc          # ポリシーを持たない env のガード
+No stack policy for 'poc': .../aws/stack-policies/voicevox-poc.json does not exist.
+poc and dev are deliberately unprotected — they are re-created routinely,
+and a policy there would refuse the resource replacements that implies.
+exit=1
+
+$ ./scripts/apply-stack-policy.sh pro          # スタックが存在しない状態のガード
+Stack VoicevoxStack-pro does not exist, or is not visible with these credentials.
+A stack policy attaches to an existing stack; deploy it first.
+exit=1
+```
+
+2 つ目のガードは、**いま本当にスタックが無い**ことの裏返しでもある。
+
+### 実機で未確認のこと（AC のうち 3 件 → #200）
+
+- `get-stack-policy` がこの文書を返すこと
+- 置換を伴う `deploy:pro` が拒否されること
+- in-place の変更は通ること（凍結ではないこと）
+
+いずれも `VoicevoxStack-pro` の**初回デプロイ = 本番スタックの新規作成**が前提で、
+docker build + MFA セッション + 実費がかかる。chore PR の副作用で踏む判断ではないので
+**#200** に切り出した。#196（poc デプロイ後の deny 確認）と同じ性質の持ち越し。
+
+---
+
 ---
 
 <!--
