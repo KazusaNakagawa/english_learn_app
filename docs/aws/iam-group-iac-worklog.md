@@ -2230,6 +2230,89 @@ Tests:       215 passed, 215 total
 `admin` のオフボーディングだけ歩けていない。実行者が別の `admin` か root に限られ、
 平時のメンバーが 0 のため。設計書の該当節に未検証である旨を明記した。
 
+## 2026-09-12 — #192 aws/ の Jest を CI で回す
+
+### やったこと
+
+`.github/workflows/cdk-ci.yml` を復活させた。2026-02-15 に `.bk` へ退避されて以来
+（5e8c9dc）動いていなかったもので、そのまま戻すだけでは足りない点が 3 つあった。
+
+| 旧 `.bk` | 直したこと |
+| --- | --- |
+| テストを一切実行しない（`npm ci` → `build` → `cdk synth`） | `npm test -- --ci --runInBand` を追加。これが Issue の本体 |
+| 素の `npx cdk synth` | `npm run synth:iam` と `npm run synth:poc` に分割。素の synth は `bin/app.ts` しか見ないので **IamStack を丸ごと取りこぼす** |
+| `paths: aws/**` のみ | `docs/05.iam_group_design.md` を追加。`design-doc.test.ts` が守っているのはこの doc で、**doc だけの PR こそがすり抜ける** |
+
+`aws/test/ci-workflow.test.ts` でワークフロー自体をピン留めした。paths フィルタと
+ステップ構成が静かに壊れるのを検出するのが目的。YAML パーサは入れていない
+（CI をテストするためだけに `npm ci` の依存を増やすことになるため、テキストで読む）。
+
+### ハマった点
+
+**1. `js-yaml` を devDependency に入れかけて戻した。**
+
+最初はワークフローを YAML としてパースするつもりで `npm i -D js-yaml` したが、
+手元のレジストリが返したのは `js-yaml@5.4.1`。公開レジストリ側にこのバージョンが
+あるか手元から確認できず、**CI の `npm ci` が壊れたら本末転倒**なので取り消した。
+CI を直す PR が CI を壊す依存を持ち込むのは避ける。
+
+**2. テストのパーサが `paths:` のコメント行で打ち切られた。**
+
+```
+✕ runs when docs/05.iam_group_design.md changes
+✕ runs when .github/workflows/cdk-ci.yml changes
+```
+
+リスト項目にマッチしない行が来たら break していたため、
+「なぜこの path を入れたか」を説明するコメントでリストが途切れていた。
+コメントと空行は読み飛ばすようにした。YAML のリストにコメントが挟まるのは普通。
+
+### 判断が分かれた点
+
+**synth ステップにダミーの `VOICEVOX_API_KEY_*` を渡すか。**
+
+Issue の Scope には「ダミー値を入れて synth する」と書いてあった。#182 の前は
+それが必須で、`.bk` の synth ステップが CI で落ちる原因でもあった:
+
+```console
+$ DOTENV_CONFIG_PATH=/dev/null npx cdk synth
+Error: API key not found. Set environment variable: VOICEVOX_API_KEY_POC
+```
+
+#182 でこの依存が消えたので、**あえて何も渡さない**。渡さないこと自体が
+「テンプレートに秘密が要らない」ことの継続的な検査になる。将来また環境変数に
+秘密を戻したら、この synth ステップが鍵を要求し始めて気づける。
+ワークフローのコメントにその意図を書いた。
+
+### 検証コマンドと結果
+
+CI と同じ条件（AWS 資格情報なし・VOICEVOX キーなし・`.env` 無効）で 4 ステップを再現。
+
+```console
+$ env -u AWS_PROFILE -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN \
+      -u VOICEVOX_API_KEY_POC -u VOICEVOX_API_KEY_DEV -u VOICEVOX_API_KEY_PRO \
+      AWS_SHARED_CREDENTIALS_FILE=/dev/null AWS_CONFIG_FILE=/dev/null \
+      AWS_REGION=ap-northeast-1 DOTENV_CONFIG_PATH=/dev/null \
+      bash -c 'npm run build && npm test -- --ci --runInBand && npm run synth:iam && npm run synth:poc'
+
+build: OK
+Tests:       267 passed, 267 total      # Issue 記載の 215 は #191 時点の数。#182 で +40、本 PR で +12
+synth:iam exit=0
+synth:poc exit=0
+```
+
+### 残っている確認（マージ後にやる）
+
+- **doc だけの PR で発火すること**（AC 1）
+- **`docs/05` の行列を stack と食い違わせた PR が落ちること**（AC 2）
+
+どちらも `develop` にワークフローが載ってからでないと素直に試せない。
+pull_request の paths 判定は PR の変更ファイル全体に対して効くので、
+このブランチから枝分かれさせると `aws/**` も差分に入ってしまい
+「doc だけ」の証明にならない。マージ後に doc 1 行だけの PR で確かめる。
+
+---
+
 ---
 
 <!--

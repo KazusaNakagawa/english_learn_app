@@ -1,0 +1,79 @@
+name: CDK CI
+
+# Restored from cdk-ci.yml.bk (disabled in 5e8c9dc) and corrected for #192.
+# The archived version never ran the tests, and its bare `cdk synth` only saw
+# bin/app.ts — so IamStack, which lives in the second CDK app entry, was never
+# synthesized at all.
+on:
+  push:
+    branches: [develop, main]
+    paths:
+      - 'aws/**'
+      # design-doc.test.ts fails when this doc drifts from the synthesized
+      # IamStack. A doc-only PR is exactly the case that test exists for, and
+      # exactly the case an `aws/**`-only filter would skip.
+      - 'docs/05.iam_group_design.md'
+      - '.github/workflows/cdk-ci.yml'
+  pull_request:
+    branches: [develop, main]
+    paths:
+      - 'aws/**'
+      - 'docs/05.iam_group_design.md'
+      - '.github/workflows/cdk-ci.yml'
+
+# A follow-up push should replace the run in flight, not race it.
+concurrency:
+  group: cdk-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate CDK
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: aws
+
+    # No secrets, by design: every suite that constructs VoicevoxStack plants
+    # its own dummy keys, and neither synth needs AWS credentials. That keeps
+    # this job working on pull requests from forks.
+    env:
+      AWS_REGION: ap-northeast-1
+      AWS_DEFAULT_REGION: ap-northeast-1
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: aws/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript build
+        run: npm run build
+
+      # The point of #192. --runInBand because each suite synthesizes a stack,
+      # and parallel workers on a 2-core runner buy little for the memory.
+      - name: Jest
+        run: npm test -- --ci --runInBand
+
+      # Both CDK apps. IamStack is only reachable through this script; a bare
+      # `cdk synth` would silently validate half the infrastructure.
+      - name: Synth IamStack
+        run: npm run synth:iam
+
+      # No VOICEVOX_API_KEY_* is set here on purpose: since #182 the stack reads
+      # its secrets from Secrets Manager at runtime, so synth needs none. If a
+      # secret ever creeps back into the template, this step starts needing one.
+      - name: Synth VoicevoxStack-poc
+        run: npm run synth:poc
