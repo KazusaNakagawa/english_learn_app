@@ -2597,6 +2597,29 @@ Tests:       5 failed, 287 passed, 292 total
 
 戻して 292 passed に復帰。
 
+### ついでに: GitHub Actions のバージョン上げ
+
+CI は成功していたが、毎回この警告が出ていた。
+
+```text
+! Node.js 20 is deprecated. The following actions target Node.js 20 but are
+  being forced to run on Node.js 24: actions/checkout@v4, actions/setup-node@v4.
+```
+
+`actions/checkout` と `actions/setup-node` を **v4 → v7** に上げた。
+どちらも v5 が Node 24 対応リリースで、v6 / v7 はその上に乗っている。
+間の breaking change はこのジョブには届かない。
+
+| 変更 | このジョブへの影響 |
+| --- | --- |
+| setup-node v5: `package.json` に `packageManager` があると自動キャッシュ | 無し。`cache: 'npm'` を明示している |
+| setup-node v6: 自動キャッシュを npm のみに限定 | 同上 |
+| checkout v7: `pull_request_target` / `workflow_run` で fork の head を拒否 | 無し。トリガーは `pull_request`（merge ref） |
+
+v5 以降は runner v2.327.1 以上が要るが、GitHub ホストランナーはとうに超えている。
+`ios-build.yml.bk` の `checkout@v4` は**触っていない**。無効化済みで走らないファイルで、
+編集すると「生きている」ように見えるため。復活させるときに一緒に上げる。
+
 ### 実機で未確認のこと
 
 #200 の 3 件（`get-stack-policy` の読み戻し、置換の拒否、in-place の通過）は

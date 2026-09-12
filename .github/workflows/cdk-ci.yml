@@ -51,11 +51,21 @@ jobs:
       AWS_DEFAULT_REGION: ap-northeast-1
 
     steps:
+      # v4 runs on Node 20, which GitHub's runners now force onto Node 24 and
+      # warn about on every run. v5 of both actions is the Node 24 release;
+      # v6/v7 are on top of that.
+      #
+      # The breaking changes in between do not reach this job: setup-node v5
+      # caches automatically when package.json has a `packageManager` field and
+      # v6 narrowed that to npm — this job asks for `cache: 'npm'` explicitly
+      # either way. checkout v7 refuses to check out a fork's head for
+      # `pull_request_target` / `workflow_run`; this workflow triggers on
+      # `pull_request`, which checks out the merge ref and is unaffected.
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: 'npm'
