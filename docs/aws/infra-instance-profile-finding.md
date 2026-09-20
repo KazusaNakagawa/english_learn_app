@@ -1,4 +1,4 @@
-# `PowerUserAccess` を持つ `infra` で、踏み台 EC2 が立てられなかった
+# `PowerUserAccess` があるのに、踏み台 EC2 を SSM に登録できなかった
 
 > **この文書の位置づけ**
 > Zenn 記事「1 ユーザで運用していた RDS for MySQL に、ロールを切って admin を封印する」の
@@ -23,7 +23,9 @@ RDS 上で MySQL のロール設計を検証するため、**RDS をパブリッ
 
 現場で使っている経路と同じで、セキュリティの記事の検証環境としても筋が通る。作業ユーザ `dev_user1` は `infra` グループに所属し、**`PowerUserAccess` を持っている**。EC2 も RDS も作れるはずだった。
 
-実際には、**EC2 を SSM に登録するためのインスタンスプロファイルが作れず**、この構成を断念した。
+**EC2 の起動自体は許可されている**（`ec2:RunInstances` の dry-run は権限ではなく AMI 検証で落ちた）。
+断念した理由は、**EC2 を SSM に登録するためのインスタンスプロファイルが作れなかった**ことだ。
+SSM エージェントが登録されない EC2 は、ポートフォワーディングの踏み台として使えない。
 
 ```bash
 $ aws iam create-instance-profile --instance-profile-name tmp-permcheck-delete-me
@@ -98,7 +100,7 @@ AccessDenied: ... not authorized to perform: iam:SimulatePrincipalPolicy
 
 `PassRole` のほうは、仮に `CreateInstanceProfile` があっても、`voicevox-*-role-*` などの命名に合わせない限り通らない。**2 段構えで塞がっている。**
 
-## 5. ポリシー側を直す道も塞がっている
+## 5. 既存ポリシーの書き換えは塞がれている（ただし実効権限の昇格経路は残る）
 
 `infra` は `iam:CreatePolicyVersion` を持っているので、自分でポリシーを書き換えられそうに見える。しかし `infra-administration` の末尾に、これがある。
 
@@ -120,7 +122,31 @@ AccessDenied: ... not authorized to perform: iam:SimulatePrincipalPolicy
 }
 ```
 
-**このスタックが管理するポリシーを、実行時に書き換えることを明示的に拒否している。** 変更したければ CDK のコードを直してデプロイするしかない。これも意図的な設計で、「権限の変更はコードレビューを通す」という方針の実装にあたる。
+**このスタックが管理するポリシーを、実行時に書き換えることを明示的に拒否している。** これらを変えたければ CDK のコードを直してデプロイするしかない。「ガードレールの変更はコードレビューを通す」という方針の実装にあたる。
+
+### ただし「権限を増やせない」わけではない
+
+ここは正確に書いておく。塞がれているのは**このスタックが持つ既存ポリシーを書き換える経路**だけで、**実効権限を上げる経路は別に残っている**。
+
+`infra` は `iam:CreateRole` / `iam:CreatePolicy` / `iam:PutRolePolicy` / `iam:AttachRolePolicy` / `iam:UpdateAssumeRolePolicy` を持ち、`PowerUserAccess` 側で `sts:AssumeRole` も通る。つまり**自分を信頼する新しいロールを作り、任意の権限を載せて引き受けられる**。`DenyGrantingAdministratorAccess` が止めるのは AWS 管理の `AdministratorAccess` を「貼る」ことだけで、同等の内容を独自ポリシーやインラインポリシーで書く分には条件に当たらない。
+
+これも設計側は把握していた。
+
+```ts
+/**
+ * Groups whose membership `infra` may change.
+ *
+ * `admin` is absent on purpose. Its emptiness in steady state is the whole
+ * break-glass design — alerting on use assumes nobody is quietly a member — and
+ * `iam:AddUserToGroup` on '*' let any infra member join it in one call.
+ * The broader escalation (mint a role, assume it) is accepted and documented,
+ * but that one is loud in CloudTrail; silently joining `admin` is not.
+ */
+```
+
+> 訳: より広い昇格（ロールを作って引き受ける）は**受容され、文書化されている**。ただしそれは CloudTrail で目立つ。`admin` にこっそり参加するほうは目立たない。
+
+つまり `infra` は**信頼された役割**であって、権限を増やせない存在ではない。設計が守っているのは「増やすなら CloudTrail に残る形で」という点で、そこが `admin` グループへの参加を許していない理由でもある。この区別を落として「CDK を通さないと権限は変えられない」と読むと、実態より強く見積もることになる。
 
 ## 6. どうしたか
 
@@ -149,7 +175,8 @@ AccessDenied: ... not authorized to perform: iam:SimulatePrincipalPolicy
 
 IAM 記事の続編、または追記として成立する材料だと思う。切り口は次のあたり。
 
-- **「`PowerUserAccess` を付けたのに EC2 に踏み台が立てられない」という見出しの引きの強さ**。原因が `PowerUserAccess` の `NotAction: iam:*` にあると分かるまでの過程がそのまま読み物になる
+- **「`PowerUserAccess` を付けたのに踏み台が SSM に載らない」という見出しの引きの強さ**。原因が `PowerUserAccess` の `NotAction: iam:*` にあると分かるまでの過程がそのまま読み物になる
 - **意図的な制限と、単なる列挙漏れの見分け方**。設計コメントとテストコードが残っていたから区別できた、という話
 - **権限設計の「摩擦」は、コストとして事前に受容しておくと迷わない**。`INFRA_PASSABLE_ROLES` のコメントが、まさにその受容を宣言していた
-- 自分のポリシーを自分で書き換えられないようにする `DenyRewritingThisStackPolicies` の効用
+- 自分のポリシーを自分で書き換えられないようにする `DenyRewritingThisStackPolicies` の効用と、**その限界**。既存ポリシーは守れても、ロールを作って引き受ける昇格までは止まらない。「止める」のではなく「CloudTrail に残る形に寄せる」という設計判断だった
+- **この文書自体がレビューで直った話**。当初「CDK を通さないと権限は変えられない」と書いていたが、自動レビューに `CreateRole` + `AssumeRole` の経路を指摘されて修正した。ポリシーを読んだつもりで、Deny の条件（`AdministratorAccess` の ARN 限定）を読み落としていた
