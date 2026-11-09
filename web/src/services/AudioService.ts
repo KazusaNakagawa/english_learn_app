@@ -113,6 +113,19 @@ async function fetchVoicevoxWav(
   }
 }
 
+/**
+ * Best effort and never rejects, so callers start it without awaiting: a clip
+ * that was fetched must play even if it cannot be stored or storing is slow.
+ */
+async function storeInCache(cacheKey: string, text: string, speakerId: string, blob: Blob): Promise<void> {
+  try {
+    await putCache(cacheKey, text, speakerId, blob)
+    await evictCache(CACHE_MAX_BYTES)
+  } catch (err) {
+    console.warn('[AudioService] cache write failed:', err)
+  }
+}
+
 let _currentPlayback: { stop: () => void } | null = null
 let _stopController = new AbortController()
 
@@ -182,19 +195,25 @@ export async function playTTS(
   const isStopped = () => signal.aborted
 
   if (useVoicevox) {
-    const cacheKey = await makeCacheKey(text, speakerId)
+    // crypto.subtle is undefined on non-secure origins such as a LAN dev URL.
+    const cacheKey = await makeCacheKey(text, speakerId).catch((err) => {
+      console.warn('[AudioService] cache unavailable:', err)
+      return null
+    })
 
     // 1. Cache hit
-    try {
-      const cached = await getCache(cacheKey)
-      if (isStopped()) return 'cancelled'
-      if (cached) {
-        console.debug('[AudioService] cache hit:', cacheKey)
-        await playBlob(cached.audio_data)
-        return isStopped() ? 'cancelled' : 'cache'
+    if (cacheKey) {
+      try {
+        const cached = await getCache(cacheKey)
+        if (isStopped()) return 'cancelled'
+        if (cached) {
+          console.debug('[AudioService] cache hit:', cacheKey)
+          await playBlob(cached.audio_data)
+          return isStopped() ? 'cancelled' : 'cache'
+        }
+      } catch (err) {
+        console.warn('[AudioService] cache read failed:', err)
       }
-    } catch (err) {
-      console.warn('[AudioService] cache read failed:', err)
     }
     if (isStopped()) return 'cancelled'
 
@@ -202,10 +221,9 @@ export async function playTTS(
     try {
       console.debug('[AudioService] fetching from VOICEVOX, speaker:', speakerId)
       const blob = await fetchVoicevoxWav(text, speakerId, apiKey, signal, onColdStart, onColdStartEnd)
-      await putCache(cacheKey, text, speakerId, blob)
-      await evictCache(CACHE_MAX_BYTES)
       if (isStopped()) return 'cancelled'
-      console.debug('[AudioService] cached and playing, size:', blob.size)
+      if (cacheKey) void storeInCache(cacheKey, text, speakerId, blob)
+      console.debug('[AudioService] playing fetched clip, size:', blob.size)
       await playBlob(blob)
       return isStopped() ? 'cancelled' : 'voicevox'
     } catch (err) {

@@ -413,6 +413,114 @@ describe('playTTS with stopTTS', () => {
     })
   })
 
+  describe('when the cache fails', () => {
+    const playToEnd = async (result: Promise<unknown>) => {
+      await audioStarted()
+      FakeAudio.instances[0].onended?.()
+      return result
+    }
+
+    beforeEach(() => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+    })
+
+    it('writes and evicts when the cache is healthy', async () => {
+      const { playTTS } = await load()
+      await expect(playToEnd(playTTS('hello', options))).resolves.toBe('voicevox')
+      expect(cache.putCache).toHaveBeenCalledOnce()
+      expect(cache.evictCache).toHaveBeenCalledOnce()
+      expect(console.warn).not.toHaveBeenCalled()
+    })
+
+    it('still plays the fetched clip when putCache rejects', async () => {
+      cache.putCache.mockRejectedValue(new Error('quota exceeded'))
+      const { playTTS } = await load()
+      await expect(playToEnd(playTTS('hello', options))).resolves.toBe('voicevox')
+      expect(speak).not.toHaveBeenCalled()
+      expect(console.warn).toHaveBeenCalledOnce()
+    })
+
+    it('still plays the fetched clip when evictCache rejects', async () => {
+      cache.evictCache.mockRejectedValue(new Error('transaction aborted'))
+      const { playTTS } = await load()
+      await expect(playToEnd(playTTS('hello', options))).resolves.toBe('voicevox')
+      expect(speak).not.toHaveBeenCalled()
+    })
+
+    it('starts playback without waiting for a cache write that never settles', async () => {
+      cache.putCache.mockImplementationOnce(() => new Promise(() => {}))
+      const { playTTS } = await load()
+      await expect(playToEnd(playTTS('hello', options))).resolves.toBe('voicevox')
+      expect(cache.putCache).toHaveBeenCalledOnce()
+    })
+
+    it('settles a stop at once while a cache write is still running', async () => {
+      let fail: (reason: Error) => void = () => {}
+      cache.putCache.mockImplementationOnce(() => new Promise((_, reject) => { fail = reject }))
+      const { playTTS, stopTTS } = await load()
+      const result = playTTS('hello', options)
+      await audioStarted()
+      stopTTS()
+      await expect(result).resolves.toBe('cancelled')
+      expect(FakeAudio.instances[0].paused).toBe(true)
+
+      fail(new Error('quota exceeded'))
+      await flush()
+      expect(speak).not.toHaveBeenCalled()
+      expect(FakeAudio.instances).toHaveLength(1)
+    })
+
+    it('does not store a clip that arrives after a stop', async () => {
+      const blobPending: { release: () => void } = { release: () => {} }
+      fetchMock.mockImplementationOnce(async () => okResponse())
+      fetchMock.mockImplementationOnce(async () => ({
+        ok: true,
+        blob: () => new Promise<Blob>((resolve) => { blobPending.release = () => resolve(new Blob(['wav'])) }),
+      }))
+      const { playTTS, stopTTS } = await load()
+      const result = playTTS('hello', options)
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+      await flush()
+      stopTTS()
+      blobPending.release()
+      await expect(result).resolves.toBe('cancelled')
+      expect(cache.putCache).not.toHaveBeenCalled()
+      expect(FakeAudio.instances).toHaveLength(0)
+    })
+
+    it('uses VOICEVOX without the cache when makeCacheKey rejects', async () => {
+      cache.makeCacheKey.mockRejectedValue(new TypeError('crypto.subtle is undefined'))
+      const { playTTS } = await load()
+      await expect(playToEnd(playTTS('hello', options))).resolves.toBe('voicevox')
+      expect(cache.getCache).not.toHaveBeenCalled()
+      expect(cache.putCache).not.toHaveBeenCalled()
+      expect(cache.evictCache).not.toHaveBeenCalled()
+      expect(console.warn).toHaveBeenCalledOnce()
+    })
+
+    it('falls back to Web Speech when makeCacheKey and VOICEVOX both fail', async () => {
+      cache.makeCacheKey.mockRejectedValue(new TypeError('crypto.subtle is undefined'))
+      fetchMock.mockRejectedValueOnce(new Error('network down'))
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      const { playTTS } = await load()
+      await expect(playTTS('hello', options)).resolves.toBe('webspeech')
+      expect(speak).toHaveBeenCalledOnce()
+    })
+
+    it('resolves as cancelled when makeCacheKey rejects after a stop', async () => {
+      let fail: (reason: Error) => void = () => {}
+      cache.makeCacheKey.mockImplementationOnce(() => new Promise((_, reject) => { fail = reject }))
+      const { playTTS, stopTTS } = await load()
+      const result = playTTS('hello', options)
+      await vi.waitFor(() => expect(cache.makeCacheKey).toHaveBeenCalledOnce())
+      stopTTS()
+      fail(new TypeError('crypto.subtle is undefined'))
+      await expect(result).resolves.toBe('cancelled')
+      expect(fetchMock).not.toHaveBeenCalled()
+      expect(speak).not.toHaveBeenCalled()
+    })
+  })
+
   describe('where speechSynthesis is unavailable', () => {
     beforeEach(() => {
       vi.stubGlobal('speechSynthesis', undefined)
