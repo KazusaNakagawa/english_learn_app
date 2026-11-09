@@ -113,7 +113,10 @@ async function fetchVoicevoxWav(
   }
 }
 
-/** Best effort: a clip that was fetched must still play if it cannot be stored. */
+/**
+ * Best effort and never rejects, so callers start it without awaiting: a clip
+ * that was fetched must play even if it cannot be stored or storing is slow.
+ */
 async function storeInCache(cacheKey: string, text: string, speakerId: string, blob: Blob): Promise<void> {
   try {
     await putCache(cacheKey, text, speakerId, blob)
@@ -218,8 +221,8 @@ export async function playTTS(
     try {
       console.debug('[AudioService] fetching from VOICEVOX, speaker:', speakerId)
       const blob = await fetchVoicevoxWav(text, speakerId, apiKey, signal, onColdStart, onColdStartEnd)
-      if (cacheKey) await storeInCache(cacheKey, text, speakerId, blob)
       if (isStopped()) return 'cancelled'
+      if (cacheKey) void storeInCache(cacheKey, text, speakerId, blob)
       console.debug('[AudioService] playing fetched clip, size:', blob.size)
       await playBlob(blob)
       return isStopped() ? 'cancelled' : 'voicevox'

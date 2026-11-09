@@ -55,22 +55,39 @@ export async function makeCacheKey(text: string, speakerId: string): Promise<str
   return sha256(`${text}_${speakerId}`)
 }
 
+/**
+ * Settles with the transaction itself. A failure at commit time, such as
+ * QuotaExceededError, fires only `abort`, and a failed request also ends in
+ * `abort`, so `oncomplete` and `onabort` cover every outcome.
+ */
+function transactionDone(tx: IDBTransaction): Promise<void> {
+  return new Promise((resolve, reject) => {
+    tx.oncomplete = () => resolve()
+    tx.onabort    = () => reject(tx.error ?? new DOMException('Transaction aborted', 'AbortError'))
+  })
+}
+
 export async function getCache(cacheKey: string): Promise<AudioCacheRecord | null> {
   const db = await openDB()
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, 'readwrite')
-    const req = tx.objectStore(STORE).get(cacheKey)
-    req.onsuccess = () => {
-      const record = req.result as AudioCacheRecord | undefined
-      if (!record) { resolve(null); return }
-      // update last_accessed_at (LRU touch)
-      record.last_accessed_at = new Date().toISOString()
-      tx.objectStore(STORE).put(record)
-    }
-    req.onerror = () => reject(req.error)
-    tx.oncomplete = () => resolve(req.result as AudioCacheRecord | null)
-    tx.onerror    = () => reject(tx.error)
-  })
+  const tx = db.transaction(STORE, 'readwrite')
+  const req = tx.objectStore(STORE).get(cacheKey)
+  let record = null as AudioCacheRecord | null
+  req.onsuccess = () => {
+    record = (req.result as AudioCacheRecord | undefined) ?? null
+    if (!record) return
+    // update last_accessed_at (LRU touch)
+    record.last_accessed_at = new Date().toISOString()
+    tx.objectStore(STORE).put(record)
+  }
+  try {
+    await transactionDone(tx)
+  } catch (err) {
+    if (!record) throw err
+    // Only the LRU touch failed. A full origin is the usual cause, and the clip
+    // read before the abort is still good.
+    console.warn('[AudioCacheService] LRU update failed:', err)
+  }
+  return record
 }
 
 export async function putCache(
@@ -90,12 +107,9 @@ export async function putCache(
     created_at: now,
     last_accessed_at: now,
   }
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, 'readwrite')
-    const req = tx.objectStore(STORE).put(record)
-    req.onsuccess = () => resolve()
-    req.onerror   = () => reject(req.error)
-  })
+  const tx = db.transaction(STORE, 'readwrite')
+  tx.objectStore(STORE).put(record)
+  return transactionDone(tx)
 }
 
 export async function getCacheUsage(): Promise<number> {
@@ -143,8 +157,5 @@ export async function evictCache(maxBytes: number): Promise<void> {
     tx.objectStore(STORE).delete(r.id)
     total -= r.size_bytes
   }
-  await new Promise<void>((resolve, reject) => {
-    tx.oncomplete = () => resolve()
-    tx.onerror    = () => reject(tx.error)
-  })
+  await transactionDone(tx)
 }

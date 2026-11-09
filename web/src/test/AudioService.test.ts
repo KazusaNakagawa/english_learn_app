@@ -447,17 +447,45 @@ describe('playTTS with stopTTS', () => {
       expect(speak).not.toHaveBeenCalled()
     })
 
-    it('does not play the clip when the stop lands during a failing cache write', async () => {
+    it('starts playback without waiting for a cache write that never settles', async () => {
+      cache.putCache.mockImplementationOnce(() => new Promise(() => {}))
+      const { playTTS } = await load()
+      await expect(playToEnd(playTTS('hello', options))).resolves.toBe('voicevox')
+      expect(cache.putCache).toHaveBeenCalledOnce()
+    })
+
+    it('settles a stop at once while a cache write is still running', async () => {
       let fail: (reason: Error) => void = () => {}
       cache.putCache.mockImplementationOnce(() => new Promise((_, reject) => { fail = reject }))
       const { playTTS, stopTTS } = await load()
       const result = playTTS('hello', options)
-      await vi.waitFor(() => expect(cache.putCache).toHaveBeenCalledOnce())
+      await audioStarted()
       stopTTS()
-      fail(new Error('quota exceeded'))
       await expect(result).resolves.toBe('cancelled')
-      expect(FakeAudio.instances).toHaveLength(0)
+      expect(FakeAudio.instances[0].paused).toBe(true)
+
+      fail(new Error('quota exceeded'))
+      await flush()
       expect(speak).not.toHaveBeenCalled()
+      expect(FakeAudio.instances).toHaveLength(1)
+    })
+
+    it('does not store a clip that arrives after a stop', async () => {
+      const blobPending: { release: () => void } = { release: () => {} }
+      fetchMock.mockImplementationOnce(async () => okResponse())
+      fetchMock.mockImplementationOnce(async () => ({
+        ok: true,
+        blob: () => new Promise<Blob>((resolve) => { blobPending.release = () => resolve(new Blob(['wav'])) }),
+      }))
+      const { playTTS, stopTTS } = await load()
+      const result = playTTS('hello', options)
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+      await flush()
+      stopTTS()
+      blobPending.release()
+      await expect(result).resolves.toBe('cancelled')
+      expect(cache.putCache).not.toHaveBeenCalled()
+      expect(FakeAudio.instances).toHaveLength(0)
     })
 
     it('uses VOICEVOX without the cache when makeCacheKey rejects', async () => {
