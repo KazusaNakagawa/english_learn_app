@@ -17,24 +17,26 @@ vi.mock('react-router', async (importOriginal) => {
   return { ...actual, useNavigate: () => mockNavigate }
 })
 
-function renderPage() {
-  return render(
+async function renderPage() {
+  const view = render(
     <MemoryRouter initialEntries={['/']}>
       <WordListPage />
     </MemoryRouter>,
   )
+  await screen.findByText(SAMPLE_WORDS[0].word)
+  return view
 }
 
 describe('WordListPage', () => {
-  it('renders all sample words', () => {
-    renderPage()
+  it('renders all sample words', async () => {
+    await renderPage()
     for (const word of SAMPLE_WORDS) {
       expect(screen.getByText(word.word)).toBeInTheDocument()
     }
   })
 
   it('navigates to SentenceListPage on word card click', async () => {
-    renderPage()
+    await renderPage()
     const firstWord = SAMPLE_WORDS[0]
     const card = screen.getByRole('button', { name: new RegExp(firstWord.word) })
     await userEvent.click(card)
@@ -42,7 +44,7 @@ describe('WordListPage', () => {
   })
 
   it('navigates on Enter key press', async () => {
-    renderPage()
+    await renderPage()
     const firstWord = SAMPLE_WORDS[0]
     const card = screen.getByRole('button', { name: new RegExp(firstWord.word) })
     card.focus()
@@ -51,7 +53,7 @@ describe('WordListPage', () => {
   })
 
   it('navigates on Space key press', async () => {
-    renderPage()
+    await renderPage()
     const firstWord = SAMPLE_WORDS[0]
     const card = screen.getByRole('button', { name: new RegExp(firstWord.word) })
     card.focus()
@@ -59,19 +61,28 @@ describe('WordListPage', () => {
     expect(mockNavigate).toHaveBeenCalledWith(`/words/${firstWord.id}/sentences`)
   })
 
-  it('word card has tabIndex=0 for keyboard focus', () => {
-    renderPage()
+  it('word card has tabIndex=0 for keyboard focus', async () => {
+    await renderPage()
     const firstWord = SAMPLE_WORDS[0]
     const card = screen.getByRole('button', { name: new RegExp(firstWord.word) })
     expect(card).toHaveAttribute('tabindex', '0')
   })
 
   it('TTS button click does not navigate to sentence page', async () => {
-    renderPage()
+    await renderPage()
     mockNavigate.mockClear()
     const ttsButtons = screen.getAllByTitle('英語を再生')
     await userEvent.click(ttsButtons[0])
     expect(mockNavigate).not.toHaveBeenCalledWith(expect.stringContaining('/sentences'))
+  })
+
+  it('shows a message when the words cannot be loaded', async () => {
+    vi.stubGlobal('indexedDB', { open: () => { throw new Error('blocked') } })
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    render(<MemoryRouter initialEntries={['/']}><WordListPage /></MemoryRouter>)
+    expect(await screen.findByText('単語データを読み込めませんでした')).toBeInTheDocument()
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
   })
 
   describe('stopping audio when leaving the page', () => {
@@ -81,8 +92,8 @@ describe('WordListPage', () => {
       vi.mocked(AudioService.playTTS).mockReset().mockResolvedValue('webspeech')
     })
 
-    it('calls stopTTS on unmount with nothing playing', () => {
-      const { unmount } = renderPage()
+    it('calls stopTTS on unmount with nothing playing', async () => {
+      const { unmount } = await renderPage()
       expect(AudioService.stopTTS).not.toHaveBeenCalled()
       unmount()
       expect(AudioService.stopTTS).toHaveBeenCalledOnce()
@@ -90,7 +101,7 @@ describe('WordListPage', () => {
 
     it('does not stop a clip while the page stays mounted', async () => {
       vi.mocked(AudioService.playTTS).mockImplementationOnce(() => new Promise(() => {}))
-      renderPage()
+      await renderPage()
       await userEvent.click(screen.getAllByTitle('英語を再生')[0])
       expect(AudioService.playTTS).toHaveBeenCalledOnce()
       expect(AudioService.stopTTS).not.toHaveBeenCalled()
@@ -98,7 +109,7 @@ describe('WordListPage', () => {
 
     it('stops a clip that is still pending when the page unmounts', async () => {
       vi.mocked(AudioService.playTTS).mockImplementationOnce(() => new Promise(() => {}))
-      const { unmount } = renderPage()
+      const { unmount } = await renderPage()
       await userEvent.click(screen.getAllByTitle('英語を再生')[0])
       expect(AudioService.playTTS).toHaveBeenCalledOnce()
       unmount()

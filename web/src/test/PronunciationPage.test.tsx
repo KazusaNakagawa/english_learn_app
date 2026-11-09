@@ -21,14 +21,16 @@ vi.mock('react-router', async (importOriginal) => {
 const word = SAMPLE_WORDS[0]
 const sentence = word.sentences[0]
 
-function renderPage() {
-  return render(
+async function renderPage() {
+  const view = render(
     <MemoryRouter initialEntries={[`/words/${word.id}/pronunciation/${sentence.id}`]}>
       <Routes>
         <Route path="/words/:id/pronunciation/:sentenceId" element={<PronunciationPage />} />
       </Routes>
     </MemoryRouter>,
   )
+  await screen.findByText(sentence.english)
+  return view
 }
 
 describe('PronunciationPage', () => {
@@ -38,19 +40,19 @@ describe('PronunciationPage', () => {
     mockPlayTTS.mockReset().mockResolvedValue('webspeech')
   })
 
-  it('renders the sentence text', () => {
-    renderPage()
+  it('renders the sentence text', async () => {
+    await renderPage()
     expect(screen.getByText(sentence.english)).toBeInTheDocument()
     expect(screen.getByText(sentence.japanese)).toBeInTheDocument()
   })
 
-  it('renders word context', () => {
-    renderPage()
+  it('renders word context', async () => {
+    await renderPage()
     expect(screen.getByText(word.word)).toBeInTheDocument()
   })
 
-  it('calls stopTTS on unmount', () => {
-    const { unmount } = renderPage()
+  it('calls stopTTS on unmount', async () => {
+    const { unmount } = await renderPage()
     unmount()
     expect(AudioService.stopTTS).toHaveBeenCalled()
   })
@@ -58,7 +60,7 @@ describe('PronunciationPage', () => {
   it('both TTS buttons are disabled while one is playing', async () => {
     // playTTS never resolves so the playing state persists
     mockPlayTTS.mockReturnValue(new Promise(() => {}))
-    renderPage()
+    await renderPage()
 
     const enButton = screen.getByRole('button', { name: '英語を聞く' })
     const jaButton = screen.getByRole('button', { name: '日本語を聞く' })
@@ -69,14 +71,14 @@ describe('PronunciationPage', () => {
     expect(jaButton).toBeDisabled()
   })
 
-  it('TTS buttons are enabled before playback starts', () => {
-    renderPage()
+  it('TTS buttons are enabled before playback starts', async () => {
+    await renderPage()
     expect(screen.getByRole('button', { name: '英語を聞く' })).not.toBeDisabled()
     expect(screen.getByRole('button', { name: '日本語を聞く' })).not.toBeDisabled()
   })
 
   it('back button navigates to sentence list', async () => {
-    renderPage()
+    await renderPage()
     await userEvent.click(screen.getByText('例文一覧'))
     expect(mockNavigate).toHaveBeenCalledWith(`/words/${word.id}/sentences`)
   })

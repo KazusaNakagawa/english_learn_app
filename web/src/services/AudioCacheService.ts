@@ -6,8 +6,8 @@
  * Eviction : LRU — evicts oldest last_accessed_at records when over maxBytes
  */
 
-const DB_NAME = 'EnglishLearnDB'
-const DB_VERSION = 1
+import { openDB } from './db'
+
 const STORE = 'audio_cache'
 
 export interface AudioCacheRecord {
@@ -18,32 +18,6 @@ export interface AudioCacheRecord {
   size_bytes: number
   created_at: string
   last_accessed_at: string
-}
-
-async function openDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION)
-    req.onupgradeneeded = (e) => {
-      const db = (e.target as IDBOpenDBRequest).result
-      if (!db.objectStoreNames.contains('words')) {
-        const words = db.createObjectStore('words', { keyPath: 'id' })
-        words.createIndex('status', 'status')
-        words.createIndex('created_at', 'created_at')
-        words.createIndex('word', 'word')
-      }
-      if (!db.objectStoreNames.contains('sentences')) {
-        const sentences = db.createObjectStore('sentences', { keyPath: 'id' })
-        sentences.createIndex('word_id', 'word_id')
-      }
-      if (!db.objectStoreNames.contains(STORE)) {
-        const cache = db.createObjectStore(STORE, { keyPath: 'id' })
-        cache.createIndex('created_at', 'created_at')
-        cache.createIndex('last_accessed_at', 'last_accessed_at')
-      }
-    }
-    req.onsuccess = () => resolve(req.result)
-    req.onerror   = () => reject(req.error)
-  })
 }
 
 async function sha256(text: string): Promise<string> {

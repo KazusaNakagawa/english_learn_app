@@ -5,13 +5,14 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { playTTS, stopTTS, type VoiceType } from '@/services/AudioService'
 import { loadSettings } from '@/services/SettingsService'
-import { SAMPLE_WORDS } from '@/data/sampleWords'
+import { useWord } from '@/hooks/useWords'
 
 export default function PronunciationPage() {
   const { id, sentenceId } = useParams<{ id: string; sentenceId: string }>()
   const navigate = useNavigate()
 
-  const word = SAMPLE_WORDS.find((w) => w.id === id)
+  const wordState = useWord(id)
+  const word = wordState.status === 'ready' ? wordState.data : null
   const sentence = word?.sentences.find((s) => s.id === sentenceId)
 
   const [playingLang, setPlayingLang] = useState<'en' | 'ja' | null>(null)
@@ -21,10 +22,12 @@ export default function PronunciationPage() {
     return () => { stopTTS() }
   }, [])
 
+  if (wordState.status === 'loading') return null
+
   if (!word || !sentence) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-        <p className="text-sm">例文が見つかりません</p>
+        <p className="text-sm">{wordState.status === 'error' ? '単語データを読み込めませんでした' : '例文が見つかりません'}</p>
         <button
           onClick={() => navigate(`/words/${id}/sentences`)}
           className="mt-2 text-sm text-[var(--ios-blue)]"
