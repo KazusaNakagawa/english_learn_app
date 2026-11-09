@@ -77,6 +77,8 @@ describe('WordListPage', () => {
   describe('stopping audio when leaving the page', () => {
     beforeEach(() => {
       vi.mocked(AudioService.stopTTS).mockClear()
+      // mockReset, not mockClear: it also drops an unconsumed mockImplementationOnce.
+      vi.mocked(AudioService.playTTS).mockReset().mockResolvedValue('webspeech')
     })
 
     it('calls stopTTS on unmount with nothing playing', () => {
@@ -90,7 +92,7 @@ describe('WordListPage', () => {
       vi.mocked(AudioService.playTTS).mockImplementationOnce(() => new Promise(() => {}))
       renderPage()
       await userEvent.click(screen.getAllByTitle('英語を再生')[0])
-      expect(AudioService.playTTS).toHaveBeenCalled()
+      expect(AudioService.playTTS).toHaveBeenCalledOnce()
       expect(AudioService.stopTTS).not.toHaveBeenCalled()
     })
 
@@ -98,6 +100,7 @@ describe('WordListPage', () => {
       vi.mocked(AudioService.playTTS).mockImplementationOnce(() => new Promise(() => {}))
       const { unmount } = renderPage()
       await userEvent.click(screen.getAllByTitle('英語を再生')[0])
+      expect(AudioService.playTTS).toHaveBeenCalledOnce()
       unmount()
       expect(AudioService.stopTTS).toHaveBeenCalledOnce()
     })

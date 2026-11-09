@@ -329,6 +329,26 @@ describe('playTTS with stopTTS', () => {
     })
   })
 
+  describe('where speechSynthesis is unavailable', () => {
+    beforeEach(() => {
+      vi.stubGlobal('speechSynthesis', undefined)
+    })
+
+    it('does not throw when nothing is playing', async () => {
+      const { stopTTS } = await load()
+      expect(() => stopTTS()).not.toThrow()
+    })
+
+    it('still plays and stops VOICEVOX audio', async () => {
+      const { playTTS, stopTTS } = await load()
+      const result = playTTS('hello', options)
+      await audioStarted()
+      stopTTS()
+      await expect(result).resolves.toBe('cancelled')
+      expect(FakeAudio.instances[0].paused).toBe(true)
+    })
+  })
+
   it('leaves a stop with nothing playing harmless', async () => {
     const { playTTS, stopTTS } = await load()
     expect(() => stopTTS()).not.toThrow()
