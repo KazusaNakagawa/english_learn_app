@@ -294,6 +294,41 @@ describe('playTTS with stopTTS', () => {
     await expect(second).resolves.toBe('voicevox')
   })
 
+  describe('a new request while another is in progress', () => {
+    it('stops the clip already playing so that stopTTS can reach the new one', async () => {
+      const { playTTS, stopTTS } = await load()
+      const first = playTTS('first', options)
+      await audioStarted()
+
+      const second = playTTS('second', options)
+      await expect(first).resolves.toBe('cancelled')
+      expect(FakeAudio.instances[0].paused).toBe(true)
+
+      await audioStarted(2)
+      stopTTS()
+      await expect(second).resolves.toBe('cancelled')
+      expect(FakeAudio.instances[1].paused).toBe(true)
+    })
+
+    it('does not let an older clip that arrives late interrupt the newer one', async () => {
+      let release: () => void = () => {}
+      fetchMock.mockImplementationOnce(() => new Promise((resolve) => { release = () => resolve(okResponse()) }))
+      const { playTTS } = await load()
+      const first = playTTS('first', options)
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce())
+
+      const second = playTTS('second', options)
+      await audioStarted()
+      release()
+      await expect(first).resolves.toBe('cancelled')
+
+      expect(FakeAudio.instances).toHaveLength(1)
+      expect(FakeAudio.instances[0].paused).toBe(false)
+      FakeAudio.instances[0].onended?.()
+      await expect(second).resolves.toBe('voicevox')
+    })
+  })
+
   it('leaves a stop with nothing playing harmless', async () => {
     const { playTTS, stopTTS } = await load()
     expect(() => stopTTS()).not.toThrow()

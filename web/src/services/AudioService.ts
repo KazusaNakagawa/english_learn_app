@@ -155,7 +155,9 @@ export function stopTTS(): void {
 
 /**
  * Play TTS audio. Tries cache → VOICEVOX → Web Speech API in order.
- * Returns which source was used, or 'cancelled' if stopTTS ran first.
+ * Starting a call supersedes any call still in progress, so only one clip can
+ * be playing and stopTTS can always reach it.
+ * Returns which source was used, or 'cancelled' if stopped or superseded first.
  */
 export async function playTTS(
   text: string,
@@ -165,6 +167,7 @@ export async function playTTS(
 
   const useVoicevox = voice === 'zundamon' && !!VOICEVOX_BASE && !!apiKey
 
+  stopTTS()
   const stopCountAtStart = _stopCount
   const isStopped = () => _stopCount !== stopCountAtStart
 
