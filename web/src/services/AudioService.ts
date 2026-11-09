@@ -12,6 +12,10 @@ import { getCache, putCache, makeCacheKey, evictCache } from './AudioCacheServic
 const VOICEVOX_BASE = import.meta.env.VITE_VOICEVOX_ENDPOINT_POC ?? ''
 const CACHE_MAX_BYTES = 50 * 1024 * 1024 // 50 MB
 const VOICE_LOAD_TIMEOUT_MS = 3000
+// Generous on purpose: reaching the limit cuts the speech off, and natural
+// speech runs well under this even for Japanese.
+const UTTERANCE_BASE_TIMEOUT_MS = 10_000
+const UTTERANCE_TIMEOUT_PER_CHAR_MS = 300
 
 export type VoiceType = 'default' | 'female' | 'male' | 'zundamon'
 
@@ -28,11 +32,14 @@ export type PlaySource = 'cache' | 'voicevox' | 'webspeech' | 'cancelled'
 
 // ---- Web Speech API helpers ----
 
+let _voiceLoadTimedOut = false
+
 function loadVoices(signal: AbortSignal): Promise<SpeechSynthesisVoice[]> {
   return new Promise((resolve) => {
     const synth = window.speechSynthesis
     const voices = synth.getVoices()
-    if (voices.length > 0) { resolve(voices); return }
+    // After one timeout, waiting again would cost every later clip the same delay.
+    if (voices.length > 0 || _voiceLoadTimedOut) { resolve(voices); return }
     // Some browsers never fire voiceschanged, so a timeout or a stop also ends
     // the wait. An empty list is fine: the utterance uses the default voice.
     const waiting = new AbortController()
@@ -41,7 +48,10 @@ function loadVoices(signal: AbortSignal): Promise<SpeechSynthesisVoice[]> {
       clearTimeout(timer)
       resolve(synth.getVoices())
     }
-    const timer = setTimeout(finish, VOICE_LOAD_TIMEOUT_MS)
+    const timer = setTimeout(() => {
+      _voiceLoadTimedOut = true
+      finish()
+    }, VOICE_LOAD_TIMEOUT_MS)
     synth.addEventListener('voiceschanged', finish, { signal: waiting.signal })
     signal.addEventListener('abort', finish, { signal: waiting.signal })
   })
@@ -64,14 +74,27 @@ async function speakWebSpeech(
   voice: VoiceType,
   signal: AbortSignal,
 ): Promise<void> {
-  // Absent in some embedded browsers. Pages show this message to the user.
+  // Absent in some embedded browsers. SettingsPage shows this message; the other
+  // pages only log it.
   if (!window.speechSynthesis) throw new Error('このブラウザは音声合成に対応していません')
-  const voices = await loadVoices(signal)
+  // Only an English non-zundamon voice reads the list.
+  const voices = lang === 'en' && voice !== 'zundamon' ? await loadVoices(signal) : []
   if (signal.aborted) return
   return new Promise((resolve, reject) => {
-    // Some engines fire neither end nor error after cancel(), so a stop settles
-    // this directly. stopTTS aborts first, so a later utterance error is ignored.
-    signal.addEventListener('abort', () => resolve(), { once: true })
+    // An engine can fire neither end nor error, so the utterance cannot be
+    // trusted to settle this. Without the limit, pages that ignore play buttons
+    // while something is playing would stay stuck.
+    const watchdog = setTimeout(() => {
+      window.speechSynthesis.cancel()
+      reject(new Error('音声の再生がタイムアウトしました'))
+    }, UTTERANCE_BASE_TIMEOUT_MS + text.length * UTTERANCE_TIMEOUT_PER_CHAR_MS)
+    const settle = (finish: () => void) => {
+      clearTimeout(watchdog)
+      finish()
+    }
+    // stopTTS aborts before cancel(), so a stop settles first and a later
+    // utterance error is ignored.
+    signal.addEventListener('abort', () => settle(resolve), { once: true })
     window.speechSynthesis.cancel()
     const utt = new SpeechSynthesisUtterance(text)
     utt.lang = lang === 'en' ? 'en-US' : 'ja-JP'
@@ -79,8 +102,8 @@ async function speakWebSpeech(
       const v = pickEnVoice(voices, voice)
       if (v) utt.voice = v
     }
-    utt.onend = () => resolve()
-    utt.onerror = (e) => reject(new Error(e.error))
+    utt.onend = () => settle(resolve)
+    utt.onerror = (e) => settle(() => reject(new Error(e.error)))
     window.speechSynthesis.speak(utt)
   })
 }

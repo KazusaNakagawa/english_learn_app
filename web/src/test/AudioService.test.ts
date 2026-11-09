@@ -597,6 +597,38 @@ describe('playTTS with stopTTS', () => {
       expect(speak).toHaveBeenCalledOnce()
     })
 
+    it('does not wait again once a load has timed out', async () => {
+      const { playTTS } = await load()
+      const first = playTTS('first', webSpeech)
+      await vi.advanceTimersByTimeAsync(3000)
+      await first
+      await expect(playTTS('second', webSpeech)).resolves.toBe('webspeech')
+      expect(speak).toHaveBeenCalledTimes(2)
+    })
+
+    it('uses voices that appear after a timeout', async () => {
+      const { playTTS } = await load()
+      const first = playTTS('first', webSpeech)
+      await vi.advanceTimersByTimeAsync(3000)
+      await first
+      voices = [{ lang: 'en-US', name: 'Test Female' }]
+      await playTTS('second', webSpeech)
+      expect(speak.mock.calls[1][0]).toMatchObject({ voice: voices[0] })
+    })
+
+    it('does not wait for voices in Japanese, which never reads them', async () => {
+      const { playTTS } = await load()
+      await expect(playTTS('こんにちは', { voice: 'female', lang: 'ja' })).resolves.toBe('webspeech')
+      expect(voicesChanged).toBeNull()
+    })
+
+    it('does not wait for voices when the zundamon voice falls back', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const { playTTS } = await load()
+      await expect(playTTS('hello', { voice: 'zundamon', lang: 'en' })).resolves.toBe('webspeech')
+      expect(voicesChanged).toBeNull()
+    })
+
     it('does not speak when the timeout passes after a stop', async () => {
       const { playTTS, stopTTS } = await load()
       const result = playTTS('hello', webSpeech)
@@ -631,13 +663,69 @@ describe('playTTS with stopTTS', () => {
       await expect(first).resolves.toBe('cancelled')
     })
 
-    it('stays pending without a stop', async () => {
-      const { playTTS } = await load()
-      let settled = false
-      void playTTS('hello', webSpeech).finally(() => { settled = true })
-      await vi.waitFor(() => expect(speak).toHaveBeenCalledOnce())
-      await flush()
-      expect(settled).toBe(false)
+    describe('without a stop', () => {
+      const timeoutMessage = '音声の再生がタイムアウトしました'
+      const cancelCalls = () => vi.mocked(window.speechSynthesis.cancel).mock.calls.length
+
+      beforeEach(() => {
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      })
+
+      afterEach(() => {
+        vi.useRealTimers()
+      })
+
+      it('stays pending until the limit for the text, then rejects', async () => {
+        const { playTTS } = await load()
+        let settled = false
+        const result = playTTS('hello', webSpeech).finally(() => { settled = true })
+        const rejection = expect(result).rejects.toThrow(timeoutMessage)
+        await vi.advanceTimersByTimeAsync(11499)
+        expect(settled).toBe(false)
+        await vi.advanceTimersByTimeAsync(1)
+        await rejection
+      })
+
+      it('allows longer text proportionally more time', async () => {
+        const { playTTS } = await load()
+        let settled = false
+        const result = playTTS('a'.repeat(100), webSpeech).finally(() => { settled = true })
+        const rejection = expect(result).rejects.toThrow(timeoutMessage)
+        await vi.advanceTimersByTimeAsync(39999)
+        expect(settled).toBe(false)
+        await vi.advanceTimersByTimeAsync(1)
+        await rejection
+      })
+
+      it('clears the stuck utterance when the limit is reached', async () => {
+        const { playTTS } = await load()
+        const rejection = expect(playTTS('hello', webSpeech)).rejects.toThrow(timeoutMessage)
+        await vi.advanceTimersByTimeAsync(0)
+        const before = cancelCalls()
+        await vi.advanceTimersByTimeAsync(11500)
+        await rejection
+        expect(cancelCalls()).toBe(before + 1)
+      })
+
+      it('does not fire the limit after the utterance ends', async () => {
+        speak.mockImplementation((u: { onend: (() => void) | null }) => u.onend?.())
+        const { playTTS } = await load()
+        await expect(playTTS('hello', webSpeech)).resolves.toBe('webspeech')
+        const before = cancelCalls()
+        await vi.advanceTimersByTimeAsync(20000)
+        expect(cancelCalls()).toBe(before)
+      })
+
+      it('does not fire the limit after a stop', async () => {
+        const { playTTS, stopTTS } = await load()
+        const result = playTTS('hello', webSpeech)
+        await vi.advanceTimersByTimeAsync(0)
+        stopTTS()
+        await expect(result).resolves.toBe('cancelled')
+        const before = cancelCalls()
+        await vi.advanceTimersByTimeAsync(20000)
+        expect(cancelCalls()).toBe(before)
+      })
     })
   })
 
