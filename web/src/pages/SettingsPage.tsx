@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { playTTS, type VoiceType } from '@/services/AudioService'
+import { playTTS, stopTTS, type VoiceType } from '@/services/AudioService'
 import { useNavigate } from 'react-router'
 import { getCacheUsage, clearCache } from '@/services/AudioCacheService'
 import { loadSettings, saveSettings, type AppSettings } from '@/services/SettingsService'
@@ -198,6 +198,11 @@ export default function SettingsPage() {
   }, [])
 
   useEffect(() => { refreshCacheUsage() }, [refreshCacheUsage])
+
+  // Stop audio on unmount
+  useEffect(() => {
+    return () => { stopTTS() }
+  }, [])
 
   const resolvedVvKey = vvKey || (import.meta.env.VITE_VOICEVOX_API_KEY_POC ?? '')
 

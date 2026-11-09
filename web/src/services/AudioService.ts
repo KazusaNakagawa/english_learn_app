@@ -147,7 +147,9 @@ function playBlob(blob: Blob): Promise<void> {
  */
 export function stopTTS(): void {
   _stopCount++
-  window.speechSynthesis.cancel()
+  // Absent in some embedded browsers. Pages call this on unmount, where a throw
+  // would take down the whole React tree.
+  window.speechSynthesis?.cancel()
   _currentPlayback?.stop()
 }
 
