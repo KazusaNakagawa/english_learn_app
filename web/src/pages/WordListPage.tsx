@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { Volume2, Loader2 } from 'lucide-react'
-import { playTTS, type VoiceType } from '@/services/AudioService'
+import { playTTS, stopTTS, type VoiceType } from '@/services/AudioService'
 import { loadSettings } from '@/services/SettingsService'
 import { SAMPLE_WORDS } from '@/data/sampleWords'
 
@@ -30,6 +30,11 @@ export default function WordListPage() {
       activeLetter === 'ALL' || w.word.toUpperCase().startsWith(activeLetter)
     return matchesSearch && matchesLetter
   })
+
+  // Stop audio on unmount
+  useEffect(() => {
+    return () => { stopTTS() }
+  }, [])
 
   async function play(id: string, text: string, lang: 'en' | 'ja', e: React.MouseEvent) {
     e.stopPropagation()
