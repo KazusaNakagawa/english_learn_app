@@ -11,6 +11,7 @@ import { getCache, putCache, makeCacheKey, evictCache } from './AudioCacheServic
 
 const VOICEVOX_BASE = import.meta.env.VITE_VOICEVOX_ENDPOINT_POC ?? ''
 const CACHE_MAX_BYTES = 50 * 1024 * 1024 // 50 MB
+const VOICE_LOAD_TIMEOUT_MS = 3000
 
 export type VoiceType = 'default' | 'female' | 'male' | 'zundamon'
 
@@ -32,14 +33,17 @@ function loadVoices(signal: AbortSignal): Promise<SpeechSynthesisVoice[]> {
     const synth = window.speechSynthesis
     const voices = synth.getVoices()
     if (voices.length > 0) { resolve(voices); return }
-    // Some browsers never fire voiceschanged, so a stop must also end the wait.
+    // Some browsers never fire voiceschanged, so a timeout or a stop also ends
+    // the wait. An empty list is fine: the utterance uses the default voice.
+    const waiting = new AbortController()
     const finish = () => {
-      synth.removeEventListener('voiceschanged', finish)
-      signal.removeEventListener('abort', finish)
+      waiting.abort()
+      clearTimeout(timer)
       resolve(synth.getVoices())
     }
-    synth.addEventListener('voiceschanged', finish)
-    signal.addEventListener('abort', finish)
+    const timer = setTimeout(finish, VOICE_LOAD_TIMEOUT_MS)
+    synth.addEventListener('voiceschanged', finish, { signal: waiting.signal })
+    signal.addEventListener('abort', finish, { signal: waiting.signal })
   })
 }
 
@@ -60,9 +64,14 @@ async function speakWebSpeech(
   voice: VoiceType,
   signal: AbortSignal,
 ): Promise<void> {
+  // Absent in some embedded browsers. Pages show this message to the user.
+  if (!window.speechSynthesis) throw new Error('このブラウザは音声合成に対応していません')
   const voices = await loadVoices(signal)
   if (signal.aborted) return
   return new Promise((resolve, reject) => {
+    // Some engines fire neither end nor error after cancel(), so a stop settles
+    // this directly. stopTTS aborts first, so a later utterance error is ignored.
+    signal.addEventListener('abort', () => resolve(), { once: true })
     window.speechSynthesis.cancel()
     const utt = new SpeechSynthesisUtterance(text)
     utt.lang = lang === 'en' ? 'en-US' : 'ja-JP'
@@ -236,12 +245,6 @@ export async function playTTS(
 
   // 3. Web Speech API fallback
   if (isStopped()) return 'cancelled'
-  try {
-    await speakWebSpeech(text, lang, voice, signal)
-  } catch (err) {
-    // speechSynthesis.cancel() surfaces as an utterance error.
-    if (isStopped()) return 'cancelled'
-    throw err
-  }
+  await speakWebSpeech(text, lang, voice, signal)
   return isStopped() ? 'cancelled' : 'webspeech'
 }

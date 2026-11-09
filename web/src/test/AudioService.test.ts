@@ -110,9 +110,9 @@ describe('playTTS with stopTTS', () => {
       cancel: vi.fn(),
       speak,
       getVoices: () => voices,
-      addEventListener: (_: string, listener: () => void) => { voicesChanged = listener },
-      removeEventListener: (_: string, listener: () => void) => {
-        if (voicesChanged === listener) voicesChanged = null
+      addEventListener: (_: string, listener: () => void, listenerOptions?: AddEventListenerOptions) => {
+        voicesChanged = listener
+        listenerOptions?.signal?.addEventListener('abort', () => { voicesChanged = null })
       },
     })
     URL.createObjectURL = vi.fn(() => 'blob:test')
@@ -538,6 +538,106 @@ describe('playTTS with stopTTS', () => {
       stopTTS()
       await expect(result).resolves.toBe('cancelled')
       expect(FakeAudio.instances[0].paused).toBe(true)
+    })
+
+    it('rejects with a readable error for a Web Speech voice', async () => {
+      const { playTTS } = await load()
+      await expect(playTTS('hello', { voice: 'female', lang: 'en' })).rejects.toThrow('音声合成に対応していません')
+    })
+
+    it('rejects with a readable error when VOICEVOX falls back', async () => {
+      fetchMock.mockRejectedValueOnce(new Error('network down'))
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      const { playTTS } = await load()
+      await expect(playTTS('hello', options)).rejects.toThrow('音声合成に対応していません')
+    })
+
+    it('resolves as cancelled when the stop lands before the fallback', async () => {
+      let fail: (reason: Error) => void = () => {}
+      fetchMock.mockImplementationOnce(() => new Promise((_, reject) => { fail = reject }))
+      const { playTTS, stopTTS } = await load()
+      const result = playTTS('hello', options)
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce())
+      stopTTS()
+      fail(new Error('network down'))
+      await expect(result).resolves.toBe('cancelled')
+    })
+  })
+
+  describe('when voices never load', () => {
+    const webSpeech = { voice: 'female', lang: 'en' } as const
+
+    beforeEach(() => {
+      voices = []
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('waits for the full timeout, then speaks with the default voice', async () => {
+      const { playTTS } = await load()
+      const result = playTTS('hello', webSpeech)
+      await vi.advanceTimersByTimeAsync(2999)
+      expect(speak).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1)
+      await expect(result).resolves.toBe('webspeech')
+      expect(speak).toHaveBeenCalledOnce()
+    })
+
+    it('speaks once when voiceschanged fires before the timeout', async () => {
+      const { playTTS } = await load()
+      const result = playTTS('hello', webSpeech)
+      await vi.advanceTimersByTimeAsync(0)
+      voices = [{ lang: 'en-US', name: 'Test' }]
+      voicesChanged?.()
+      await expect(result).resolves.toBe('webspeech')
+      await vi.advanceTimersByTimeAsync(5000)
+      expect(speak).toHaveBeenCalledOnce()
+    })
+
+    it('does not speak when the timeout passes after a stop', async () => {
+      const { playTTS, stopTTS } = await load()
+      const result = playTTS('hello', webSpeech)
+      await vi.advanceTimersByTimeAsync(0)
+      stopTTS()
+      await expect(result).resolves.toBe('cancelled')
+      await vi.advanceTimersByTimeAsync(5000)
+      expect(speak).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('when an utterance never ends', () => {
+    const webSpeech = { voice: 'female', lang: 'en' } as const
+
+    beforeEach(() => {
+      speak.mockImplementation(() => {})
+    })
+
+    it('resolves as cancelled after a stop with no end or error event', async () => {
+      const { playTTS, stopTTS } = await load()
+      const result = playTTS('hello', webSpeech)
+      await vi.waitFor(() => expect(speak).toHaveBeenCalledOnce())
+      stopTTS()
+      await expect(result).resolves.toBe('cancelled')
+    })
+
+    it('resolves the first call as cancelled when a new request supersedes it', async () => {
+      const { playTTS } = await load()
+      const first = playTTS('first', webSpeech)
+      await vi.waitFor(() => expect(speak).toHaveBeenCalledOnce())
+      void playTTS('second', webSpeech)
+      await expect(first).resolves.toBe('cancelled')
+    })
+
+    it('stays pending without a stop', async () => {
+      const { playTTS } = await load()
+      let settled = false
+      void playTTS('hello', webSpeech).finally(() => { settled = true })
+      await vi.waitFor(() => expect(speak).toHaveBeenCalledOnce())
+      await flush()
+      expect(settled).toBe(false)
     })
   })
 
