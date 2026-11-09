@@ -25,9 +25,7 @@ describe('stopTTS', () => {
 
   it('pauses and nulls out a playing HTMLAudioElement', async () => {
     const pause = vi.fn()
-    const mockAudio = { pause, src: 'blob:fake' } as unknown as HTMLAudioElement
 
-    // Inject the private _currentAudio by constructing a Blob playback scenario
     // We test indirectly: stopTTS should not throw even with no audio playing
     const { stopTTS } = await import('@/services/AudioService')
     expect(() => stopTTS()).not.toThrow()

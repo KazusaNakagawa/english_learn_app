@@ -1,14 +1,22 @@
 import { Link, useLocation } from 'react-router'
 import { BookOpen, Archive, PlusCircle, Trash2, Settings } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-const TABS = [
+type Tab = {
+  to: string
+  icon: LucideIcon
+  label: string
+  isAdd?: boolean
+}
+
+const TABS: Tab[] = [
   { to: '/',         icon: BookOpen,    label: '学習' },
   { to: '/archive',  icon: Archive,     label: 'アーカイブ' },
   { to: '/add',      icon: PlusCircle,  label: '追加',  isAdd: true },
   { to: '/trash',    icon: Trash2,      label: 'ゴミ箱' },
   { to: '/settings', icon: Settings,    label: '設定' },
-] as const
+]
 
 export default function TabBar({ onAdd }: { onAdd: () => void }) {
   const { pathname } = useLocation()
