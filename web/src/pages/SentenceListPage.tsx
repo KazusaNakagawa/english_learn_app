@@ -30,7 +30,7 @@ export default function SentenceListPage() {
 
   const [playingId, setPlayingId] = useState<string | null>(null) // sentence id or `word-en` / `word-ja`
   const sentenceRefs = useRef<Record<string, HTMLDivElement | null>>({})
-  const cancelRef = useRef(false)
+  const runIdRef = useRef(0)
 
   // Scroll active sentence into view
   useEffect(() => {
@@ -41,7 +41,7 @@ export default function SentenceListPage() {
   // Stop audio on unmount
   useEffect(() => {
     return () => {
-      cancelRef.current = true
+      runIdRef.current += 1
       stopTTS()
     }
   }, [])
@@ -62,8 +62,15 @@ export default function SentenceListPage() {
   const s = loadSettings()
   const resolvedVvKey = s.voicevoxApiKey || (import.meta.env.VITE_VOICEVOX_API_KEY_POC ?? '')
 
+  // A stopped playTTS can stay pending through a cold start, so a shared flag
+  // would be reset by the next tap. Each run checks its own id instead.
+  function beginRun() {
+    const runId = ++runIdRef.current
+    return () => runIdRef.current !== runId
+  }
+
   function doStop() {
-    cancelRef.current = true
+    runIdRef.current += 1
     stopTTS()
     setPlayingId(null)
   }
@@ -72,7 +79,7 @@ export default function SentenceListPage() {
     const key = `word-${lang}`
     if (playingId === key) { doStop(); return }
     if (playingId) return
-    cancelRef.current = false
+    const isCancelled = beginRun()
     setPlayingId(key)
     try {
       await playTTS(lang === 'en' ? word!.word : word!.meaning, {
@@ -82,9 +89,9 @@ export default function SentenceListPage() {
         lang,
       })
     } catch (err) {
-      if (!cancelRef.current) console.error('[SentenceListPage] word playback failed:', err)
+      if (!isCancelled()) console.error('[SentenceListPage] word playback failed:', err)
     } finally {
-      setPlayingId((prev) => (prev === key ? null : prev))
+      if (!isCancelled()) setPlayingId(null)
     }
   }
 
@@ -94,9 +101,9 @@ export default function SentenceListPage() {
 
   async function startPlaybackFrom(startIndex: number) {
     if (playingId) { doStop(); return }
-    cancelRef.current = false
+    const isCancelled = beginRun()
     for (let i = startIndex; i < flatSentences.length; i++) {
-      if (cancelRef.current) break
+      if (isCancelled()) break
       const sentence = flatSentences[i]
       setPlayingId(sentence.id)
       try {
@@ -107,9 +114,9 @@ export default function SentenceListPage() {
           apiKey: resolvedVvKey,
           lang: 'en',
         })
-        if (cancelRef.current) break
+        if (isCancelled()) break
         await sleep(s.intervalSec)
-        if (cancelRef.current) break
+        if (isCancelled()) break
 
         if (s.playPattern === 'bilingual') {
           // EN → JA → EN
@@ -119,9 +126,9 @@ export default function SentenceListPage() {
             apiKey: resolvedVvKey,
             lang: 'ja',
           })
-          if (cancelRef.current) break
+          if (isCancelled()) break
           await sleep(s.intervalSec)
-          if (cancelRef.current) break
+          if (isCancelled()) break
           await playTTS(sentence.english, {
             voice: s.enVoice as VoiceType,
             speakerId: s.voicevoxStyle,
@@ -138,11 +145,11 @@ export default function SentenceListPage() {
           })
         }
       } catch (err) {
-        if (!cancelRef.current) console.error('[SentenceListPage] sentence playback failed:', err)
+        if (!isCancelled()) console.error('[SentenceListPage] sentence playback failed:', err)
         break
       }
     }
-    if (!cancelRef.current) setPlayingId(null)
+    if (!isCancelled()) setPlayingId(null)
   }
 
   const isAnyPlaying = !!playingId

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -9,6 +9,17 @@ import * as AudioService from '@/services/AudioService'
 vi.mock('@/services/AudioService', () => ({
   playTTS: vi.fn().mockResolvedValue('webspeech'),
   stopTTS: vi.fn(),
+}))
+
+vi.mock('@/services/SettingsService', () => ({
+  loadSettings: () => ({
+    enVoice: 'default',
+    jaVoice: 'default',
+    voicevoxStyle: '3',
+    voicevoxApiKey: '',
+    intervalSec: 0,
+    playPattern: 'en-en',
+  }),
 }))
 
 const mockNavigate = vi.fn()
@@ -90,5 +101,56 @@ describe('SentenceListPage', () => {
     renderPage()
     await userEvent.click(screen.getByText('単語一覧'))
     expect(mockNavigate).toHaveBeenCalledWith('/')
+  })
+
+  describe('stopping and replaying while audio is still pending', () => {
+    type Resolve = (source: AudioService.PlaySource) => void
+
+    function holdNextPlay(): Resolve {
+      let resolve: Resolve = () => {}
+      vi.mocked(AudioService.playTTS).mockImplementationOnce(
+        () => new Promise((r) => { resolve = r }),
+      )
+      return (source) => resolve(source)
+    }
+
+    const settle = (action: () => void) =>
+      act(async () => {
+        action()
+        await new Promise((resolve) => setTimeout(resolve, 20))
+      })
+
+    it('does not resume a stopped sentence loop alongside the new one', async () => {
+      renderPage()
+      const sentence = word.sentences[0]
+      const stale = holdNextPlay()
+      holdNextPlay()
+
+      await userEvent.click(screen.getByLabelText(`「${sentence.english}」を再生`))
+      await userEvent.click(screen.getByLabelText(`「${sentence.english}」の再生を停止`))
+      await userEvent.click(screen.getByLabelText(`「${sentence.english}」を再生`))
+      expect(AudioService.playTTS).toHaveBeenCalledTimes(2)
+
+      await settle(() => stale('cancelled'))
+
+      expect(AudioService.playTTS).toHaveBeenCalledTimes(2)
+      expect(screen.getByLabelText(`「${sentence.english}」の再生を停止`)).toBeInTheDocument()
+    })
+
+    it('keeps the new word playback active when the stopped call resolves late', async () => {
+      renderPage()
+      const stale = holdNextPlay()
+      const current = holdNextPlay()
+
+      await userEvent.click(screen.getByRole('button', { name: '英語を聞く' }))
+      await userEvent.click(screen.getByLabelText(`「${word.word}」の再生を停止`))
+      await userEvent.click(screen.getByRole('button', { name: '英語を聞く' }))
+
+      await settle(() => stale('cancelled'))
+      expect(screen.getByLabelText(`「${word.word}」の再生を停止`)).toBeInTheDocument()
+
+      await settle(() => current('webspeech'))
+      expect(screen.getByRole('button', { name: '英語を聞く' })).toBeInTheDocument()
+    })
   })
 })
