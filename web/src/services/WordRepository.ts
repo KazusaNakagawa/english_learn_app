@@ -57,3 +57,57 @@ export async function getWord(id: string): Promise<Word | null> {
   const word: Word | undefined = await read((store) => store.get(id))
   return word ?? null
 }
+
+/** Everything iOS would export: all words except those in the trash. */
+export async function getWordsForExport(): Promise<Word[]> {
+  const words: Word[] = await read((store) => store.getAll())
+  return words.filter((w) => !w.deletedAt).sort(byWord)
+}
+
+/** Runs a read-then-write in one transaction, so a failure changes nothing. */
+async function update<T>(work: (store: IDBObjectStore, finish: (value: T) => void) => void): Promise<T> {
+  const db = await openDB()
+  try {
+    return await new Promise<T>((resolve, reject) => {
+      const tx = db.transaction(STORE, 'readwrite')
+      let outcome: T
+      work(tx.objectStore(STORE), (value) => { outcome = value })
+      tx.oncomplete = () => resolve(outcome)
+      tx.onabort = () => reject(tx.error ?? new Error('Transaction aborted'))
+    })
+  } finally {
+    db.close()
+  }
+}
+
+export interface MergeResult {
+  added: number
+  skipped: number
+}
+
+/** Adds words whose id is not stored yet, trash included, as iOS does. */
+export function mergeWords(imported: Word[]): Promise<MergeResult> {
+  return update((store, finish) => {
+    const keys = store.getAllKeys()
+    keys.onsuccess = () => {
+      const seen = new Set<IDBValidKey>(keys.result)
+      const fresh = imported.filter((w) => !seen.has(w.id) && seen.add(w.id))
+      fresh.forEach((w) => store.put(w))
+      finish({ added: fresh.length, skipped: imported.length - fresh.length })
+    }
+  })
+}
+
+/** Replaces everything except trashed words whose id is not being imported. */
+export function replaceWords(imported: Word[]): Promise<void> {
+  return update((store, finish) => {
+    const all: IDBRequest<Word[]> = store.getAll()
+    all.onsuccess = () => {
+      const ids = new Set(imported.map((w) => w.id))
+      const trashed = all.result.filter((w) => w.deletedAt && !ids.has(w.id))
+      store.clear()
+      ;[...trashed, ...imported].forEach((w) => store.put(w))
+      finish(undefined)
+    }
+  })
+}

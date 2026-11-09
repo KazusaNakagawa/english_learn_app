@@ -1,7 +1,10 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { playTTS, stopTTS, type VoiceType } from '@/services/AudioService'
 import { useNavigate } from 'react-router'
 import { getCacheUsage, clearCache } from '@/services/AudioCacheService'
+import { getWordsForExport, mergeWords, replaceWords } from '@/services/WordRepository'
+import { exportFileName, parseWordFile, serializeWords, WordFileError } from '@/services/WordTransfer'
+import type { Word } from '@/types/word'
 import { loadSettings, saveSettings, type AppSettings } from '@/services/SettingsService'
 import {
   ChevronRight, FlaskConical, Volume2,
@@ -161,6 +164,97 @@ function initFromSettings() {
     openAIKey: s.openAIKey,
     aiModel:   s.openAIModel,
   }
+}
+
+function WordTransferRows() {
+  const fileInput = useRef<HTMLInputElement>(null)
+  const [pending, setPending] = useState<Word[] | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+
+  async function exportWords() {
+    setNotice(null)
+    try {
+      const blob = new Blob([serializeWords(await getWordsForExport())], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = exportFileName()
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('[SettingsPage] export failed:', err)
+      setNotice({ type: 'error', message: 'エクスポートに失敗しました' })
+    }
+  }
+
+  async function chooseFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = '' // so choosing the same file again still fires change
+    if (!file) return
+    setNotice(null)
+    setPending(null)
+    try {
+      setPending(parseWordFile(await file.text()))
+    } catch (err) {
+      if (!(err instanceof WordFileError)) console.error('[SettingsPage] file read failed:', err)
+      setNotice({ type: 'error', message: err instanceof WordFileError ? err.message : 'ファイルを読み込めませんでした' })
+    }
+  }
+
+  async function applyImport(mode: 'merge' | 'replace') {
+    if (!pending) return
+    setSaving(true)
+    try {
+      if (mode === 'merge') {
+        const { added, skipped } = await mergeWords(pending)
+        const skippedNote = skipped > 0 ? `（${skipped}件は登録済みのためスキップ）` : ''
+        setNotice({ type: 'success', message: `${added}件を追加しました${skippedNote}` })
+      } else {
+        await replaceWords(pending)
+        setNotice({ type: 'success', message: `${pending.length}件でデータを置き換えました` })
+      }
+      setPending(null)
+    } catch (err) {
+      console.error('[SettingsPage] import failed:', err)
+      setNotice({ type: 'error', message: '単語の保存に失敗しました' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <>
+      <ListRow icon={Upload} label="単語リストをエクスポート" onClick={exportWords} />
+      <ListRow icon={Download} label="単語リストをインポート" onClick={() => fileInput.current?.click()} />
+      <input
+        ref={fileInput}
+        type="file"
+        accept=".json,application/json"
+        aria-label="単語ファイルを選択"
+        className="hidden"
+        onChange={chooseFile}
+      />
+      {pending && (
+        <Row>
+          <p className="text-sm">{pending.length}件の単語をインポートします</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            「置き換え」を選ぶと、ゴミ箱以外の今の単語はすべて消えます
+          </p>
+          <div className="flex gap-2 mt-2">
+            <Button size="sm" disabled={saving} onClick={() => applyImport('merge')}>追加</Button>
+            <Button size="sm" variant="destructive" disabled={saving} onClick={() => applyImport('replace')}>置き換え</Button>
+            <Button size="sm" variant="ghost" disabled={saving} onClick={() => setPending(null)}>キャンセル</Button>
+          </div>
+        </Row>
+      )}
+      {notice && (
+        <Row>
+          <InlineAlert type={notice.type} message={notice.message} />
+        </Row>
+      )}
+    </>
+  )
 }
 
 export default function SettingsPage() {
@@ -379,8 +473,7 @@ export default function SettingsPage() {
         <div>
           <SectionLabel label="データ管理" />
           <GroupCard>
-            <ListRow icon={Upload}  label="単語リストをエクスポート" />
-            <ListRow icon={Download} label="単語リストをインポート" />
+            <WordTransferRows />
             <Row>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">音声キャッシュ</span>

@@ -2,7 +2,7 @@ import { IDBFactory } from 'fake-indexeddb'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { SAMPLE_WORDS } from '@/data/sampleWords'
 import { openDB } from '@/services/db'
-import { getWord, getWords } from '@/services/WordRepository'
+import { getWord, getWords, getWordsForExport, mergeWords, replaceWords } from '@/services/WordRepository'
 import type { Word } from '@/types/word'
 
 const makeWord = (id: string, word: string, extra: Partial<Word> = {}): Word => ({
@@ -21,6 +21,8 @@ async function store(...words: Word[]) {
   await new Promise((resolve) => { tx.oncomplete = resolve })
   db.close()
 }
+
+const TRASHED_AT = '2026-11-01T00:00:00.000Z'
 
 describe('WordRepository', () => {
   beforeEach(() => {
@@ -91,6 +93,80 @@ describe('WordRepository', () => {
 
     it('resolves null for an unknown id', async () => {
       await expect(getWord('missing')).resolves.toBeNull()
+    })
+  })
+
+  describe('getWordsForExport', () => {
+    it('includes archived words and leaves out trashed ones', async () => {
+      await store(
+        makeWord('a', 'active'),
+        makeWord('r', 'archived', { archivedAt: TRASHED_AT }),
+        makeWord('d', 'trashed', { deletedAt: TRASHED_AT }),
+      )
+      const words = await getWordsForExport()
+      expect(words.map((w) => w.word)).toEqual(['active', 'archived'])
+    })
+  })
+
+  describe('mergeWords', () => {
+    it('adds new words and keeps existing ones', async () => {
+      await store(makeWord('a', 'apple'))
+      await expect(mergeWords([makeWord('b', 'banana')])).resolves.toEqual({ added: 1, skipped: 0 })
+      const words = await getWords()
+      expect(words.map((w) => w.word)).toEqual(['apple', 'banana'])
+    })
+
+    it('skips an id that already exists without overwriting it', async () => {
+      await store(makeWord('a', 'apple'))
+      await expect(mergeWords([makeWord('a', 'changed')])).resolves.toEqual({ added: 0, skipped: 1 })
+      expect((await getWord('a'))?.word).toBe('apple')
+    })
+
+    it('also skips an id that is in the trash', async () => {
+      await store(makeWord('a', 'apple'), makeWord('d', 'trashed', { deletedAt: TRASHED_AT }))
+      await expect(mergeWords([makeWord('d', 'back')])).resolves.toEqual({ added: 0, skipped: 1 })
+    })
+
+    it('counts a repeated id in the file once', async () => {
+      await store(makeWord('a', 'apple'))
+      const result = await mergeWords([makeWord('b', 'one'), makeWord('b', 'two')])
+      expect(result).toEqual({ added: 1, skipped: 1 })
+    })
+
+    it('does not add the samples when importing into a fresh store', async () => {
+      await mergeWords([makeWord('a', 'apple')])
+      await expect(getWords()).resolves.toHaveLength(1)
+    })
+  })
+
+  describe('replaceWords', () => {
+    it('removes active and archived words', async () => {
+      await store(makeWord('a', 'apple'), makeWord('r', 'archived', { archivedAt: TRASHED_AT }))
+      await replaceWords([makeWord('b', 'banana')])
+      await expect(getWordsForExport()).resolves.toEqual([makeWord('b', 'banana')])
+      await expect(getWord('r')).resolves.toBeNull()
+    })
+
+    it('keeps trashed words', async () => {
+      await store(makeWord('d', 'trashed', { deletedAt: TRASHED_AT }))
+      await replaceWords([makeWord('b', 'banana')])
+      expect((await getWord('d'))?.word).toBe('trashed')
+    })
+
+    it('drops a trashed word whose id is in the file', async () => {
+      await store(makeWord('d', 'trashed', { deletedAt: TRASHED_AT }))
+      await replaceWords([makeWord('d', 'restored')])
+      const word = await getWord('d')
+      expect(word?.word).toBe('restored')
+      expect(word?.deletedAt).toBeUndefined()
+    })
+
+    it('changes nothing when the write fails', async () => {
+      await store(makeWord('a', 'apple'))
+      const bad = { ...makeWord('b', 'banana'), id: undefined } as unknown as Word
+      await expect(replaceWords([makeWord('c', 'cherry'), bad])).rejects.toBeDefined()
+      const words = await getWords()
+      expect(words.map((w) => w.word)).toEqual(['apple'])
     })
   })
 
