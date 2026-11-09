@@ -27,15 +27,19 @@ export type PlaySource = 'cache' | 'voicevox' | 'webspeech' | 'cancelled'
 
 // ---- Web Speech API helpers ----
 
-function loadVoices(): Promise<SpeechSynthesisVoice[]> {
+function loadVoices(signal: AbortSignal): Promise<SpeechSynthesisVoice[]> {
   return new Promise((resolve) => {
-    const voices = window.speechSynthesis.getVoices()
+    const synth = window.speechSynthesis
+    const voices = synth.getVoices()
     if (voices.length > 0) { resolve(voices); return }
-    window.speechSynthesis.addEventListener(
-      'voiceschanged',
-      () => resolve(window.speechSynthesis.getVoices()),
-      { once: true },
-    )
+    // Some browsers never fire voiceschanged, so a stop must also end the wait.
+    const finish = () => {
+      synth.removeEventListener('voiceschanged', finish)
+      signal.removeEventListener('abort', finish)
+      resolve(synth.getVoices())
+    }
+    synth.addEventListener('voiceschanged', finish)
+    signal.addEventListener('abort', finish)
   })
 }
 
@@ -54,10 +58,10 @@ async function speakWebSpeech(
   text: string,
   lang: 'en' | 'ja',
   voice: VoiceType,
-  isStopped: () => boolean,
+  signal: AbortSignal,
 ): Promise<void> {
-  const voices = await loadVoices()
-  if (isStopped()) return
+  const voices = await loadVoices(signal)
+  if (signal.aborted) return
   return new Promise((resolve, reject) => {
     window.speechSynthesis.cancel()
     const utt = new SpeechSynthesisUtterance(text)
@@ -78,6 +82,7 @@ async function fetchVoicevoxWav(
   text: string,
   speakerId: string,
   apiKey: string,
+  signal: AbortSignal,
   onColdStart?: () => void,
   onColdStartEnd?: () => void,
 ): Promise<Blob> {
@@ -89,13 +94,14 @@ async function fetchVoicevoxWav(
   try {
     const qRes = await fetch(
       `${VOICEVOX_BASE}/audio_query?text=${encodeURIComponent(text)}&speaker=${speakerId}`,
-      { method: 'POST', headers },
+      { method: 'POST', headers, signal },
     )
     if (!qRes.ok) throw new Error(`audio_query failed: ${qRes.status}`)
 
     const sRes = await fetch(`${VOICEVOX_BASE}/synthesis?speaker=${speakerId}`, {
       method: 'POST',
       headers,
+      signal,
       body: JSON.stringify(await qRes.json()),
     })
     if (!sRes.ok) throw new Error(`synthesis failed: ${sRes.status}`)
@@ -108,7 +114,7 @@ async function fetchVoicevoxWav(
 }
 
 let _currentPlayback: { stop: () => void } | null = null
-let _stopCount = 0
+let _stopController = new AbortController()
 
 function playBlob(blob: Blob): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -142,11 +148,13 @@ function playBlob(blob: Blob): Promise<void> {
 }
 
 /**
- * Stop TTS immediately. Any playTTS call already in progress, including one
- * still fetching audio, resolves with 'cancelled' and produces no more sound.
+ * Stop TTS immediately. Any playTTS call already in progress resolves with
+ * 'cancelled' and produces no more sound. A VOICEVOX request still in flight is
+ * aborted, so that clip is not cached.
  */
 export function stopTTS(): void {
-  _stopCount++
+  _stopController.abort()
+  _stopController = new AbortController()
   // Absent in some embedded browsers. Pages call this on unmount, where a throw
   // would take down the whole React tree.
   window.speechSynthesis?.cancel()
@@ -170,8 +178,8 @@ export async function playTTS(
   const useVoicevox = voice === 'zundamon' && !!VOICEVOX_BASE && !!apiKey
 
   stopTTS()
-  const stopCountAtStart = _stopCount
-  const isStopped = () => _stopCount !== stopCountAtStart
+  const { signal } = _stopController
+  const isStopped = () => signal.aborted
 
   if (useVoicevox) {
     const cacheKey = await makeCacheKey(text, speakerId)
@@ -193,7 +201,7 @@ export async function playTTS(
     // 2. VOICEVOX fetch
     try {
       console.debug('[AudioService] fetching from VOICEVOX, speaker:', speakerId)
-      const blob = await fetchVoicevoxWav(text, speakerId, apiKey, onColdStart, onColdStartEnd)
+      const blob = await fetchVoicevoxWav(text, speakerId, apiKey, signal, onColdStart, onColdStartEnd)
       await putCache(cacheKey, text, speakerId, blob)
       await evictCache(CACHE_MAX_BYTES)
       if (isStopped()) return 'cancelled'
@@ -201,6 +209,7 @@ export async function playTTS(
       await playBlob(blob)
       return isStopped() ? 'cancelled' : 'voicevox'
     } catch (err) {
+      if (isStopped()) return 'cancelled'
       console.error('[AudioService] VOICEVOX failed, falling back to Web Speech:', err)
     }
   } else if (voice === 'zundamon') {
@@ -210,7 +219,7 @@ export async function playTTS(
   // 3. Web Speech API fallback
   if (isStopped()) return 'cancelled'
   try {
-    await speakWebSpeech(text, lang, voice, isStopped)
+    await speakWebSpeech(text, lang, voice, signal)
   } catch (err) {
     // speechSynthesis.cancel() surfaces as an utterance error.
     if (isStopped()) return 'cancelled'

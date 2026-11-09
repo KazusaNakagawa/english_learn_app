@@ -85,6 +85,11 @@ describe('playTTS with stopTTS', () => {
   let voicesChanged: (() => void) | null
 
   const okResponse = () => ({ ok: true, json: async () => ({}), blob: async () => new Blob(['wav']) })
+  // Mirrors what a browser does: aborting rejects a pending fetch.
+  const pendingFetch = (_url: string, init: RequestInit) =>
+    new Promise((_, reject) => {
+      init.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))
+    })
   const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
   const audioStarted = (count = 1) => vi.waitFor(() => expect(FakeAudio.instances).toHaveLength(count))
   const load = () => import('@/services/AudioService')
@@ -106,12 +111,16 @@ describe('playTTS with stopTTS', () => {
       speak,
       getVoices: () => voices,
       addEventListener: (_: string, listener: () => void) => { voicesChanged = listener },
+      removeEventListener: (_: string, listener: () => void) => {
+        if (voicesChanged === listener) voicesChanged = null
+      },
     })
     URL.createObjectURL = vi.fn(() => 'blob:test')
     URL.revokeObjectURL = vi.fn()
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     vi.unstubAllGlobals()
     vi.unstubAllEnvs()
   })
@@ -205,24 +214,52 @@ describe('playTTS with stopTTS', () => {
   })
 
   describe('stopping before audio starts', () => {
-    it('does not play a clip that arrives after the stop, but still caches it', async () => {
-      let release: () => void = () => {}
-      fetchMock.mockImplementationOnce(() => new Promise((resolve) => { release = () => resolve(okResponse()) }))
+    it('aborts a pending /audio_query and never sends /synthesis', async () => {
+      fetchMock.mockImplementationOnce(pendingFetch)
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {})
       const { playTTS, stopTTS } = await load()
       const result = playTTS('hello', options)
       await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce())
       stopTTS()
-      release()
       await expect(result).resolves.toBe('cancelled')
+      await flush()
+      expect(fetchMock).toHaveBeenCalledOnce()
       expect(FakeAudio.instances).toHaveLength(0)
       expect(speak).not.toHaveBeenCalled()
-      expect(cache.putCache).toHaveBeenCalledOnce()
+      expect(error).not.toHaveBeenCalled()
     })
 
-    it('does not fall back when the fetch fails after the stop', async () => {
+    it('aborts a pending /synthesis and does not cache the clip', async () => {
+      fetchMock.mockImplementationOnce(async () => okResponse()).mockImplementationOnce(pendingFetch)
+      const { playTTS, stopTTS } = await load()
+      const result = playTTS('hello', options)
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+      stopTTS()
+      await expect(result).resolves.toBe('cancelled')
+      expect(cache.putCache).not.toHaveBeenCalled()
+      expect(FakeAudio.instances).toHaveLength(0)
+    })
+
+    it('gives a request made after a stop a signal that is not aborted', async () => {
+      fetchMock.mockImplementationOnce(pendingFetch)
+      const { playTTS, stopTTS } = await load()
+      const first = playTTS('first', options)
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce())
+      stopTTS()
+      await expect(first).resolves.toBe('cancelled')
+
+      const second = playTTS('second', options)
+      await audioStarted()
+      expect(fetchMock.mock.calls[0][1].signal.aborted).toBe(true)
+      expect(fetchMock.mock.calls[1][1].signal.aborted).toBe(false)
+      FakeAudio.instances[0].onended?.()
+      await expect(second).resolves.toBe('voicevox')
+    })
+
+    it('does not fall back or log one when the fetch fails after the stop', async () => {
       let fail: (reason: Error) => void = () => {}
       fetchMock.mockImplementationOnce(() => new Promise((_, reject) => { fail = reject }))
-      vi.spyOn(console, 'error').mockImplementation(() => {})
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {})
       const { playTTS, stopTTS } = await load()
       const result = playTTS('hello', options)
       await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce())
@@ -230,6 +267,39 @@ describe('playTTS with stopTTS', () => {
       fail(new Error('network down'))
       await expect(result).resolves.toBe('cancelled')
       expect(speak).not.toHaveBeenCalled()
+      expect(error).not.toHaveBeenCalled()
+    })
+
+    it('still logs and falls back when the fetch fails without a stop', async () => {
+      fetchMock.mockRejectedValueOnce(new Error('network down'))
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const { playTTS } = await load()
+      await expect(playTTS('hello', options)).resolves.toBe('webspeech')
+      expect(speak).toHaveBeenCalledOnce()
+      expect(error).toHaveBeenCalledOnce()
+    })
+
+    it('resolves as cancelled when voiceschanged never fires', async () => {
+      voices = []
+      const { playTTS, stopTTS } = await load()
+      const result = playTTS('hello', { voice: 'female', lang: 'en' })
+      await vi.waitFor(() => expect(voicesChanged).not.toBeNull())
+      stopTTS()
+      await expect(result).resolves.toBe('cancelled')
+      expect(voicesChanged).toBeNull()
+      expect(speak).not.toHaveBeenCalled()
+    })
+
+    it('still speaks once voices load without a stop', async () => {
+      voices = []
+      const { playTTS } = await load()
+      const result = playTTS('hello', { voice: 'female', lang: 'en' })
+      await vi.waitFor(() => expect(voicesChanged).not.toBeNull())
+      voices = [{ lang: 'en-US', name: 'Test' }]
+      voicesChanged?.()
+      await expect(result).resolves.toBe('webspeech')
+      expect(voicesChanged).toBeNull()
+      expect(speak).toHaveBeenCalledOnce()
     })
 
     it('does not play a cached clip when the stop lands during the cache read', async () => {
@@ -308,6 +378,20 @@ describe('playTTS with stopTTS', () => {
       stopTTS()
       await expect(second).resolves.toBe('cancelled')
       expect(FakeAudio.instances[1].paused).toBe(true)
+    })
+
+    it('aborts the older request without waiting for its response', async () => {
+      fetchMock.mockImplementationOnce(pendingFetch)
+      const { playTTS } = await load()
+      const first = playTTS('first', options)
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce())
+
+      const second = playTTS('second', options)
+      await expect(first).resolves.toBe('cancelled')
+
+      await audioStarted()
+      FakeAudio.instances[0].onended?.()
+      await expect(second).resolves.toBe('voicevox')
     })
 
     it('does not let an older clip that arrives late interrupt the newer one', async () => {
