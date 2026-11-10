@@ -48,6 +48,8 @@ AI による例文生成と音声合成を組み合わせた、発音練習に�
 |------|------|
 | 開発環境 | macOS + Xcode 15 以上 |
 | 実行環境 | iOS 17.0 以上（シミュレーター / 実機） |
+| Web 版の開発環境 | Node.js 20 以上 + npm |
+| Web 版の実行環境 | Chrome / Safari などのモダンブラウザ |
 
 ---
 
@@ -111,6 +113,52 @@ OpenAI の API キーを入力すると、単語追加時に例文を自動生�
 スキップして後から設定画面で入力することも可能です。
 
 > API キーは iOS Keychain に安全に保存されます。
+
+---
+
+## Web 版（ブラウザ）の起動手順
+
+`web/` にブラウザで動く版（React + Vite）があります。単語や例文はブラウザの IndexedDB に保存され、サーバーは要りません。
+
+### 1. 依存パッケージのインストール
+
+```bash
+cd web
+npm install
+```
+
+### 2. 環境変数ファイルの作成（任意）
+
+```bash
+cp .env.example .env
+```
+
+VOICEVOX の接続先（`VITE_VOICEVOX_ENDPOINT_POC`）が空のままなら、音声はブラウザの読み上げ（Web Speech API）だけになります。ずんだもん音声を手元の Docker で鳴らす手順は [docs/web/local-voicevox.md](docs/web/local-voicevox.md) を参照してください。
+
+`.env` の値はビルド時に埋め込まれるので、書き換えたら開発サーバーを起動し直してください。
+
+### 3. 開発サーバーの起動
+
+```bash
+npm run dev
+```
+
+ブラウザで http://localhost:5173 を開くと、サンプルの単語が並んだ単語一覧が表示されます。
+
+### 4. OpenAI API キーの設定（任意）
+
+設定画面で OpenAI の API キーを入力すると、単語の追加・編集画面で例文を生成できます。
+
+> Web 版の API キーは sessionStorage に保存されるため、タブを閉じると消えます。
+
+### その他のコマンド
+
+| コマンド | 内容 |
+|---------|------|
+| `npm test` | 単体テスト（Vitest） |
+| `npm run lint` | ESLint |
+| `npm run build` | 型チェックと本番ビルド（`dist/`） |
+| `npm run preview` | ビルドしたものをローカルで確認 |
 
 ---
 
@@ -206,6 +254,7 @@ OpenAI の API キーを入力すると、単語追加時に例文を自動生�
 | ネットワーク監視 | Network framework（NWPathMonitor） |
 | クラウド TTS 基盤 | AWS Lambda + API Gateway（VOICEVOX エンジン） |
 | インフラ管理 | AWS CDK（TypeScript） |
+| Web 版 | React + Vite + TypeScript、IndexedDB（データ保存）、Web Speech API（音声） |
 
 ---
 
