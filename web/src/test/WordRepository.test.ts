@@ -3,6 +3,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { SAMPLE_WORDS } from '@/data/sampleWords'
 import { openDB } from '@/services/db'
 import {
+  addWord,
+  getListedSpellings,
   daysUntilPurge,
   deleteWordPermanently,
   getTrashedWords,
@@ -376,6 +378,60 @@ describe('WordRepository', () => {
     ])('counts days left until purge when %s', (_, daysAgo, left) => {
       const deletedAt = new Date(NOW - daysAgo * DAY).toISOString()
       expect(daysUntilPurge(deletedAt, NOW)).toBe(left)
+    })
+  })
+
+  describe('addWord', () => {
+    const input = {
+      word: 'apple',
+      meaning: 'りんご',
+      phonetic: '',
+      sentences: [
+        { english: 'I ate an apple.', japanese: 'りんごを食べた。', category: '' },
+        { english: 'Apples are red.', japanese: 'りんごは赤い。', category: '色' },
+      ],
+    }
+
+    it('stores a new word that the list then shows', async () => {
+      await store(makeWord('b', 'banana'))
+      const word = await addWord(input, new Date('2026-11-10T12:00:00.000Z'))
+      expect(word).toMatchObject({ ...input, sentences: input.sentences.map((s) => expect.objectContaining(s)) })
+      expect(word.createdAt).toBe('2026-11-10T12:00:00.000Z')
+      expect(word.isFavorite).toBe(false)
+      expect((await getWords()).map((w) => w.word)).toEqual(['apple', 'banana'])
+      await expect(getWord(word.id)).resolves.toEqual(word)
+    })
+
+    it('gives the word and each sentence its own uppercase UUID', async () => {
+      const word = await addWord(input)
+      const ids = [word.id, ...word.sentences.map((s) => s.id)]
+      expect(ids.every((id) => /^[0-9A-F-]{36}$/.test(id))).toBe(true)
+      expect(new Set(ids).size).toBe(3)
+    })
+
+    it('accepts a word with no sentences', async () => {
+      const word = await addWord({ ...input, sentences: [] })
+      expect((await getWord(word.id))?.sentences).toEqual([])
+    })
+
+    it('leaves the samples out when the first thing done is adding a word', async () => {
+      await addWord(input)
+      expect((await getWords()).map((w) => w.word)).toEqual(['apple'])
+    })
+
+    it('lists spellings of active and archived words, but not trashed ones', async () => {
+      await store(
+        makeWord('a', 'Apple'),
+        makeWord('r', 'archived', { archivedAt: TRASHED_AT }),
+        makeWord('d', 'trashed', { deletedAt: TRASHED_AT }),
+      )
+      await expect(getListedSpellings()).resolves.toEqual(new Set(['apple', 'archived']))
+    })
+
+    it('survives an export and re-import with nothing added', async () => {
+      await addWord(input)
+      const exported = parseWordFile(serializeWords(await getWordsForExport()))
+      await expect(mergeWords(exported)).resolves.toMatchObject({ added: 0 })
     })
   })
 
