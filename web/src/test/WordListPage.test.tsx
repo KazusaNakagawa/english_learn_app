@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { IDBFactory } from 'fake-indexeddb'
@@ -149,6 +149,87 @@ describe('WordListPage', () => {
       expect(await screen.findByLabelText(`「${word.word}」をゴミ箱へ移動`)).toBeInTheDocument()
       expect(screen.queryByText(`「${word.word}」をゴミ箱に移動しました`)).not.toBeInTheDocument()
       expect((await getWords()).map((w) => w.id)).toContain(word.id)
+    })
+
+    const card = (word: string) => screen.getByLabelText(`${word} — 例文一覧へ`)
+    const swipe = (word: string, dx: number, dy = 0) => {
+      const row = card(word).parentElement as HTMLElement
+      fireEvent.pointerDown(row, { pointerId: 1, button: 0, clientX: 300, clientY: 100 })
+      fireEvent.pointerMove(row, { pointerId: 1, clientX: 300 + dx / 2, clientY: 100 + dy / 2 })
+      fireEvent.pointerMove(row, { pointerId: 1, clientX: 300 + dx, clientY: 100 + dy })
+      fireEvent.pointerUp(row, { pointerId: 1, clientX: 300 + dx, clientY: 100 + dy })
+      fireEvent.click(card(word))
+    }
+    const deleteButton = (word: string) => screen.getByRole('button', { name: `「${word}」をゴミ箱へ移動` })
+
+    it('shows no trash button until the row is swiped', async () => {
+      await renderPage()
+      const word = first()
+      expect(screen.queryByText('削除')).not.toBeInTheDocument()
+      swipe(word.word, -100)
+      expect(screen.getByText('削除')).toBeInTheDocument()
+      expect(deleteButton(word.word)).toHaveAttribute('tabindex', '0')
+      expect(mockNavigate).not.toHaveBeenCalledWith(expect.stringContaining('/sentences'))
+    })
+
+    it('deletes from the revealed button', async () => {
+      await renderPage()
+      const word = first()
+      swipe(word.word, -100)
+      await userEvent.click(deleteButton(word.word))
+      expect(await screen.findByText(`「${word.word}」をゴミ箱に移動しました`)).toBeInTheDocument()
+      expect((await getWords()).map((w) => w.id)).not.toContain(word.id)
+    })
+
+    it('deletes at once on a full swipe', async () => {
+      await renderPage()
+      const word = first()
+      swipe(word.word, -250)
+      expect(await screen.findByText(`「${word.word}」をゴミ箱に移動しました`)).toBeInTheDocument()
+      expect((await getWords()).map((w) => w.id)).not.toContain(word.id)
+    })
+
+    it('springs back after a short swipe, so a tap still opens the word', async () => {
+      await renderPage()
+      const word = first()
+      swipe(word.word, -20)
+      expect(screen.queryByText('削除')).not.toBeInTheDocument()
+      await userEvent.click(card(word.word))
+      expect(mockNavigate).toHaveBeenCalledWith(`/words/${word.id}/sentences`)
+    })
+
+    it('leaves a vertical drag to scrolling', async () => {
+      await renderPage()
+      const word = first()
+      swipe(word.word, -10, 60)
+      expect(screen.queryByText('削除')).not.toBeInTheDocument()
+    })
+
+    it('closes an open row on tap instead of opening the word', async () => {
+      await renderPage()
+      const word = first()
+      swipe(word.word, -100)
+      mockNavigate.mockClear()
+      await userEvent.click(card(word.word))
+      expect(screen.queryByText('削除')).not.toBeInTheDocument()
+      expect(mockNavigate).not.toHaveBeenCalled()
+    })
+
+    it('keeps only one row open at a time', async () => {
+      await renderPage()
+      const [a, b] = [...SAMPLE_WORDS].sort((x, y) => x.word.localeCompare(y.word))
+      swipe(a.word, -100)
+      fireEvent.pointerDown(card(b.word), { pointerId: 2, button: 0, clientX: 10, clientY: 10 })
+      fireEvent.pointerUp(card(b.word), { pointerId: 2, clientX: 10, clientY: 10 })
+      expect(screen.queryByText('削除')).not.toBeInTheDocument()
+    })
+
+    it('deletes the focused card with the Delete key', async () => {
+      await renderPage()
+      const word = first()
+      card(word.word).focus()
+      await userEvent.keyboard('{Delete}')
+      expect(await screen.findByText(`「${word.word}」をゴミ箱に移動しました`)).toBeInTheDocument()
     })
 
     it('reports a failure and keeps the word', async () => {

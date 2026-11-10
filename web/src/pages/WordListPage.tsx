@@ -4,10 +4,11 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-import { Volume2, Loader2, Trash2 } from 'lucide-react'
+import { Volume2, Loader2 } from 'lucide-react'
 import { playTTS, stopTTS, type VoiceType } from '@/services/AudioService'
 import { loadSettings } from '@/services/SettingsService'
 import { useWords } from '@/hooks/useWords'
+import { SwipeToDelete } from '@/components/SwipeToDelete'
 import { restoreWord, trashWord } from '@/services/WordRepository'
 import type { Word } from '@/types/word'
 
@@ -27,6 +28,7 @@ export default function WordListPage() {
   const [trashedIds, setTrashedIds] = useState<ReadonlySet<string>>(new Set())
   const [lastTrashed, setLastTrashed] = useState<Word | null>(null)
   const [trashError, setTrashError] = useState<string | null>(null)
+  const [openSwipeId, setOpenSwipeId] = useState<string | null>(null)
   const words = (wordsState.status === 'ready' ? wordsState.data : []).filter((w) => !trashedIds.has(w.id))
 
   const filtered = words.filter((w) => {
@@ -65,8 +67,7 @@ export default function WordListPage() {
     }
   }
 
-  async function moveToTrash(word: Word, e: React.MouseEvent) {
-    e.stopPropagation()
+  async function moveToTrash(word: Word) {
     setTrashError(null)
     try {
       await trashWord(word.id)
@@ -75,6 +76,7 @@ export default function WordListPage() {
     } catch (err) {
       console.error('[WordListPage] trash failed:', err)
       setTrashError('ゴミ箱に移動できませんでした')
+      throw err
     }
   }
 
@@ -160,15 +162,27 @@ export default function WordListPage() {
       )}
 
       {/* Word list */}
-      <main className={cn('max-w-2xl mx-auto px-4 space-y-2', lastTrashed || trashError ? 'pb-20' : 'pb-4')}>
+      <main
+        className={cn('max-w-2xl mx-auto px-4 space-y-2', lastTrashed || trashError ? 'pb-20' : 'pb-4')}
+        onPointerDownCapture={(e) => {
+          // Touching anywhere but the open row closes it, as on iOS.
+          if (openSwipeId && !(e.target as Element).closest('[data-swipe-open="true"]')) setOpenSwipeId(null)
+        }}
+      >
         {wordsState.status === 'loading' ? null : wordsState.status === 'error' ? (
           <p className="text-sm text-muted-foreground text-center py-12">単語データを読み込めませんでした</p>
         ) : filtered.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-12">該当する単語がありません</p>
         ) : (
           filtered.map((word) => (
-            <div
+            <SwipeToDelete
               key={word.id}
+              open={openSwipeId === word.id}
+              onOpenChange={(open) => setOpenSwipeId(open ? word.id : null)}
+              onDelete={() => moveToTrash(word)}
+              deleteLabel={`「${word.word}」をゴミ箱へ移動`}
+            >
+            <div
               role="button"
               tabIndex={0}
               aria-label={`${word.word} — 例文一覧へ`}
@@ -176,12 +190,17 @@ export default function WordListPage() {
               onKeyDown={(e) => {
                 // Keys pressed on the buttons inside the card belong to those buttons.
                 if (e.target !== e.currentTarget) return
+                if (e.key === 'Delete' || e.key === 'Backspace') {
+                  e.preventDefault()
+                  void moveToTrash(word).catch(() => {})
+                  return
+                }
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault()
                   navigate(`/words/${word.id}/sentences`)
                 }
               }}
-              className="bg-white rounded-2xl px-4 py-3 flex items-center gap-3 cursor-pointer active:opacity-70 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ios-blue)]"
+              className="bg-white px-4 py-3 flex items-center gap-3 cursor-pointer active:opacity-70 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ios-blue)]"
             >
               {/* Left: text info */}
               <div className="flex-1 min-w-0">
@@ -227,18 +246,9 @@ export default function WordListPage() {
                     </Button>
                   )
                 })}
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={(e) => moveToTrash(word, e)}
-                  aria-label={`「${word.word}」をゴミ箱へ移動`}
-                  title="ゴミ箱へ移動"
-                  className="h-8 px-2 rounded-lg text-muted-foreground hover:text-[var(--ios-red)] hover:bg-[var(--ios-red)]/10"
-                >
-                  <Trash2 size={15} />
-                </Button>
               </div>
             </div>
+            </SwipeToDelete>
           ))
         )}
       </main>
