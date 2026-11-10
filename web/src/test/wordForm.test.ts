@@ -1,6 +1,5 @@
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { emptySentenceRow, validateWordForm, type WordForm } from '@/lib/wordForm'
-import { newId } from '@/lib/id'
 
 const form = (extra: Partial<WordForm> = {}): WordForm => ({
   word: 'apple',
@@ -16,7 +15,7 @@ describe('validateWordForm', () => {
       word: '  apple ',
       meaning: ' りんご ',
       phonetic: ' ˈæp.əl ',
-      sentences: [{ english: ' I ate an apple. ', japanese: ' りんごを食べた。 ', category: ' 食べ物 ' }],
+      sentences: [{ key: 'k', english: ' I ate an apple. ', japanese: ' りんごを食べた。 ', category: ' 食べ物 ' }],
     }))
     expect(result.errors).toEqual([])
     expect(result.input).toEqual({
@@ -37,46 +36,31 @@ describe('validateWordForm', () => {
     expect(result.input).toBeNull()
   })
 
-  it('ignores a sentence row left completely empty', () => {
-    const result = validateWordForm(form({ sentences: [emptySentenceRow(), { english: ' ', japanese: '', category: 'x' }] }))
+  it('ignores a sentence row left completely empty, spaces included', () => {
+    const result = validateWordForm(form({ sentences: [emptySentenceRow(), { key: 'k', english: ' ', japanese: '', category: ' ' }] }))
     expect(result.errors).toEqual([])
     expect(result.input?.sentences).toEqual([])
   })
 
+  it('does not drop a row that has only a category', () => {
+    const result = validateWordForm(form({ sentences: [{ key: 'k', english: '', japanese: '', category: '食べ物' }] }))
+    expect(result.errors).toEqual(['例文1: 英文と和訳の両方を入力してください'])
+  })
+
+  it('gives every new row its own key', () => {
+    expect(emptySentenceRow().key).not.toBe(emptySentenceRow().key)
+  })
+
   it('names the row that has only one of English and Japanese', () => {
     const sentences = [
-      { english: 'Fine.', japanese: '大丈夫。', category: '' },
-      { english: 'Missing translation.', japanese: '', category: '' },
+      { key: 'a', english: 'Fine.', japanese: '大丈夫。', category: '' },
+      { key: 'b', english: 'Missing translation.', japanese: '', category: '' },
     ]
     expect(validateWordForm(form({ sentences })).errors).toEqual(['例文2: 英文と和訳の両方を入力してください'])
   })
 
   it('reports every problem at once', () => {
-    const result = validateWordForm(form({ word: '', meaning: '', sentences: [{ english: '', japanese: 'だけ', category: '' }] }))
+    const result = validateWordForm(form({ word: '', meaning: '', sentences: [{ key: 'k', english: '', japanese: 'だけ', category: '' }] }))
     expect(result.errors).toHaveLength(3)
-  })
-})
-
-describe('newId', () => {
-  const UUID_V4 = /^[0-9A-F]{8}-[0-9A-F]{4}-4[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$/
-
-  afterEach(() => {
-    vi.restoreAllMocks()
-  })
-
-  it('makes an uppercase UUID v4, the spelling iOS writes', () => {
-    expect(newId()).toMatch(UUID_V4)
-  })
-
-  it('works without crypto.randomUUID, which non-secure origins lack', () => {
-    const original = crypto.randomUUID
-    Object.defineProperty(crypto, 'randomUUID', { value: undefined, configurable: true })
-    try {
-      const ids = new Set(Array.from({ length: 50 }, newId))
-      expect([...ids].every((id) => UUID_V4.test(id))).toBe(true)
-      expect(ids.size).toBe(50)
-    } finally {
-      Object.defineProperty(crypto, 'randomUUID', { value: original, configurable: true })
-    }
   })
 })

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getTrashedWords, getWord, getWords } from '@/services/WordRepository'
+import { getListedSpellings, getTrashedWords, getWord, getWords } from '@/services/WordRepository'
 import type { Word } from '@/types/word'
 
 export type LoadState<T> =
@@ -37,4 +37,8 @@ export function useWord(id: string | undefined): LoadState<Word | null> {
 
 export function useTrashedWords(): LoadState<Word[]> {
   return useLoad(getTrashedWords, 'trash')
+}
+
+export function useListedSpellings(): LoadState<Set<string>> {
+  return useLoad(getListedSpellings, 'spellings')
 }

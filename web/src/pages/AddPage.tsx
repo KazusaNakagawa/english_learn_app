@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router'
 import { Plus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { useWords } from '@/hooks/useWords'
+import { useListedSpellings } from '@/hooks/useWords'
 import { emptySentenceRow, validateWordForm, type SentenceRow, type WordForm } from '@/lib/wordForm'
 import { addWord } from '@/services/WordRepository'
 
@@ -11,7 +11,7 @@ const fieldClass = 'border-0 shadow-none px-0 focus-visible:ring-0 text-sm'
 
 export default function AddPage() {
   const navigate = useNavigate()
-  const wordsState = useWords()
+  const spellings = useListedSpellings()
   const [form, setForm] = useState<WordForm>({ word: '', meaning: '', phonetic: '', sentences: [] })
   // Errors appear after the first save attempt, then follow the input as it is corrected.
   const [submitted, setSubmitted] = useState(false)
@@ -20,13 +20,12 @@ export default function AddPage() {
 
   const errors = submitted ? validateWordForm(form).errors : []
   const typed = form.word.trim().toLowerCase()
-  const alreadyListed = typed !== '' && wordsState.status === 'ready'
-    && wordsState.data.some((w) => w.word.toLowerCase() === typed)
+  const alreadyListed = typed !== '' && spellings.status === 'ready' && spellings.data.has(typed)
 
   const setField = (key: 'word' | 'meaning' | 'phonetic', value: string) =>
     setForm((prev) => ({ ...prev, [key]: value }))
 
-  const setRow = (index: number, key: keyof SentenceRow, value: string) =>
+  const setRow = (index: number, key: Exclude<keyof SentenceRow, 'key'>, value: string) =>
     setForm((prev) => ({
       ...prev,
       sentences: prev.sentences.map((row, i) => (i === index ? { ...row, [key]: value } : row)),
@@ -41,7 +40,7 @@ export default function AddPage() {
     setSaving(true)
     try {
       await addWord(input)
-      navigate('/')
+      navigate('/', { replace: true }) // so going back does not reopen an empty form
     } catch (err) {
       console.error('[AddPage] save failed:', err)
       setSaveError('保存に失敗しました')
@@ -76,7 +75,7 @@ export default function AddPage() {
           <p className="text-xs text-muted-foreground uppercase tracking-wide px-1 mb-1">例文（任意）</p>
           <div className="space-y-2">
             {form.sentences.map((row, i) => (
-              <div key={i} className="bg-white rounded-2xl pl-4 pr-2 py-1 flex gap-2">
+              <div key={row.key} className="bg-white rounded-2xl pl-4 pr-2 py-1 flex gap-2">
                 <div className="flex-1 divide-y divide-border">
                   <Input aria-label={`例文${i + 1}の英文`} placeholder="英文" autoComplete="off"
                     value={row.english} onChange={(e) => setRow(i, 'english', e.target.value)} className={fieldClass} />

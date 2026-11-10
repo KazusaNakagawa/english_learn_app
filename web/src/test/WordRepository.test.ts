@@ -4,6 +4,7 @@ import { SAMPLE_WORDS } from '@/data/sampleWords'
 import { openDB } from '@/services/db'
 import {
   addWord,
+  getListedSpellings,
   daysUntilPurge,
   deleteWordPermanently,
   getTrashedWords,
@@ -411,6 +412,20 @@ describe('WordRepository', () => {
     it('accepts a word with no sentences', async () => {
       const word = await addWord({ ...input, sentences: [] })
       expect((await getWord(word.id))?.sentences).toEqual([])
+    })
+
+    it('leaves the samples out when the first thing done is adding a word', async () => {
+      await addWord(input)
+      expect((await getWords()).map((w) => w.word)).toEqual(['apple'])
+    })
+
+    it('lists spellings of active and archived words, but not trashed ones', async () => {
+      await store(
+        makeWord('a', 'Apple'),
+        makeWord('r', 'archived', { archivedAt: TRASHED_AT }),
+        makeWord('d', 'trashed', { deletedAt: TRASHED_AT }),
+      )
+      await expect(getListedSpellings()).resolves.toEqual(new Set(['apple', 'archived']))
     })
 
     it('survives an export and re-import with nothing added', async () => {

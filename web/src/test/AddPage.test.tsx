@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router'
 import { IDBFactory } from 'fake-indexeddb'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import AddPage from '@/pages/AddPage'
+import { archiveForTest } from './helpers/archive'
 import { getWords } from '@/services/WordRepository'
 
 const mockNavigate = vi.fn()
@@ -33,7 +34,7 @@ describe('AddPage', () => {
     await type('意味', 'りんご')
     await type('発音記号', 'ˈæp.əl')
     await save()
-    await vi.waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/'))
+    await vi.waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/', { replace: true }))
     const saved = (await getWords()).find((w) => w.word === 'apple')
     expect(saved).toMatchObject({ meaning: 'りんご', phonetic: 'ˈæp.əl', sentences: [] })
   })
@@ -48,7 +49,7 @@ describe('AddPage', () => {
     await type('例文1のカテゴリ', '食べ物')
     await userEvent.click(screen.getByRole('button', { name: '例文を追加' }))
     await save()
-    await vi.waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/'))
+    await vi.waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/', { replace: true }))
     const saved = (await getWords()).find((w) => w.word === 'apple')
     expect(saved?.sentences).toEqual([
       expect.objectContaining({ english: 'I ate an apple.', japanese: 'りんごを食べた。', category: '食べ物' }),
@@ -87,8 +88,27 @@ describe('AddPage', () => {
     expect(await screen.findByText('「Rarity」は登録済みです')).toBeInTheDocument()
     await type('意味', '二つ目')
     await save()
-    await vi.waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/'))
+    await vi.waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/', { replace: true }))
     expect((await getWords()).filter((w) => w.word.toLowerCase() === 'rarity')).toHaveLength(2)
+  })
+
+  it('warns about a word that is archived', async () => {
+    await archiveForTest('rarity')
+    render(<MemoryRouter><AddPage /></MemoryRouter>)
+    await type('英単語', 'rarity')
+    expect(await screen.findByText('「rarity」は登録済みです')).toBeInTheDocument()
+  })
+
+  it('keeps typed text with its row when an earlier row is removed', async () => {
+    render(<MemoryRouter><AddPage /></MemoryRouter>)
+    await userEvent.click(screen.getByRole('button', { name: '例文を追加' }))
+    await userEvent.click(screen.getByRole('button', { name: '例文を追加' }))
+    await type('例文1の英文', 'first')
+    await type('例文2の英文', 'second')
+    const secondInput = screen.getByLabelText('例文2の英文')
+    await userEvent.click(screen.getByRole('button', { name: '例文1を削除' }))
+    expect(screen.getByLabelText('例文1の英文')).toBe(secondInput)
+    expect(secondInput).toHaveValue('second')
   })
 
   it('reports a save failure and keeps the input', async () => {

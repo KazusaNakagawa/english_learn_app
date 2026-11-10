@@ -1,10 +1,9 @@
 /** The add-word form, and turning what was typed into something storable. */
 
-export interface SentenceRow {
-  english: string
-  japanese: string
-  category: string
-}
+import type { Sentence } from '@/types/word'
+
+/** A sentence being typed. `key` keeps React rows stable when one is removed. */
+export type SentenceRow = Omit<Sentence, 'id'> & { key: string }
 
 export interface WordForm {
   word: string
@@ -13,10 +12,22 @@ export interface WordForm {
   sentences: SentenceRow[]
 }
 
-/** A validated form: trimmed, with empty sentence rows dropped. */
-export type WordInput = WordForm
+/** A validated form: trimmed, with empty sentence rows dropped and row keys gone. */
+export interface WordInput {
+  word: string
+  meaning: string
+  phonetic: string
+  sentences: Omit<Sentence, 'id'>[]
+}
 
-export const emptySentenceRow = (): SentenceRow => ({ english: '', japanese: '', category: '' })
+let nextRowKey = 0
+
+export const emptySentenceRow = (): SentenceRow => ({
+  key: `row-${nextRowKey++}`,
+  english: '',
+  japanese: '',
+  category: '',
+})
 
 export function validateWordForm(form: WordForm): { errors: string[]; input: WordInput | null } {
   const errors: string[] = []
@@ -25,16 +36,17 @@ export function validateWordForm(form: WordForm): { errors: string[]; input: Wor
   if (!word) errors.push('英単語を入力してください')
   if (!meaning) errors.push('意味を入力してください')
 
-  const sentences: SentenceRow[] = []
+  const sentences: Omit<Sentence, 'id'>[] = []
   form.sentences.forEach((row, i) => {
     const english = row.english.trim()
     const japanese = row.japanese.trim()
-    if (!english && !japanese) return // a row added but never filled in
+    const category = row.category.trim()
+    if (!english && !japanese && !category) return // a row added but never filled in
     if (!english || !japanese) {
       errors.push(`例文${i + 1}: 英文と和訳の両方を入力してください`)
       return
     }
-    sentences.push({ english, japanese, category: row.category.trim() })
+    sentences.push({ english, japanese, category })
   })
 
   if (errors.length > 0) return { errors, input: null }

@@ -134,6 +134,11 @@ export async function getWord(id: string): Promise<Word | null> {
   return isWord(record) ? record : null
 }
 
+/** Lowercased spellings of every word not in the trash, archived ones included, for duplicate checks. */
+export async function getListedSpellings(): Promise<Set<string>> {
+  return new Set((await allWords()).filter((w) => !w.deletedAt).map((w) => w.word.toLowerCase()))
+}
+
 /** Everything iOS would export: all words except those in the trash. */
 export async function getWordsForExport(): Promise<Word[]> {
   return (await allWords()).filter((w) => !w.deletedAt).sort(byWord)
@@ -280,7 +285,11 @@ export function getTrashedWords(now = Date.now()): Promise<Word[]> {
   })
 }
 
-/** Stores a word typed in by the user, giving it and its sentences new ids. */
+/**
+ * Stores a word typed in by the user, giving it and its sentences new ids.
+ * Adding to a database that has never been read leaves the samples out on
+ * purpose: someone whose first act is adding a word is starting their own list.
+ */
 export async function addWord(input: WordInput, now = new Date()): Promise<Word> {
   const word: Word = {
     id: newId(),
