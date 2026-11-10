@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { SAMPLE_WORDS } from '@/data/sampleWords'
 import { openDB } from '@/services/db'
 import { getWord, getWords, getWordsForExport, mergeWords, replaceWords } from '@/services/WordRepository'
+import { parseWordFile, serializeWords } from '@/services/WordTransfer'
 import type { Word } from '@/types/word'
 
 const makeWord = (id: string, word: string, extra: Partial<Word> = {}): Word => ({
@@ -119,26 +120,42 @@ describe('WordRepository', () => {
   describe('mergeWords', () => {
     it('adds new words and keeps existing ones', async () => {
       await store(makeWord('a', 'apple'))
-      await expect(mergeWords([makeWord('b', 'banana')])).resolves.toEqual({ added: 1, skipped: 0 })
+      await expect(mergeWords([makeWord('b', 'banana')])).resolves.toEqual({ added: 1, skipped: 0, duplicates: 0, hidden: 0 })
       const words = await getWords()
       expect(words.map((w) => w.word)).toEqual(['apple', 'banana'])
     })
 
     it('skips an id that already exists without overwriting it', async () => {
       await store(makeWord('a', 'apple'))
-      await expect(mergeWords([makeWord('a', 'changed')])).resolves.toEqual({ added: 0, skipped: 1 })
+      await expect(mergeWords([makeWord('a', 'changed')])).resolves.toEqual({ added: 0, skipped: 1, duplicates: 0, hidden: 0 })
       expect((await getWord('a'))?.word).toBe('apple')
     })
 
     it('also skips an id that is in the trash', async () => {
       await store(makeWord('a', 'apple'), makeWord('d', 'trashed', { deletedAt: TRASHED_AT }))
-      await expect(mergeWords([makeWord('d', 'back')])).resolves.toEqual({ added: 0, skipped: 1 })
+      await expect(mergeWords([makeWord('d', 'back')])).resolves.toEqual({ added: 0, skipped: 1, duplicates: 0, hidden: 0 })
     })
 
     it('counts a repeated id in the file once', async () => {
       await store(makeWord('a', 'apple'))
       const result = await mergeWords([makeWord('b', 'one'), makeWord('b', 'two')])
-      expect(result).toEqual({ added: 1, skipped: 1 })
+      expect(result).toEqual({ added: 1, skipped: 0, duplicates: 1, hidden: 0 })
+    })
+
+    it('treats ids that differ only in case as the same word', async () => {
+      await store(makeWord('abcdef01-0000-4000-8000-000000000001', 'apple'))
+      const result = await mergeWords([makeWord('ABCDEF01-0000-4000-8000-000000000001', 'again')])
+      expect(result).toEqual({ added: 0, skipped: 1, duplicates: 0, hidden: 0 })
+    })
+
+    it('counts added words the list will not show', async () => {
+      await store(makeWord('a', 'apple'))
+      const result = await mergeWords([
+        makeWord('b', 'banana'),
+        makeWord('r', 'archived', { archivedAt: TRASHED_AT }),
+        makeWord('d', 'trashed', { deletedAt: TRASHED_AT }),
+      ])
+      expect(result).toEqual({ added: 3, skipped: 0, duplicates: 0, hidden: 2 })
     })
 
     it('does not add the samples when importing into a fresh store', async () => {
@@ -169,12 +186,78 @@ describe('WordRepository', () => {
       expect(word?.deletedAt).toBeUndefined()
     })
 
+    it('reports the number of words stored, counting a repeated id once', async () => {
+      const result = await replaceWords([
+        makeWord('b', 'one'),
+        makeWord('b', 'two'),
+        makeWord('r', 'archived', { archivedAt: TRASHED_AT }),
+      ])
+      expect(result).toEqual({ stored: 2, hidden: 1 })
+      expect((await getWord('b'))?.word).toBe('two')
+    })
+
+    it('drops a trashed word whose id differs only in case', async () => {
+      await store(makeWord('abcdef01-0000-4000-8000-000000000001', 'trashed', { deletedAt: TRASHED_AT }))
+      await replaceWords([makeWord('ABCDEF01-0000-4000-8000-000000000001', 'restored')])
+      await expect(getWord('abcdef01-0000-4000-8000-000000000001')).resolves.toBeNull()
+    })
+
+    it('removes records written by the PoC screen', async () => {
+      const poc = { id: 'purge-test-1', word: 'poc', meaning: 'x', status: 'deleted', deleted_at: TRASHED_AT }
+      await store(poc as unknown as Word)
+      await replaceWords([makeWord('b', 'banana')])
+      const db = await openDB()
+      const left = await new Promise((resolve) => {
+        const req = db.transaction('words').objectStore('words').get('purge-test-1')
+        req.onsuccess = () => resolve(req.result)
+      })
+      db.close()
+      expect(left).toBeUndefined()
+    })
+
     it('changes nothing when the write fails', async () => {
       await store(makeWord('a', 'apple'))
       const bad = { ...makeWord('b', 'banana'), id: undefined } as unknown as Word
       await expect(replaceWords([makeWord('c', 'cherry'), bad])).rejects.toBeDefined()
       const words = await getWords()
       expect(words.map((w) => w.word)).toEqual(['apple'])
+    })
+  })
+
+  describe('export and re-import', () => {
+    const ids = (words: Word[]) => words.map((w) => w.id.toUpperCase()).sort()
+
+    beforeEach(async () => {
+      await store(
+        makeWord('abcdef01-0000-4000-8000-000000000001', 'lowercase id', { sentences: [] }),
+        makeWord('ABCDEF02-0000-4000-8000-000000000002', 'archived', { archivedAt: TRASHED_AT, sentences: [] }),
+        makeWord('ABCDEF03-0000-4000-8000-000000000003', 'trashed', { deletedAt: TRASHED_AT, sentences: [] }),
+      )
+    })
+
+    it('adds nothing when merging an export back in', async () => {
+      const exported = parseWordFile(serializeWords(await getWordsForExport()))
+      await expect(mergeWords(exported)).resolves.toMatchObject({ added: 0, skipped: 2 })
+      expect(ids(await getWordsForExport())).toEqual(ids(exported))
+    })
+
+    it('keeps the same words when replacing with an export', async () => {
+      const before = await getWordsForExport()
+      const exported = parseWordFile(serializeWords(before))
+      await expect(replaceWords(exported)).resolves.toEqual({ stored: 2, hidden: 1 })
+      expect(ids(await getWordsForExport())).toEqual(ids(before))
+      expect((await getWord('ABCDEF03-0000-4000-8000-000000000003'))?.word).toBe('trashed')
+    })
+
+    it('exports nothing from a store with only the trash and PoC records', async () => {
+      const db = await openDB()
+      const tx = db.transaction('words', 'readwrite')
+      tx.objectStore('words').clear()
+      tx.objectStore('words').put(makeWord('ABCDEF03-0000-4000-8000-000000000003', 'trashed', { deletedAt: TRASHED_AT }))
+      tx.objectStore('words').put({ id: 'purge-test-1', word: 'poc', meaning: 'x' })
+      await new Promise((resolve) => { tx.oncomplete = resolve })
+      db.close()
+      await expect(getWordsForExport()).resolves.toEqual([])
     })
   })
 

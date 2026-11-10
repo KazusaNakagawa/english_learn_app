@@ -82,7 +82,11 @@ describe('SettingsPage', () => {
       await mergeWords([{ ...fileWord(ID_A, 'apple') }])
     })
 
+    const originalURL = { create: URL.createObjectURL, revoke: URL.revokeObjectURL }
+
     afterEach(() => {
+      URL.createObjectURL = originalURL.create
+      URL.revokeObjectURL = originalURL.revoke
       vi.unstubAllGlobals()
       vi.restoreAllMocks()
     })
@@ -91,17 +95,40 @@ describe('SettingsPage', () => {
       const createObjectURL = vi.fn<(blob: Blob) => string>(() => 'blob:words')
       URL.createObjectURL = createObjectURL as typeof URL.createObjectURL
       URL.revokeObjectURL = vi.fn()
-      const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+      let connectedAtClick = false
+      const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+        connectedAtClick = this.isConnected
+      })
       await renderPage()
 
       await userEvent.click(screen.getByText('単語リストをエクスポート'))
 
       await vi.waitFor(() => expect(click).toHaveBeenCalledOnce())
       const anchor = click.mock.contexts[0] as HTMLAnchorElement
+      expect(connectedAtClick).toBe(true)
+      expect(anchor.isConnected).toBe(false)
+      expect(URL.revokeObjectURL).not.toHaveBeenCalled()
       expect(anchor.download).toMatch(/^words_export_\d+\.json$/)
       const exported = JSON.parse(await readBlob(createObjectURL.mock.calls[0][0]))
       expect(exported.words.map((w: { word: string }) => w.word)).toEqual(['apple'])
-      expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:words')
+      await vi.waitFor(() => expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:words'), { timeout: 3000 })
+    })
+
+    it('refuses to export an empty list', async () => {
+      const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+      const { replaceWords } = await import('@/services/WordRepository')
+      await replaceWords([{ ...fileWord(ID_B, 'trashed'), deletedAt: '2026-11-01T00:00:00.000Z' }])
+      await renderPage()
+      await userEvent.click(screen.getByText('単語リストをエクスポート'))
+      expect(await screen.findByText('エクスポートする単語がありません')).toBeInTheDocument()
+      expect(click).not.toHaveBeenCalled()
+    })
+
+    it('says when added words will not appear in the list', async () => {
+      await renderPage()
+      await uploadWords({ ...fileWord(ID_B, 'archived'), archivedAt: 784111777 })
+      await userEvent.click(await screen.findByRole('button', { name: '追加' }))
+      expect(await screen.findByText('1件を追加しました（1件はアーカイブかゴミ箱のため一覧に表示されません）')).toBeInTheDocument()
     })
 
     it('asks how to import and changes nothing until a mode is chosen', async () => {

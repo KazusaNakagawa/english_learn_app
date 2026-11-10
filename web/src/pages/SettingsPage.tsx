@@ -166,6 +166,13 @@ function initFromSettings() {
   }
 }
 
+// Safari starts the download after click() returns, so the URL must outlive it.
+const DOWNLOAD_URL_LIFETIME_MS = 1000
+
+function hiddenNote(hidden: number): string {
+  return hidden > 0 ? `${hidden}件はアーカイブかゴミ箱のため一覧に表示されません` : ''
+}
+
 function WordTransferRows() {
   const fileInput = useRef<HTMLInputElement>(null)
   const [pending, setPending] = useState<Word[] | null>(null)
@@ -175,13 +182,20 @@ function WordTransferRows() {
   async function exportWords() {
     setNotice(null)
     try {
-      const blob = new Blob([serializeWords(await getWordsForExport())], { type: 'application/json' })
+      const words = await getWordsForExport()
+      if (words.length === 0) {
+        setNotice({ type: 'error', message: 'エクスポートする単語がありません' })
+        return
+      }
+      const blob = new Blob([serializeWords(words)], { type: 'application/json' })
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
       link.download = exportFileName()
+      document.body.appendChild(link) // older Firefox ignores a detached anchor
       link.click()
-      URL.revokeObjectURL(url)
+      link.remove()
+      setTimeout(() => URL.revokeObjectURL(url), DOWNLOAD_URL_LIFETIME_MS)
     } catch (err) {
       console.error('[SettingsPage] export failed:', err)
       setNotice({ type: 'error', message: 'エクスポートに失敗しました' })
@@ -191,7 +205,7 @@ function WordTransferRows() {
   async function chooseFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     e.target.value = '' // so choosing the same file again still fires change
-    if (!file) return
+    if (!file || saving) return
     setNotice(null)
     setPending(null)
     try {
@@ -207,12 +221,18 @@ function WordTransferRows() {
     setSaving(true)
     try {
       if (mode === 'merge') {
-        const { added, skipped } = await mergeWords(pending)
-        const skippedNote = skipped > 0 ? `（${skipped}件は登録済みのためスキップ）` : ''
-        setNotice({ type: 'success', message: `${added}件を追加しました${skippedNote}` })
+        const { added, skipped, duplicates, hidden } = await mergeWords(pending)
+        const notes = [
+          skipped > 0 ? `${skipped}件は登録済みのためスキップ` : '',
+          duplicates > 0 ? `${duplicates}件はファイル内の重複` : '',
+          hiddenNote(hidden),
+        ].filter(Boolean)
+        const detail = notes.length > 0 ? `（${notes.join('、')}）` : ''
+        setNotice({ type: 'success', message: `${added}件を追加しました${detail}` })
       } else {
-        await replaceWords(pending)
-        setNotice({ type: 'success', message: `${pending.length}件でデータを置き換えました` })
+        const { stored, hidden } = await replaceWords(pending)
+        const detail = hidden > 0 ? `（${hiddenNote(hidden)}）` : ''
+        setNotice({ type: 'success', message: `${stored}件でデータを置き換えました${detail}` })
       }
       setPending(null)
     } catch (err) {
@@ -226,7 +246,7 @@ function WordTransferRows() {
   return (
     <>
       <ListRow icon={Upload} label="単語リストをエクスポート" onClick={exportWords} />
-      <ListRow icon={Download} label="単語リストをインポート" onClick={() => fileInput.current?.click()} />
+      <ListRow icon={Download} label="単語リストをインポート" onClick={() => { if (!saving) fileInput.current?.click() }} />
       <input
         ref={fileInput}
         type="file"
