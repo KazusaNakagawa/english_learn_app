@@ -116,52 +116,6 @@ OpenAI の API キーを入力すると、単語追加時に例文を自動生�
 
 ---
 
-## Web 版（ブラウザ）の起動手順
-
-`web/` にブラウザで動く版（React + Vite）があります。単語や例文はブラウザの IndexedDB に保存され、サーバーは要りません。
-
-### 1. 依存パッケージのインストール
-
-```bash
-cd web
-npm install
-```
-
-### 2. 環境変数ファイルの作成（任意）
-
-```bash
-cp .env.example .env
-```
-
-VOICEVOX の接続先（`VITE_VOICEVOX_ENDPOINT_POC`）が空のままなら、音声はブラウザの読み上げ（Web Speech API）だけになります。ずんだもん音声を手元の Docker で鳴らす手順は [docs/web/local-voicevox.md](docs/web/local-voicevox.md) を参照してください。
-
-`.env` の値はビルド時に埋め込まれるので、書き換えたら開発サーバーを起動し直してください。
-
-### 3. 開発サーバーの起動
-
-```bash
-npm run dev
-```
-
-ブラウザで http://localhost:5173 を開くと、サンプルの単語が並んだ単語一覧が表示されます。
-
-### 4. OpenAI API キーの設定（任意）
-
-設定画面で OpenAI の API キーを入力すると、単語の追加・編集画面で例文を生成できます。
-
-> Web 版の API キーは sessionStorage に保存されるため、タブを閉じると消えます。
-
-### その他のコマンド
-
-| コマンド | 内容 |
-|---------|------|
-| `npm test` | 単体テスト（Vitest） |
-| `npm run lint` | ESLint |
-| `npm run build` | 型チェックと本番ビルド（`dist/`） |
-| `npm run preview` | ビルドしたものをローカルで確認 |
-
----
-
 ## 使い方
 
 ### 単語リスト画面
@@ -296,6 +250,8 @@ npm run dev
 - 例文の読み上げ（ずんだもん / ブラウザの音声）と連続再生、音声キャッシュ
 - OpenAI API による例文の自動生成（API キーを設定画面で入力）
 
+> Web 版の API キー（OpenAI / VOICEVOX）は sessionStorage に保存されるため、タブを閉じると消えます。
+
 ### 起動
 
 Node.js 20 以上が必要です（Node.js 24 で動作確認）。
@@ -307,7 +263,7 @@ cp .env.example .env   # 初回のみ。中身は空のままでも動きます
 npm run dev
 ```
 
-ブラウザで http://localhost:5173/ を開きます。単語データ、音声キャッシュ、設定は、開いた URL（ポート番号を含む）ごとに保存されます。別のポートで開くと、登録した単語は見えません。
+ブラウザで http://localhost:5173/ を開くと、サンプルの単語が並んだ単語一覧が表示されます。単語データ、音声キャッシュ、設定は、開いた URL（ポート番号を含む）ごとに保存されます。別のポートで開くと、登録した単語は見えません。
 
 ### ずんだもん音声の接続先
 
@@ -326,13 +282,15 @@ npm run dev
 
 ローカルの Docker でエンジンを動かす手順は [docs/web/local-voicevox.md](docs/web/local-voicevox.md) を参照してください。
 
-### テスト
+### テスト・ビルド
 
 ```bash
 cd web
 npm test          # vitest
 npx tsc -b        # 型チェック（ルートの tsconfig は参照だけなので -b が必要）
 npm run lint
+npm run build     # 型チェックと本番ビルド（dist/）
+npm run preview   # ビルドしたものをローカルで確認
 ```
 
 ---
