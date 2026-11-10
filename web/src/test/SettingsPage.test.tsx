@@ -59,6 +59,26 @@ describe('SettingsPage', () => {
     })
   })
 
+  describe('VOICEVOX key warning', () => {
+    const warning = 'AppConfigのキーを使用中（設定で上書き可）'
+
+    afterEach(() => {
+      vi.unstubAllEnvs()
+    })
+
+    it('is not shown when no key exists anywhere, as with a local engine', async () => {
+      vi.stubEnv('VITE_VOICEVOX_API_KEY_POC', '')
+      await renderPage()
+      expect(screen.queryByText(warning)).not.toBeInTheDocument()
+    })
+
+    it('is shown when the build-time key is in use', async () => {
+      vi.stubEnv('VITE_VOICEVOX_API_KEY_POC', 'build-key')
+      await renderPage()
+      expect(screen.getByText(warning)).toBeInTheDocument()
+    })
+  })
+
   describe('word list import and export', () => {
     const ID_A = 'AAAAAAAA-0001-4001-8001-000000000001'
     const ID_B = 'BBBBBBBB-0001-4001-8001-000000000001'

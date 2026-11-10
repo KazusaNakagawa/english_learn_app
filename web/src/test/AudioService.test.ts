@@ -525,7 +525,10 @@ describe('playTTS with stopTTS', () => {
     const noKey = { voice: 'zundamon', lang: 'en' } as const
     const headersOf = (call: number) => fetchMock.mock.calls[call][1].headers as Record<string, string>
 
+    const local = () => vi.stubEnv('VITE_VOICEVOX_ENDPOINT_POC', 'http://127.0.0.1:50021')
+
     it('uses a local engine with no key, sending no x-api-key header', async () => {
+      local()
       const { playTTS } = await load()
       const result = playTTS('hello', noKey)
       await audioStarted()
@@ -537,6 +540,7 @@ describe('playTTS with stopTTS', () => {
     })
 
     it('treats an empty key as no key', async () => {
+      local()
       const { playTTS } = await load()
       const result = playTTS('hello', { ...noKey, apiKey: '' })
       await audioStarted()
@@ -555,12 +559,31 @@ describe('playTTS with stopTTS', () => {
       expect(headersOf(1)['x-api-key']).toBe('test-key')
     })
 
-    it('falls back to Web Speech when an endpoint rejects a request without a key', async () => {
-      fetchMock.mockResolvedValueOnce({ ok: false, status: 403, json: async () => ({}), blob: async () => new Blob() })
+    it('sends nothing to a remote endpoint without a key, so its 4xx alarm is not tripped', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const { playTTS } = await load()
+      await expect(playTTS('hello', noKey)).resolves.toBe('webspeech')
+      expect(fetchMock).not.toHaveBeenCalled()
+      expect(speak).toHaveBeenCalledOnce()
+    })
+
+    it('falls back to Web Speech when the local engine is not running', async () => {
+      local()
+      fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'))
       vi.spyOn(console, 'error').mockImplementation(() => {})
       const { playTTS } = await load()
       await expect(playTTS('hello', noKey)).resolves.toBe('webspeech')
       expect(speak).toHaveBeenCalledOnce()
+    })
+
+    it('includes the endpoint in the cache key', async () => {
+      local()
+      const { playTTS } = await load()
+      const result = playTTS('hello', noKey)
+      await audioStarted()
+      FakeAudio.instances[0].onended?.()
+      await result
+      expect(cache.makeCacheKey).toHaveBeenCalledWith('hello', '3', 'http://127.0.0.1:50021')
     })
 
     it('sends no VOICEVOX request when no endpoint is configured', async () => {
@@ -674,8 +697,7 @@ describe('playTTS with stopTTS', () => {
     })
 
     it('does not wait for voices when the zundamon voice falls back', async () => {
-      vi.spyOn(console, 'error').mockImplementation(() => {})
-      fetchMock.mockRejectedValueOnce(new Error('engine down'))
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
       const { playTTS } = await load()
       await expect(playTTS('hello', { voice: 'zundamon', lang: 'en' })).resolves.toBe('webspeech')
       expect(voicesChanged).toBeNull()
