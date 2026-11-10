@@ -1,9 +1,15 @@
 /** The add-word form, and turning what was typed into something storable. */
 
-import type { Sentence } from '@/types/word'
+import type { Sentence, Word } from '@/types/word'
 
-/** A sentence being typed. `key` keeps React rows stable when one is removed. */
-export type SentenceRow = Omit<Sentence, 'id'> & { key: string }
+/**
+ * A sentence being typed. `key` keeps React rows stable when one is removed;
+ * `id` is set for a sentence that is already stored, so editing keeps it.
+ */
+export type SentenceRow = Omit<Sentence, 'id'> & { key: string; id?: string }
+
+/** A sentence ready to store, with its id when it already exists. */
+export type SentenceInput = Omit<Sentence, 'id'> & { id?: string }
 
 export interface WordForm {
   word: string
@@ -17,7 +23,7 @@ export interface WordInput {
   word: string
   meaning: string
   phonetic: string
-  sentences: Omit<Sentence, 'id'>[]
+  sentences: SentenceInput[]
 }
 
 let nextRowKey = 0
@@ -29,6 +35,21 @@ export const emptySentenceRow = (): SentenceRow => ({
   category: '',
 })
 
+export function formFromWord(word: Word): WordForm {
+  return {
+    word: word.word,
+    meaning: word.meaning,
+    phonetic: word.phonetic,
+    sentences: word.sentences.map((s) => ({
+      key: `row-${nextRowKey++}`,
+      id: s.id,
+      english: s.english,
+      japanese: s.japanese,
+      category: s.category,
+    })),
+  }
+}
+
 export function validateWordForm(form: WordForm): { errors: string[]; input: WordInput | null } {
   const errors: string[] = []
   const word = form.word.trim()
@@ -36,7 +57,7 @@ export function validateWordForm(form: WordForm): { errors: string[]; input: Wor
   if (!word) errors.push('英単語を入力してください')
   if (!meaning) errors.push('意味を入力してください')
 
-  const sentences: Omit<Sentence, 'id'>[] = []
+  const sentences: SentenceInput[] = []
   form.sentences.forEach((row, i) => {
     const english = row.english.trim()
     const japanese = row.japanese.trim()
@@ -46,7 +67,7 @@ export function validateWordForm(form: WordForm): { errors: string[]; input: Wor
       errors.push(`例文${i + 1}: 英文と和訳の両方を入力してください`)
       return
     }
-    sentences.push({ english, japanese, category })
+    sentences.push(row.id ? { id: row.id, english, japanese, category } : { english, japanese, category })
   })
 
   if (errors.length > 0) return { errors, input: null }

@@ -296,7 +296,7 @@ export async function addWord(input: WordInput, now = new Date()): Promise<Word>
     word: input.word,
     meaning: input.meaning,
     phonetic: input.phonetic,
-    sentences: input.sentences.map((s) => ({ id: newId(), ...s })),
+    sentences: input.sentences.map(({ english, japanese, category }) => ({ id: newId(), english, japanese, category })),
     createdAt: now.toISOString(),
     isFavorite: false,
   }
@@ -305,4 +305,33 @@ export async function addWord(input: WordInput, now = new Date()): Promise<Word>
     finish()
   })
   return word
+}
+
+/**
+ * Replaces a word's text and sentences, keeping its id, dates, and favorite.
+ * Sentences that already have an id keep it; new ones get one. Rejects if the
+ * word is not stored.
+ */
+export async function updateWord(id: string, input: WordInput): Promise<void> {
+  const found = await update<boolean>((store, finish) => {
+    const request = store.get(id)
+    request.onsuccess = () => {
+      const record: unknown = request.result
+      if (!isWord(record)) return finish(false)
+      store.put({
+        ...record,
+        word: input.word,
+        meaning: input.meaning,
+        phonetic: input.phonetic,
+        sentences: input.sentences.map(({ id: sentenceId, english, japanese, category }) => ({
+          id: sentenceId ?? newId(),
+          english,
+          japanese,
+          category,
+        })),
+      })
+      finish(true)
+    }
+  })
+  if (!found) throw new Error(`Word not found: ${id}`)
 }
