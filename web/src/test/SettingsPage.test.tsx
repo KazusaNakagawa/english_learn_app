@@ -142,6 +142,37 @@ describe('SettingsPage', () => {
       expect(screen.getByText('この接続先にはAPIキーが必要です。キーがないあいだはブラウザの音声で読みます')).toBeInTheDocument()
     })
 
+    it('does not show a late result under an endpoint typed after the test started', async () => {
+      let answer = (_: Response) => {}
+      vi.stubGlobal('fetch', vi.fn((_: string, init: RequestInit) => new Promise<Response>((resolve, reject) => {
+        answer = resolve
+        init.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))
+      })))
+      await renderPage()
+      await userEvent.click(screen.getByRole('button', { name: '接続テスト' }))
+      expect(screen.getByRole('button', { name: '接続中…' })).toBeInTheDocument()
+      await userEvent.type(field(), 'http://127.0.0.1:50021')
+      await act(async () => { answer(new Response('[]')) })
+      expect(screen.queryByText(/接続できました/)).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '接続テスト' })).toBeEnabled()
+    })
+
+    it('sends a typed key only to the endpoint it was typed for', async () => {
+      await renderPage()
+      await userEvent.type(screen.getByLabelText('VOICEVOXのAPIキー'), 'mine')
+      await userEvent.click(screen.getByText('日本語サンプルを再生'))
+      expect(AudioService.playTTS).toHaveBeenLastCalledWith(expect.any(String), expect.objectContaining({
+        endpoint: 'https://aws.test', apiKey: 'mine',
+      }))
+
+      await userEvent.type(field(), 'https://other.test')
+      expect(screen.getByText('このキーは別の接続先（https://aws.test）用のため、いまの接続先には送りません。使うなら入力し直してください')).toBeInTheDocument()
+      await userEvent.click(screen.getByText('日本語サンプルを再生'))
+      expect(AudioService.playTTS).toHaveBeenLastCalledWith(expect.any(String), expect.objectContaining({
+        endpoint: 'https://other.test', apiKey: '',
+      }))
+    })
+
     it('tests the connection and shows the engine version', async () => {
       const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify('0.25.1')))
       vi.stubGlobal('fetch', fetchMock)
