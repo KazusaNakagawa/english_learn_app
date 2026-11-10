@@ -9,6 +9,7 @@
 
 import { getCache, putCache, makeCacheKey, evictCache } from './AudioCacheService'
 import { defaultEndpoint, isLocalEndpoint, normalizeEndpoint, voicevoxHeaders } from '@/lib/voicevox'
+import { reportMissingVoicevoxKey } from '@/lib/voicevoxNotice'
 
 const CACHE_MAX_BYTES = 50 * 1024 * 1024 // 50 MB
 const VOICE_LOAD_TIMEOUT_MS = 3000
@@ -274,6 +275,8 @@ export async function playTTS(
     }
   } else if (voice === 'zundamon') {
     console.warn('[AudioService] zundamon selected but there is no VOICEVOX endpoint, or no API key for a remote one — falling back')
+    // No endpoint means the browser voice is the choice; an endpoint without its key is worth telling.
+    if (base) reportMissingVoicevoxKey()
   }
 
   // 3. Web Speech API fallback

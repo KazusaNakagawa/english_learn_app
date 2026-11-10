@@ -1,10 +1,13 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { isLocalEndpoint, voicevoxHeaders } from '@/lib/voicevox'
+import { isLocalEndpoint, resolveVoicevox, voicevoxHeaders } from '@/lib/voicevox'
+import { loadSettings } from '@/services/SettingsService'
 
-const BASE_URL = import.meta.env.VITE_VOICEVOX_ENDPOINT_POC ?? ''
-const API_KEY = import.meta.env.VITE_VOICEVOX_API_KEY_POC ?? ''
+/** The endpoint and key playback uses: Settings first, then the build-time ones. */
+const readTarget = () => resolveVoicevox(loadSettings())
+
+const NO_ENDPOINT = '⚠ No VOICEVOX endpoint: set one in Settings or VITE_VOICEVOX_ENDPOINT_POC in .env'
 
 // Matches iOS VoicevoxStyle enum (SettingsManager.swift)
 const ZUNDAMON_STYLES = [
@@ -44,13 +47,22 @@ export default function VoicevoxTab({
   const [timing, setTiming] = useState<Timing | null>(null)
   const [versionResult, setVersionResult] = useState('')
   const [versionType, setVersionType] = useState<'ok' | 'err' | ''>('')
+  const [target, setTarget] = useState(readTarget)
+  const { endpoint: baseUrl, apiKey } = target
+
+  // Settings may change in another tab while this one is open.
+  useEffect(() => {
+    const refresh = () => setTarget(readTarget())
+    window.addEventListener('focus', refresh)
+    return () => window.removeEventListener('focus', refresh)
+  }, [])
 
   async function checkVersion() {
-    if (!BASE_URL) { setVersionResult('⚠ VITE_VOICEVOX_ENDPOINT_POC not set in .env'); setVersionType('err'); return }
+    if (!baseUrl) { setVersionResult(NO_ENDPOINT); setVersionType('err'); return }
     setVersionResult('⋯ Fetching…'); setVersionType('')
     try {
       const t0 = performance.now()
-      const res = await fetch(`${BASE_URL}/version`)
+      const res = await fetch(`${baseUrl}/version`)
       const ms = Math.round(performance.now() - t0)
       const body = await res.text()
       setVersionResult(`✓ ${res.status} OK (${ms} ms)\n${body}`)
@@ -62,15 +74,15 @@ export default function VoicevoxTab({
   }
 
   async function checkCORS() {
-    if (!BASE_URL) { setCorsResult('⚠ VITE_VOICEVOX_ENDPOINT_POC not set in .env'); setCorsType('warn'); return }
+    if (!baseUrl) { setCorsResult(NO_ENDPOINT); setCorsType('warn'); return }
     setCorsResult('⋯ Sending OPTIONS preflight…'); setCorsType('')
     try {
-      const res = await fetch(`${BASE_URL}/audio_query`, {
+      const res = await fetch(`${baseUrl}/audio_query`, {
         method: 'OPTIONS',
         headers: {
           Origin: location.origin,
           'Access-Control-Request-Method': 'POST',
-          'Access-Control-Request-Headers': API_KEY ? 'Content-Type, x-api-key' : 'Content-Type',
+          'Access-Control-Request-Headers': apiKey ? 'Content-Type, x-api-key' : 'Content-Type',
         },
       })
       const acao = res.headers.get('access-control-allow-origin')
@@ -96,18 +108,18 @@ export default function VoicevoxTab({
 
   async function testVoicevox() {
     // A local engine needs no key; a remote one does.
-    if (!BASE_URL || (!API_KEY && !isLocalEndpoint(BASE_URL))) {
-      setVvResult('⚠ VITE_VOICEVOX_ENDPOINT_POC not set, or VITE_VOICEVOX_API_KEY_POC not set for a remote endpoint')
+    if (!baseUrl || (!apiKey && !isLocalEndpoint(baseUrl))) {
+      setVvResult(baseUrl ? '⚠ There is no API key for this remote endpoint. Enter one in Settings.' : NO_ENDPOINT)
       setVvType('warn')
       return
     }
-    const headers = voicevoxHeaders(API_KEY)
+    const headers = voicevoxHeaders(apiKey)
     setTiming(null)
     setVvResult('⋯ Step 1: POST /audio_query (cold start may take 10–30s)…'); setVvType('')
     try {
       const t0 = performance.now()
       const queryRes = await fetch(
-        `${BASE_URL}/audio_query?text=${encodeURIComponent(text)}&speaker=${speakerId}`,
+        `${baseUrl}/audio_query?text=${encodeURIComponent(text)}&speaker=${speakerId}`,
         { method: 'POST', headers },
       )
       if (!queryRes.ok) throw new Error(`audio_query failed: ${queryRes.status} ${await queryRes.text()}`)
@@ -117,7 +129,7 @@ export default function VoicevoxTab({
 
       setVvResult(`✓ Step 1 done (${audioQueryMs} ms)\n⋯ Step 2: POST /synthesis…`); setVvType('')
 
-      const synthRes = await fetch(`${BASE_URL}/synthesis?speaker=${speakerId}`, {
+      const synthRes = await fetch(`${baseUrl}/synthesis?speaker=${speakerId}`, {
         method: 'POST',
         headers,
         body: JSON.stringify(queryJson),
@@ -145,6 +157,9 @@ export default function VoicevoxTab({
 
   return (
     <div className="space-y-3">
+      <p className="text-xs text-muted-foreground px-1">
+        Testing: <code>{baseUrl || '(none)'}</code>
+      </p>
       {/* Version */}
       <div className="bg-white rounded-2xl p-4 space-y-2">
         <h3 className="font-semibold text-sm">Version Endpoint (public, no auth)</h3>

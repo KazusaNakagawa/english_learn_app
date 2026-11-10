@@ -10,6 +10,10 @@ const cache = vi.hoisted(() => ({
 // Mock IndexedDB cache so AudioService can be imported in jsdom
 vi.mock('@/services/AudioCacheService', () => cache)
 
+// Asserted directly, so the once-per-session flag cannot hide a wrong report.
+const notice = vi.hoisted(() => ({ reportMissingVoicevoxKey: vi.fn(), onMissingVoicevoxKey: vi.fn() }))
+vi.mock('@/lib/voicevoxNotice', () => notice)
+
 beforeEach(() => {
   cache.getCache.mockReset().mockResolvedValue(null)
   cache.putCache.mockReset().mockResolvedValue(undefined)
@@ -586,6 +590,53 @@ describe('playTTS with stopTTS', () => {
       await expect(playTTS('hello', noKey)).resolves.toBe('webspeech')
       expect(fetchMock).not.toHaveBeenCalled()
       expect(speak).toHaveBeenCalledOnce()
+    })
+
+    describe('the missing-key notice', () => {
+      const reported = () => notice.reportMissingVoicevoxKey.mock.calls.length
+
+      beforeEach(() => {
+        notice.reportMissingVoicevoxKey.mockClear()
+        vi.spyOn(console, 'warn').mockImplementation(() => {})
+      })
+
+      it('is reported when a remote endpoint has no key', async () => {
+        const { playTTS } = await load()
+        await playTTS('hello', noKey)
+        expect(reported()).toBe(1)
+      })
+
+      it('is not reported for a local engine, which needs no key', async () => {
+        local()
+        const { playTTS } = await load()
+        const result = playTTS('hello', noKey)
+        await audioStarted()
+        FakeAudio.instances[0].onended?.()
+        await result
+        expect(reported()).toBe(0)
+      })
+
+      it('is not reported when no endpoint is configured, since the browser voice is then the choice', async () => {
+        vi.stubEnv('VITE_VOICEVOX_ENDPOINT_POC', '')
+        const { playTTS } = await load()
+        await playTTS('hello', noKey)
+        expect(reported()).toBe(0)
+      })
+
+      it('is not reported when there is a key', async () => {
+        const { playTTS } = await load()
+        const result = playTTS('hello', { ...noKey, apiKey: 'test-key' })
+        await audioStarted()
+        FakeAudio.instances[0].onended?.()
+        await result
+        expect(reported()).toBe(0)
+      })
+
+      it('is not reported for a voice other than zundamon', async () => {
+        const { playTTS } = await load()
+        await playTTS('hello', { voice: 'default', lang: 'en' })
+        expect(reported()).toBe(0)
+      })
     })
 
     it('falls back to Web Speech when the local engine is not running', async () => {
