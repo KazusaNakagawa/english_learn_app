@@ -588,6 +588,63 @@ describe('playTTS with stopTTS', () => {
       expect(speak).toHaveBeenCalledOnce()
     })
 
+    describe('the missing-key notice', () => {
+      const listen = async () => {
+        const notice = await import('@/lib/voicevoxNotice')
+        const listener = vi.fn()
+        notice.onMissingVoicevoxKey(listener)
+        return listener
+      }
+
+      beforeEach(() => {
+        sessionStorage.clear()
+        vi.spyOn(console, 'warn').mockImplementation(() => {})
+      })
+
+      it('is reported when a remote endpoint has no key', async () => {
+        const { playTTS } = await load()
+        const listener = await listen()
+        await playTTS('hello', noKey)
+        expect(listener).toHaveBeenCalledOnce()
+      })
+
+      it('is not reported for a local engine, which needs no key', async () => {
+        local()
+        const { playTTS } = await load()
+        const listener = await listen()
+        const result = playTTS('hello', noKey)
+        await audioStarted()
+        FakeAudio.instances[0].onended?.()
+        await result
+        expect(listener).not.toHaveBeenCalled()
+      })
+
+      it('is not reported when no endpoint is configured, since the browser voice is then the choice', async () => {
+        vi.stubEnv('VITE_VOICEVOX_ENDPOINT_POC', '')
+        const { playTTS } = await load()
+        const listener = await listen()
+        await playTTS('hello', noKey)
+        expect(listener).not.toHaveBeenCalled()
+      })
+
+      it('is not reported when there is a key', async () => {
+        const { playTTS } = await load()
+        const listener = await listen()
+        const result = playTTS('hello', { ...noKey, apiKey: 'test-key' })
+        await audioStarted()
+        FakeAudio.instances[0].onended?.()
+        await result
+        expect(listener).not.toHaveBeenCalled()
+      })
+
+      it('is not reported for a voice other than zundamon', async () => {
+        const { playTTS } = await load()
+        const listener = await listen()
+        await playTTS('hello', { voice: 'default', lang: 'en' })
+        expect(listener).not.toHaveBeenCalled()
+      })
+    })
+
     it('falls back to Web Speech when the local engine is not running', async () => {
       local()
       fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'))

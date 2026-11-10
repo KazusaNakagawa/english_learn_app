@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { isLocalEndpoint, voicevoxHeaders } from '@/lib/voicevox'
+import { isLocalEndpoint, resolveVoicevox, voicevoxHeaders } from '@/lib/voicevox'
+import { loadSettings } from '@/services/SettingsService'
 
-const BASE_URL = import.meta.env.VITE_VOICEVOX_ENDPOINT_POC ?? ''
-const API_KEY = import.meta.env.VITE_VOICEVOX_API_KEY_POC ?? ''
+const NO_ENDPOINT = '⚠ No VOICEVOX endpoint: set one in Settings or VITE_VOICEVOX_ENDPOINT_POC in .env'
 
 // Matches iOS VoicevoxStyle enum (SettingsManager.swift)
 const ZUNDAMON_STYLES = [
@@ -44,9 +44,11 @@ export default function VoicevoxTab({
   const [timing, setTiming] = useState<Timing | null>(null)
   const [versionResult, setVersionResult] = useState('')
   const [versionType, setVersionType] = useState<'ok' | 'err' | ''>('')
+  // The endpoint and key playback uses: Settings first, then the build-time ones.
+  const [{ endpoint: BASE_URL, apiKey: API_KEY }] = useState(() => resolveVoicevox(loadSettings()))
 
   async function checkVersion() {
-    if (!BASE_URL) { setVersionResult('⚠ VITE_VOICEVOX_ENDPOINT_POC not set in .env'); setVersionType('err'); return }
+    if (!BASE_URL) { setVersionResult(NO_ENDPOINT); setVersionType('err'); return }
     setVersionResult('⋯ Fetching…'); setVersionType('')
     try {
       const t0 = performance.now()
@@ -62,7 +64,7 @@ export default function VoicevoxTab({
   }
 
   async function checkCORS() {
-    if (!BASE_URL) { setCorsResult('⚠ VITE_VOICEVOX_ENDPOINT_POC not set in .env'); setCorsType('warn'); return }
+    if (!BASE_URL) { setCorsResult(NO_ENDPOINT); setCorsType('warn'); return }
     setCorsResult('⋯ Sending OPTIONS preflight…'); setCorsType('')
     try {
       const res = await fetch(`${BASE_URL}/audio_query`, {
@@ -97,7 +99,7 @@ export default function VoicevoxTab({
   async function testVoicevox() {
     // A local engine needs no key; a remote one does.
     if (!BASE_URL || (!API_KEY && !isLocalEndpoint(BASE_URL))) {
-      setVvResult('⚠ VITE_VOICEVOX_ENDPOINT_POC not set, or VITE_VOICEVOX_API_KEY_POC not set for a remote endpoint')
+      setVvResult(BASE_URL ? '⚠ There is no API key for this remote endpoint. Enter one in Settings.' : NO_ENDPOINT)
       setVvType('warn')
       return
     }
@@ -145,6 +147,9 @@ export default function VoicevoxTab({
 
   return (
     <div className="space-y-3">
+      <p className="text-xs text-muted-foreground px-1">
+        Testing: <code>{BASE_URL || '(none)'}</code>
+      </p>
       {/* Version */}
       <div className="bg-white rounded-2xl p-4 space-y-2">
         <h3 className="font-semibold text-sm">Version Endpoint (public, no auth)</h3>
