@@ -74,6 +74,7 @@ describe('SettingsPage', () => {
     })
 
     it('is shown when the build-time key is in use', async () => {
+      vi.stubEnv('VITE_VOICEVOX_ENDPOINT_POC', 'https://aws.test')
       vi.stubEnv('VITE_VOICEVOX_API_KEY_POC', 'build-key')
       await renderPage()
       expect(screen.getByText(warning)).toBeInTheDocument()
