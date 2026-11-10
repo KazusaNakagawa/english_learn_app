@@ -1,0 +1,61 @@
+name: Web CI
+
+# Builds, type-checks, lints, and tests the browser version (#210).
+# `npm run build` runs `tsc -b`, which is the only command that type-checks
+# here: the root tsconfig.json has `files: []` and only lists references, so
+# `tsc -p .` checks nothing. Vitest does not type-check either, which is how
+# the type errors fixed in #205 reached develop with the tests green.
+on:
+  push:
+    branches: [develop, main]
+    paths:
+      - 'web/**'
+      - '.github/workflows/web-ci.yml'
+  pull_request:
+    branches: [develop, main]
+    paths:
+      - 'web/**'
+      - '.github/workflows/web-ci.yml'
+
+# A follow-up push should replace the run in flight, not race it.
+concurrency:
+  group: web-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate web
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: web
+
+    # No secrets and no .env: every VITE_* value is optional, and the tests
+    # stub the ones they need. That keeps this job working on fork PRs.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # tsc -b over the app, its tests, and the Vite config, then vite build.
+      - name: Type check and build
+        run: npm run build
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test

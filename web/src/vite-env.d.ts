@@ -20,6 +20,9 @@ interface SpeechRecognition extends EventTarget {
   stop(): void
   abort(): void
 }
+// A global constructor is declared with var, as lib.dom.d.ts does; let and const do not
+// add a property to globalThis.
+// eslint-disable-next-line no-var
 declare var SpeechRecognition: {
   prototype: SpeechRecognition
   new (): SpeechRecognition
