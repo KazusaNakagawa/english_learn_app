@@ -1,7 +1,10 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { playTTS, stopTTS, type VoiceType } from '@/services/AudioService'
 import { useNavigate } from 'react-router'
 import { getCacheUsage, clearCache } from '@/services/AudioCacheService'
+import { getWordsForExport, mergeWords, replaceWords } from '@/services/WordRepository'
+import { exportFileName, parseWordFile, serializeWords, WordFileError } from '@/services/WordTransfer'
+import type { Word } from '@/types/word'
 import { loadSettings, saveSettings, type AppSettings } from '@/services/SettingsService'
 import {
   ChevronRight, FlaskConical, Volume2,
@@ -161,6 +164,117 @@ function initFromSettings() {
     openAIKey: s.openAIKey,
     aiModel:   s.openAIModel,
   }
+}
+
+// Safari starts the download after click() returns, so the URL must outlive it.
+const DOWNLOAD_URL_LIFETIME_MS = 1000
+
+function hiddenNote(hidden: number): string {
+  return hidden > 0 ? `${hidden}件はアーカイブかゴミ箱のため一覧に表示されません` : ''
+}
+
+function WordTransferRows() {
+  const fileInput = useRef<HTMLInputElement>(null)
+  const [pending, setPending] = useState<Word[] | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+
+  async function exportWords() {
+    setNotice(null)
+    try {
+      const words = await getWordsForExport()
+      if (words.length === 0) {
+        setNotice({ type: 'error', message: 'エクスポートする単語がありません' })
+        return
+      }
+      const blob = new Blob([serializeWords(words)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = exportFileName()
+      document.body.appendChild(link) // older Firefox ignores a detached anchor
+      link.click()
+      link.remove()
+      setTimeout(() => URL.revokeObjectURL(url), DOWNLOAD_URL_LIFETIME_MS)
+    } catch (err) {
+      console.error('[SettingsPage] export failed:', err)
+      setNotice({ type: 'error', message: 'エクスポートに失敗しました' })
+    }
+  }
+
+  async function chooseFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = '' // so choosing the same file again still fires change
+    if (!file || saving) return
+    setNotice(null)
+    setPending(null)
+    try {
+      setPending(parseWordFile(await file.text()))
+    } catch (err) {
+      if (!(err instanceof WordFileError)) console.error('[SettingsPage] file read failed:', err)
+      setNotice({ type: 'error', message: err instanceof WordFileError ? err.message : 'ファイルを読み込めませんでした' })
+    }
+  }
+
+  async function applyImport(mode: 'merge' | 'replace') {
+    if (!pending) return
+    setSaving(true)
+    try {
+      if (mode === 'merge') {
+        const { added, skipped, duplicates, hidden } = await mergeWords(pending)
+        const notes = [
+          skipped > 0 ? `${skipped}件は登録済みのためスキップ` : '',
+          duplicates > 0 ? `${duplicates}件はファイル内の重複` : '',
+          hiddenNote(hidden),
+        ].filter(Boolean)
+        const detail = notes.length > 0 ? `（${notes.join('、')}）` : ''
+        setNotice({ type: 'success', message: `${added}件を追加しました${detail}` })
+      } else {
+        const { stored, hidden } = await replaceWords(pending)
+        const detail = hidden > 0 ? `（${hiddenNote(hidden)}）` : ''
+        setNotice({ type: 'success', message: `${stored}件でデータを置き換えました${detail}` })
+      }
+      setPending(null)
+    } catch (err) {
+      console.error('[SettingsPage] import failed:', err)
+      setNotice({ type: 'error', message: '単語の保存に失敗しました' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <>
+      <ListRow icon={Upload} label="単語リストをエクスポート" onClick={exportWords} />
+      <ListRow icon={Download} label="単語リストをインポート" onClick={() => { if (!saving) fileInput.current?.click() }} />
+      <input
+        ref={fileInput}
+        type="file"
+        accept=".json,application/json"
+        aria-label="単語ファイルを選択"
+        className="hidden"
+        onChange={chooseFile}
+      />
+      {pending && (
+        <Row>
+          <p className="text-sm">{pending.length}件の単語をインポートします</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            「置き換え」を選ぶと、ゴミ箱以外の今の単語はすべて消えます
+          </p>
+          <div className="flex gap-2 mt-2">
+            <Button size="sm" disabled={saving} onClick={() => applyImport('merge')}>追加</Button>
+            <Button size="sm" variant="destructive" disabled={saving} onClick={() => applyImport('replace')}>置き換え</Button>
+            <Button size="sm" variant="ghost" disabled={saving} onClick={() => setPending(null)}>キャンセル</Button>
+          </div>
+        </Row>
+      )}
+      {notice && (
+        <Row>
+          <InlineAlert type={notice.type} message={notice.message} />
+        </Row>
+      )}
+    </>
+  )
 }
 
 export default function SettingsPage() {
@@ -379,8 +493,7 @@ export default function SettingsPage() {
         <div>
           <SectionLabel label="データ管理" />
           <GroupCard>
-            <ListRow icon={Upload}  label="単語リストをエクスポート" />
-            <ListRow icon={Download} label="単語リストをインポート" />
+            <WordTransferRows />
             <Row>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">音声キャッシュ</span>
