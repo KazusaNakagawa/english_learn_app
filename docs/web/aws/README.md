@@ -68,8 +68,8 @@ cd english_learn_app
 cp EnglishLearnApp/EnglishLearnApp/AppConfig.swift.example \
    EnglishLearnApp/EnglishLearnApp/AppConfig.swift
 
-cp EnglishLearnApp/Config.xcconfig.example \
-   EnglishLearnApp/Config.xcconfig
+cp EnglishLearnApp/EnglishLearnApp/Config.xcconfig.example \
+   EnglishLearnApp/EnglishLearnApp/Config.xcconfig
 ```
 
 | ファイル | 設定内容 |

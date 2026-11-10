@@ -121,7 +121,7 @@ The Lambda runs a Docker image (`voicevox/voicevox_engine:cpu-ubuntu22.04-0.25.1
 Two files must be created locally before building the iOS app:
 
 - `EnglishLearnApp/EnglishLearnApp/AppConfig.swift` — contains `voicevoxBaseURL` and `voicevoxApiKey`. Copy from `AppConfig.swift.example`.
-- `EnglishLearnApp/Config.xcconfig` — Xcode build configuration. Copy from `Config.xcconfig.example`.
+- `EnglishLearnApp/EnglishLearnApp/Config.xcconfig` — Xcode build configuration. Copy from `Config.xcconfig.example`.
 
 For API key setup, see [docs/02.voicevox_api_authentication.md](docs/02.voicevox_api_authentication.md).
 
