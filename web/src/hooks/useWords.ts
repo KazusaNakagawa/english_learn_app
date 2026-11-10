@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getWord, getWords } from '@/services/WordRepository'
+import { getTrashedWords, getWord, getWords } from '@/services/WordRepository'
 import type { Word } from '@/types/word'
 
 export type LoadState<T> =
@@ -30,5 +30,11 @@ export function useWords(): LoadState<Word[]> {
 export function useWord(id: string | undefined): LoadState<Word | null> {
   const [state, setState] = useState<LoadState<Word | null>>({ status: 'loading' })
   useEffect(() => track(id ? getWord(id) : Promise.resolve(null), setState), [id])
+  return state
+}
+
+export function useTrashedWords(): LoadState<Word[]> {
+  const [state, setState] = useState<LoadState<Word[]>>({ status: 'loading' })
+  useEffect(() => track(getTrashedWords(), setState), [])
   return state
 }

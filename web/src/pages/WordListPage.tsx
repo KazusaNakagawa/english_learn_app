@@ -4,10 +4,12 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-import { Volume2, Loader2 } from 'lucide-react'
+import { Volume2, Loader2, Trash2 } from 'lucide-react'
 import { playTTS, stopTTS, type VoiceType } from '@/services/AudioService'
 import { loadSettings } from '@/services/SettingsService'
 import { useWords } from '@/hooks/useWords'
+import { restoreWord, trashWord } from '@/services/WordRepository'
+import type { Word } from '@/types/word'
 
 const appVersion = import.meta.env.VITE_APP_VERSION ?? '—'
 const appEnv = import.meta.env.VITE_APP_ENV ?? '—'
@@ -21,7 +23,11 @@ export default function WordListPage() {
   const [playingId, setPlayingId] = useState<string | null>(null) // `${id}-en` | `${id}-ja`
 
   const wordsState = useWords()
-  const words = wordsState.status === 'ready' ? wordsState.data : []
+  // Trashing hides the word here instead of reloading, so the list does not flash.
+  const [trashedIds, setTrashedIds] = useState<ReadonlySet<string>>(new Set())
+  const [lastTrashed, setLastTrashed] = useState<Word | null>(null)
+  const [trashError, setTrashError] = useState<string | null>(null)
+  const words = (wordsState.status === 'ready' ? wordsState.data : []).filter((w) => !trashedIds.has(w.id))
 
   const filtered = words.filter((w) => {
     const matchesSearch =
@@ -56,6 +62,36 @@ export default function WordListPage() {
       console.error('[WordListPage] playback failed:', err)
     } finally {
       setPlayingId(null)
+    }
+  }
+
+  async function moveToTrash(word: Word, e: React.MouseEvent) {
+    e.stopPropagation()
+    setTrashError(null)
+    try {
+      await trashWord(word.id)
+      setTrashedIds((prev) => new Set(prev).add(word.id))
+      setLastTrashed(word)
+    } catch (err) {
+      console.error('[WordListPage] trash failed:', err)
+      setTrashError('ゴミ箱に移動できませんでした')
+    }
+  }
+
+  async function undoTrash() {
+    if (!lastTrashed) return
+    setTrashError(null)
+    try {
+      await restoreWord(lastTrashed.id)
+      setTrashedIds((prev) => {
+        const next = new Set(prev)
+        next.delete(lastTrashed.id)
+        return next
+      })
+      setLastTrashed(null)
+    } catch (err) {
+      console.error('[WordListPage] undo failed:', err)
+      setTrashError('元に戻せませんでした')
     }
   }
 
@@ -104,8 +140,27 @@ export default function WordListPage() {
         </p>
       </header>
 
+      {/* Fixed above the tab bar, so undo stays visible after trashing a word far down the list */}
+      {(lastTrashed || trashError) && (
+        <div className="fixed inset-x-0 bottom-20 z-20 px-4 pointer-events-none">
+          <div
+            role="status"
+            className="max-w-2xl mx-auto bg-neutral-800 text-white rounded-2xl pl-4 pr-2 py-1.5 flex items-center justify-between gap-2 shadow-lg pointer-events-auto"
+          >
+            <p className="text-sm truncate py-1">
+              {trashError ?? `「${lastTrashed?.word}」をゴミ箱に移動しました`}
+            </p>
+            {!trashError && (
+              <Button size="sm" variant="ghost" className="shrink-0 text-[var(--ios-blue)] hover:bg-white/10" onClick={undoTrash}>
+                元に戻す
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Word list */}
-      <main className="max-w-2xl mx-auto px-4 pb-4 space-y-2">
+      <main className={cn('max-w-2xl mx-auto px-4 space-y-2', lastTrashed || trashError ? 'pb-20' : 'pb-4')}>
         {wordsState.status === 'loading' ? null : wordsState.status === 'error' ? (
           <p className="text-sm text-muted-foreground text-center py-12">単語データを読み込めませんでした</p>
         ) : filtered.length === 0 ? (
@@ -119,6 +174,8 @@ export default function WordListPage() {
               aria-label={`${word.word} — 例文一覧へ`}
               onClick={() => navigate(`/words/${word.id}/sentences`)}
               onKeyDown={(e) => {
+                // Keys pressed on the buttons inside the card belong to those buttons.
+                if (e.target !== e.currentTarget) return
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault()
                   navigate(`/words/${word.id}/sentences`)
@@ -170,6 +227,16 @@ export default function WordListPage() {
                     </Button>
                   )
                 })}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={(e) => moveToTrash(word, e)}
+                  aria-label={`「${word.word}」をゴミ箱へ移動`}
+                  title="ゴミ箱へ移動"
+                  className="h-8 px-2 rounded-lg text-muted-foreground hover:text-[var(--ios-red)] hover:bg-[var(--ios-red)]/10"
+                >
+                  <Trash2 size={15} />
+                </Button>
               </div>
             </div>
           ))

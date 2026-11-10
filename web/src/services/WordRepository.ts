@@ -199,3 +199,69 @@ export function replaceWords(imported: Word[]): Promise<ReplaceResult> {
     }
   })
 }
+
+export const TRASH_RETENTION_DAYS = 10
+const DAY_MS = 24 * 60 * 60 * 1000
+
+/** Rewrites one word, or deletes it when `change` returns null. Unknown ids are ignored. */
+function modifyWord(id: string, change: (word: Word) => Word | null): Promise<void> {
+  return update<void>((store, finish) => {
+    const request = store.get(id)
+    request.onsuccess = () => {
+      const record: unknown = request.result
+      if (isWord(record)) {
+        const next = change(record)
+        if (next) store.put(next)
+        else store.delete(id)
+      }
+      finish()
+    }
+  })
+}
+
+export function trashWord(id: string, now = new Date()): Promise<void> {
+  return modifyWord(id, (word) => ({ ...word, deletedAt: now.toISOString() }))
+}
+
+export function restoreWord(id: string): Promise<void> {
+  return modifyWord(id, (word) => {
+    const restored = { ...word }
+    delete restored.deletedAt
+    return restored
+  })
+}
+
+export function deleteWordPermanently(id: string): Promise<void> {
+  return modifyWord(id, () => null)
+}
+
+/** Whole days left, rounded up, so a word trashed just now shows the full 10. */
+export function daysUntilPurge(deletedAt: string, now = Date.now()): number {
+  const left = Date.parse(deletedAt) + TRASH_RETENTION_DAYS * DAY_MS - now
+  return Math.max(0, Math.ceil(left / DAY_MS))
+}
+
+/**
+ * Trashed words, newest first. Words trashed more than 10 days ago are purged
+ * on the way, as the iOS app does.
+ */
+export function getTrashedWords(now = Date.now()): Promise<Word[]> {
+  const cutoff = now - TRASH_RETENTION_DAYS * DAY_MS
+  return update<Word[]>((store, finish) => {
+    const trashed: Word[] = []
+    const cursor = store.openCursor()
+    cursor.onsuccess = () => {
+      const current = cursor.result
+      if (current) {
+        const record: unknown = current.value
+        if (isWord(record) && record.deletedAt) {
+          if (Date.parse(record.deletedAt) < cutoff) current.delete()
+          else trashed.push(record)
+        }
+        current.continue()
+        return
+      }
+      finish(trashed.sort((a, b) => (b.deletedAt ?? '').localeCompare(a.deletedAt ?? '')))
+    }
+  })
+}
