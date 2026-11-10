@@ -70,7 +70,8 @@ describe('EditPage', () => {
     await screen.findByDisplayValue(word.word)
     await save()
     await vi.waitFor(() => expect(mockNavigate).toHaveBeenCalledWith(`/words/${word.id}/sentences`, { replace: true }))
-    expect(screen.getByRole('button', { name: '保存' })).toBeEnabled()
+    // The editor re-enables the button after onSave returns, which is after navigate is called.
+    await vi.waitFor(() => expect(screen.getByRole('button', { name: '保存' })).toBeEnabled())
   })
 
   it('does not warn about the word it is editing', async () => {
