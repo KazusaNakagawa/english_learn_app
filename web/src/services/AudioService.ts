@@ -113,12 +113,15 @@ async function speakWebSpeech(
 async function fetchVoicevoxWav(
   text: string,
   speakerId: string,
-  apiKey: string,
+  apiKey: string | undefined,
   signal: AbortSignal,
   onColdStart?: () => void,
   onColdStartEnd?: () => void,
 ): Promise<Blob> {
-  const headers = { 'Content-Type': 'application/json', 'x-api-key': apiKey }
+  // A local engine needs no key, and a custom header would force a CORS
+  // preflight it is not documented to allow, so send x-api-key only with a key.
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (apiKey) headers['x-api-key'] = apiKey
   let coldStartTriggered = false
   const coldStartTimer = onColdStart
     ? setTimeout(() => { coldStartTriggered = true; onColdStart() }, 3000)
@@ -220,7 +223,8 @@ export async function playTTS(
 ): Promise<PlaySource> {
   const { voice, speakerId = '3', apiKey, lang = 'en', onColdStart, onColdStartEnd } = options
 
-  const useVoicevox = voice === 'zundamon' && !!VOICEVOX_BASE && !!apiKey
+  // The key is optional: the AWS endpoint needs one, a local Docker engine does not.
+  const useVoicevox = voice === 'zundamon' && !!VOICEVOX_BASE
 
   stopTTS()
   const { signal } = _stopController
@@ -263,7 +267,7 @@ export async function playTTS(
       console.error('[AudioService] VOICEVOX failed, falling back to Web Speech:', err)
     }
   } else if (voice === 'zundamon') {
-    console.warn('[AudioService] zundamon selected but VOICEVOX_BASE or apiKey missing — falling back')
+    console.warn('[AudioService] zundamon selected but no VOICEVOX endpoint is configured — falling back')
   }
 
   // 3. Web Speech API fallback
