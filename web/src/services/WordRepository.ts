@@ -8,8 +8,8 @@
 
 import { SAMPLE_WORDS } from '@/data/sampleWords'
 import { newId } from '@/lib/id'
-import type { WordInput } from '@/lib/wordForm'
-import type { Word } from '@/types/word'
+import type { SentenceInput, WordInput } from '@/lib/wordForm'
+import type { Sentence, Word } from '@/types/word'
 import { openDB } from './db'
 
 const STORE = 'words'
@@ -134,9 +134,18 @@ export async function getWord(id: string): Promise<Word | null> {
   return isWord(record) ? record : null
 }
 
-/** Lowercased spellings of every word not in the trash, archived ones included, for duplicate checks. */
-export async function getListedSpellings(): Promise<Set<string>> {
-  return new Set((await allWords()).filter((w) => !w.deletedAt).map((w) => w.word.toLowerCase()))
+/**
+ * Ids of every word not in the trash, archived ones included, keyed by
+ * lowercased spelling, for duplicate checks that can leave out the word being edited.
+ */
+export async function getIdsBySpelling(): Promise<Map<string, string[]>> {
+  const ids = new Map<string, string[]>()
+  for (const w of await allWords()) {
+    if (w.deletedAt) continue
+    const spelling = w.word.toLowerCase()
+    ids.set(spelling, [...(ids.get(spelling) ?? []), w.id])
+  }
+  return ids
 }
 
 /** Everything iOS would export: all words except those in the trash. */
@@ -218,36 +227,36 @@ export function replaceWords(imported: Word[], now = Date.now()): Promise<Replac
 export const TRASH_RETENTION_DAYS = 10
 const DAY_MS = 24 * 60 * 60 * 1000
 
-/** Rewrites one word, or deletes it when `change` returns null. Unknown ids are ignored. */
-function modifyWord(id: string, change: (word: Word) => Word | null): Promise<void> {
-  return update<void>((store, finish) => {
+/** Rewrites one word, or deletes it when `change` returns null. Resolves whether the word was found. */
+function modifyWord(id: string, change: (word: Word) => Word | null): Promise<boolean> {
+  return update<boolean>((store, finish) => {
     const request = store.get(id)
     request.onsuccess = () => {
       const record: unknown = request.result
-      if (isWord(record)) {
-        const next = change(record)
-        if (next) store.put(next)
-        else store.delete(id)
-      }
-      finish()
+      if (!isWord(record)) return finish(false)
+      const next = change(record)
+      if (next) store.put(next)
+      else store.delete(id)
+      finish(true)
     }
   })
 }
 
-export function trashWord(id: string, now = new Date()): Promise<void> {
-  return modifyWord(id, (word) => ({ ...word, deletedAt: now.toISOString() }))
+/** Unknown ids are ignored, as with the other trash actions. */
+export async function trashWord(id: string, now = new Date()): Promise<void> {
+  await modifyWord(id, (word) => ({ ...word, deletedAt: now.toISOString() }))
 }
 
-export function restoreWord(id: string): Promise<void> {
-  return modifyWord(id, (word) => {
+export async function restoreWord(id: string): Promise<void> {
+  await modifyWord(id, (word) => {
     const restored = { ...word }
     delete restored.deletedAt
     return restored
   })
 }
 
-export function deleteWordPermanently(id: string): Promise<void> {
-  return modifyWord(id, () => null)
+export async function deleteWordPermanently(id: string): Promise<void> {
+  await modifyWord(id, () => null)
 }
 
 /** Due for purging once the full retention period has passed, the moment the days left reach 0. */
@@ -285,6 +294,11 @@ export function getTrashedWords(now = Date.now()): Promise<Word[]> {
   })
 }
 
+/** A stored sentence keeps its id; a new one gets one. */
+function toSentence({ id, english, japanese, category }: SentenceInput): Sentence {
+  return { id: id ?? newId(), english, japanese, category }
+}
+
 /**
  * Stores a word typed in by the user, giving it and its sentences new ids.
  * Adding to a database that has never been read leaves the samples out on
@@ -296,7 +310,7 @@ export async function addWord(input: WordInput, now = new Date()): Promise<Word>
     word: input.word,
     meaning: input.meaning,
     phonetic: input.phonetic,
-    sentences: input.sentences.map(({ english, japanese, category }) => ({ id: newId(), english, japanese, category })),
+    sentences: input.sentences.map(toSentence),
     createdAt: now.toISOString(),
     isFavorite: false,
   }
@@ -313,25 +327,12 @@ export async function addWord(input: WordInput, now = new Date()): Promise<Word>
  * word is not stored.
  */
 export async function updateWord(id: string, input: WordInput): Promise<void> {
-  const found = await update<boolean>((store, finish) => {
-    const request = store.get(id)
-    request.onsuccess = () => {
-      const record: unknown = request.result
-      if (!isWord(record)) return finish(false)
-      store.put({
-        ...record,
-        word: input.word,
-        meaning: input.meaning,
-        phonetic: input.phonetic,
-        sentences: input.sentences.map(({ id: sentenceId, english, japanese, category }) => ({
-          id: sentenceId ?? newId(),
-          english,
-          japanese,
-          category,
-        })),
-      })
-      finish(true)
-    }
-  })
+  const found = await modifyWord(id, (word) => ({
+    ...word,
+    word: input.word,
+    meaning: input.meaning,
+    phonetic: input.phonetic,
+    sentences: input.sentences.map(toSentence),
+  }))
   if (!found) throw new Error(`Word not found: ${id}`)
 }

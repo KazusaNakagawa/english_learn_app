@@ -1,4 +1,4 @@
-/** The add-word form, and turning what was typed into something storable. */
+/** The word form shared by the add and edit pages, and turning what was typed into something storable. */
 
 import type { Sentence, Word } from '@/types/word'
 

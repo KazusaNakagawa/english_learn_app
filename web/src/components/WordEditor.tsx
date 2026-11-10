@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Plus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { useListedSpellings } from '@/hooks/useWords'
+import { useIdsBySpelling } from '@/hooks/useWords'
 import { emptySentenceRow, validateWordForm, type SentenceRow, type WordForm, type WordInput } from '@/lib/wordForm'
 
 const fieldClass = 'border-0 shadow-none px-0 focus-visible:ring-0 text-sm'
@@ -10,16 +10,16 @@ const fieldClass = 'border-0 shadow-none px-0 focus-visible:ring-0 text-sm'
 interface Props {
   title: string
   initial: WordForm
-  /** The spelling of the word being edited, which is not a duplicate of itself. */
-  ownSpelling?: string
+  /** The id of the word being edited, which is not a duplicate of itself. */
+  ownId?: string
   /** Stores the input. A rejection is shown as a save failure. */
   onSave: (input: WordInput) => Promise<void>
   onCancel: () => void
 }
 
 /** The word form shared by the add and edit pages. */
-export function WordEditor({ title, initial, ownSpelling, onSave, onCancel }: Props) {
-  const spellings = useListedSpellings()
+export function WordEditor({ title, initial, ownId, onSave, onCancel }: Props) {
+  const idsBySpelling = useIdsBySpelling()
   const [form, setForm] = useState<WordForm>(initial)
   // Errors appear after the first save attempt, then follow the input as it is corrected.
   const [submitted, setSubmitted] = useState(false)
@@ -28,8 +28,8 @@ export function WordEditor({ title, initial, ownSpelling, onSave, onCancel }: Pr
 
   const errors = submitted ? validateWordForm(form).errors : []
   const typed = form.word.trim().toLowerCase()
-  const alreadyListed = typed !== '' && typed !== ownSpelling?.toLowerCase()
-    && spellings.status === 'ready' && spellings.data.has(typed)
+  const alreadyListed = typed !== '' && idsBySpelling.status === 'ready'
+    && (idsBySpelling.data.get(typed) ?? []).some((id) => id !== ownId)
 
   const setField = (key: 'word' | 'meaning' | 'phonetic', value: string) =>
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -52,7 +52,8 @@ export function WordEditor({ title, initial, ownSpelling, onSave, onCancel }: Pr
     } catch (err) {
       console.error('[WordEditor] save failed:', err)
       setSaveError('保存に失敗しました')
-      setSaving(false)
+    } finally {
+      setSaving(false) // also when the page stays mounted after a successful save
     }
   }
 

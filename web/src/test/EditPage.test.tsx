@@ -5,7 +5,7 @@ import { IDBFactory } from 'fake-indexeddb'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import EditPage from '@/pages/EditPage'
 import { SAMPLE_WORDS } from '@/data/sampleWords'
-import { getWord, getWords } from '@/services/WordRepository'
+import { addWord, getWord, getWords } from '@/services/WordRepository'
 
 const mockNavigate = vi.fn()
 vi.mock('react-router', async (importOriginal) => {
@@ -15,9 +15,11 @@ vi.mock('react-router', async (importOriginal) => {
 
 const [word, other] = SAMPLE_WORDS
 
-async function renderPage(id = word.id) {
+/** With `fromApp`, the edit page has an in-app page behind it to go back to. */
+async function renderPage(id = word.id, { fromApp = false } = {}) {
+  const entries = fromApp ? [`/words/${id}/sentences`, `/words/${id}/edit`] : [`/words/${id}/edit`]
   render(
-    <MemoryRouter initialEntries={[`/words/${id}/edit`]}>
+    <MemoryRouter initialEntries={entries} initialIndex={entries.length - 1}>
       <Routes>
         <Route path="/words/:id/edit" element={<EditPage />} />
       </Routes>
@@ -49,7 +51,7 @@ describe('EditPage', () => {
   })
 
   it('saves the changes and goes back', async () => {
-    await renderPage()
+    await renderPage(word.id, { fromApp: true })
     await screen.findByDisplayValue(word.word)
     await userEvent.clear(field('意味'))
     await userEvent.type(field('意味'), '修正した意味')
@@ -63,11 +65,31 @@ describe('EditPage', () => {
     expect(saved?.sentences).toHaveLength(word.sentences.length)
   })
 
+  it('opens the sentence list after saving when opened directly', async () => {
+    await renderPage()
+    await screen.findByDisplayValue(word.word)
+    await save()
+    await vi.waitFor(() => expect(mockNavigate).toHaveBeenCalledWith(`/words/${word.id}/sentences`, { replace: true }))
+    expect(screen.getByRole('button', { name: '保存' })).toBeEnabled()
+  })
+
   it('does not warn about the word it is editing', async () => {
     await renderPage()
     await screen.findByDisplayValue(word.word)
-    await userEvent.type(field('意味'), '!')
+    // Renaming to another word first proves the spellings have loaded.
+    await userEvent.clear(field('英単語'))
+    await userEvent.type(field('英単語'), other.word)
+    await screen.findByText(`「${other.word}」は登録済みです`)
+    await userEvent.clear(field('英単語'))
+    await userEvent.type(field('英単語'), word.word.toUpperCase())
     expect(screen.queryByText(/は登録済みです/)).not.toBeInTheDocument()
+  })
+
+  it('warns when another word shares its spelling', async () => {
+    await addWord({ word: word.word, meaning: '二つ目', phonetic: '', sentences: [] })
+    await renderPage()
+    await screen.findByDisplayValue(word.word)
+    expect(await screen.findByText(`「${word.word}」は登録済みです`)).toBeInTheDocument()
   })
 
   it('warns when renamed to another listed word', async () => {
@@ -88,13 +110,15 @@ describe('EditPage', () => {
     expect(mockNavigate).not.toHaveBeenCalled()
   })
 
-  it('says when the word does not exist', async () => {
+  it('says when the word does not exist, and goes to the list when opened directly', async () => {
     await renderPage('missing')
     expect(await screen.findByText('単語が見つかりません')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: '戻る' }))
+    expect(mockNavigate).toHaveBeenCalledWith('/', { replace: true })
   })
 
   it('goes back on cancel without saving', async () => {
-    await renderPage()
+    await renderPage(word.id, { fromApp: true })
     await screen.findByDisplayValue(word.word)
     await userEvent.type(field('意味'), '変更')
     await userEvent.click(screen.getByRole('button', { name: 'キャンセル' }))
