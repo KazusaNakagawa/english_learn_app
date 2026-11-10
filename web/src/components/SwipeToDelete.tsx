@@ -121,9 +121,10 @@ export function SwipeToDelete({ children, open, onOpenChange, onDelete, deleteLa
           onClick={() => void remove()}
           style={{ width: Math.max(ACTION_WIDTH, -offset) }}
           className={cn(
-            'absolute inset-y-0 right-0 flex flex-col justify-center gap-0.5 bg-[var(--ios-red)] text-white text-[11px] font-medium',
-            pastFullSwipe ? 'items-start pl-6' : 'items-center',
-            dragOffset === null && 'transition-[width] duration-200 motion-reduce:transition-none',
+            'absolute inset-y-0 right-0 flex flex-col justify-center gap-0.5 text-[var(--ios-red)] text-[11px] font-medium',
+            // A soft tint, a little stronger once letting go would delete.
+            pastFullSwipe ? 'items-start pl-6 bg-[var(--ios-red)]/25' : 'items-center bg-[var(--ios-red)]/12',
+            dragOffset === null && 'transition-[width,background-color] duration-200 motion-reduce:transition-none',
           )}
         >
           <Trash2 size={18} />
