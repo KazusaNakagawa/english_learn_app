@@ -4,19 +4,35 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-import { Volume2, Loader2 } from 'lucide-react'
+import { Archive, Volume2, Loader2 } from 'lucide-react'
 import { playTTS, stopTTS, type VoiceType } from '@/services/AudioService'
 import { loadSettings } from '@/services/SettingsService'
 import { useWords } from '@/hooks/useWords'
 import { SwipeToDelete } from '@/components/SwipeToDelete'
 import { UNDO_TOAST_MS } from '@/lib/ui'
-import { restoreWord, trashWord } from '@/services/WordRepository'
+import { archiveWord, returnToList, trashWord } from '@/services/WordRepository'
 import type { Word } from '@/types/word'
 
 const appVersion = import.meta.env.VITE_APP_VERSION ?? '—'
 const appEnv = import.meta.env.VITE_APP_ENV ?? '—'
 
 const LETTERS = ['ALL', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')]
+
+/** The two ways a word leaves the list. */
+const REMOVALS = {
+  trash: {
+    act: (id: string) => trashWord(id),
+    done: (word: string) => `「${word}」をゴミ箱に移動しました`,
+    failed: 'ゴミ箱に移動できませんでした',
+  },
+  archive: {
+    act: (id: string) => archiveWord(id),
+    done: (word: string) => `「${word}」をアーカイブしました`,
+    failed: 'アーカイブできませんでした',
+  },
+} as const
+
+type Removal = keyof typeof REMOVALS
 
 export default function WordListPage() {
   const navigate = useNavigate()
@@ -25,12 +41,12 @@ export default function WordListPage() {
   const [playingId, setPlayingId] = useState<string | null>(null) // `${id}-en` | `${id}-ja`
 
   const wordsState = useWords()
-  // Trashing hides the word here instead of reloading, so the list does not flash.
-  const [trashedIds, setTrashedIds] = useState<ReadonlySet<string>>(new Set())
-  // Undo covers the most recently trashed word only; earlier ones stay restorable from the trash page.
-  const [toast, setToast] = useState<{ text: string; undo: Word | null } | null>(null)
+  // Trashing or archiving hides the word here instead of reloading, so the list does not flash.
+  const [removedIds, setRemovedIds] = useState<ReadonlySet<string>>(new Set())
+  // Undo covers the most recent removal only; earlier ones stay restorable from the trash and archive pages.
+  const [toast, setToast] = useState<{ text: string; undo: { word: Word; removal: Removal } | null } | null>(null)
   const [openSwipeId, setOpenSwipeId] = useState<string | null>(null)
-  const words = (wordsState.status === 'ready' ? wordsState.data : []).filter((w) => !trashedIds.has(w.id))
+  const words = (wordsState.status === 'ready' ? wordsState.data : []).filter((w) => !removedIds.has(w.id))
 
   const filtered = words.filter((w) => {
     const matchesSearch =
@@ -74,38 +90,40 @@ export default function WordListPage() {
     return () => clearTimeout(timer)
   }, [toast])
 
-  async function moveToTrash(word: Word) {
+  async function remove(word: Word, removal: Removal) {
     // Its card is about to go, taking the only control that could stop it.
     if (playingId?.startsWith(`${word.id}-`)) {
       stopTTS()
       setPlayingId(null)
     }
+    const { act, done, failed } = REMOVALS[removal]
     try {
-      await trashWord(word.id)
-      setTrashedIds((prev) => new Set(prev).add(word.id))
-      setToast({ text: `「${word.word}」をゴミ箱に移動しました`, undo: word })
+      await act(word.id)
+      setRemovedIds((prev) => new Set(prev).add(word.id))
+      setToast({ text: done(word.word), undo: { word, removal } })
     } catch (err) {
-      console.error('[WordListPage] trash failed:', err)
+      console.error(`[WordListPage] ${removal} failed:`, err)
       // An undo still pending for an earlier word stays usable.
-      setToast((prev) => ({ text: 'ゴミ箱に移動できませんでした', undo: prev?.undo ?? null }))
+      setToast((prev) => ({ text: failed, undo: prev?.undo ?? null }))
       throw err
     }
   }
 
-  async function undoTrash() {
-    const word = toast?.undo
-    if (!word) return
+  async function undo() {
+    const pending = toast?.undo
+    if (!pending) return
     try {
-      await restoreWord(word.id)
-      setTrashedIds((prev) => {
+      // The word was on the list before, so undo clears both dates, whichever was set.
+      await returnToList(pending.word.id)
+      setRemovedIds((prev) => {
         const next = new Set(prev)
-        next.delete(word.id)
+        next.delete(pending.word.id)
         return next
       })
       setToast(null)
     } catch (err) {
       console.error('[WordListPage] undo failed:', err)
-      setToast({ text: '元に戻せませんでした', undo: word }) // keeps the button so it can be retried
+      setToast({ text: '元に戻せませんでした', undo: pending }) // keeps the button so it can be retried
     }
   }
 
@@ -165,7 +183,7 @@ export default function WordListPage() {
               {toast.text}
             </p>
             {toast.undo && (
-              <Button size="sm" variant="ghost" className="shrink-0 text-[var(--ios-blue)] hover:bg-white/10" onClick={undoTrash}>
+              <Button size="sm" variant="ghost" className="shrink-0 text-[var(--ios-blue)] hover:bg-white/10" onClick={undo}>
                 元に戻す
               </Button>
             )}
@@ -191,8 +209,15 @@ export default function WordListPage() {
               key={word.id}
               open={openSwipeId === word.id}
               onOpenChange={(open) => setOpenSwipeId(open ? word.id : null)}
-              onDelete={() => moveToTrash(word)}
+              onDelete={() => remove(word, 'trash')}
               deleteLabel={`「${word.word}」をゴミ箱へ移動`}
+              secondaryAction={{
+                label: 'アーカイブ',
+                ariaLabel: `「${word.word}」をアーカイブ`,
+                icon: <Archive size={18} />,
+                className: 'text-[var(--ios-teal)] bg-[var(--ios-teal)]/12',
+                onAction: () => remove(word, 'archive'),
+              }}
             >
             <div
               role="button"
@@ -204,7 +229,7 @@ export default function WordListPage() {
                 if (e.target !== e.currentTarget) return
                 if (e.key === 'Delete' || e.key === 'Backspace') {
                   e.preventDefault()
-                  void moveToTrash(word).catch(() => {})
+                  void remove(word, 'trash').catch(() => {})
                   return
                 }
                 if (e.key === 'Enter' || e.key === ' ') {

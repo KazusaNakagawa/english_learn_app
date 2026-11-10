@@ -4,6 +4,9 @@ import { SAMPLE_WORDS } from '@/data/sampleWords'
 import { openDB } from '@/services/db'
 import {
   addWord,
+  archiveWord,
+  getArchivedWords,
+  unarchiveWord,
   getIdsBySpelling,
   daysUntilPurge,
   deleteWordPermanently,
@@ -14,6 +17,7 @@ import {
   mergeWords,
   replaceWords,
   restoreWord,
+  returnToList,
   SEEDED_MARKER_ID,
   trashWord,
   updateWord,
@@ -276,6 +280,59 @@ describe('WordRepository', () => {
       await expect(replaceWords([makeWord('c', 'cherry'), bad])).rejects.toBeDefined()
       const words = await getWords()
       expect(words.map((w) => w.word)).toEqual(['apple'])
+    })
+  })
+
+  describe('archive', () => {
+    const NOW = Date.parse('2026-11-10T12:00:00.000Z')
+
+    it('archives a word, hiding it from the list but keeping it in the export', async () => {
+      await store(makeWord('a', 'apple'), makeWord('b', 'banana'))
+      await archiveWord('a', new Date(NOW))
+      expect((await getWords()).map((w) => w.word)).toEqual(['banana'])
+      expect((await getWordsForExport()).map((w) => w.word)).toEqual(['apple', 'banana'])
+      expect((await getWord('a'))?.archivedAt).toBe('2026-11-10T12:00:00.000Z')
+    })
+
+    it('unarchives a word back to the list', async () => {
+      await store(makeWord('a', 'apple', { archivedAt: TRASHED_AT }))
+      await unarchiveWord('a')
+      expect((await getWords()).map((w) => w.word)).toEqual(['apple'])
+      expect(await getWord('a')).not.toHaveProperty('archivedAt')
+    })
+
+    it('ignores an unknown id', async () => {
+      await store(makeWord('a', 'apple'))
+      await expect(archiveWord('missing')).resolves.toBeUndefined()
+      await expect(unarchiveWord('missing')).resolves.toBeUndefined()
+      expect((await getWords()).map((w) => w.word)).toEqual(['apple'])
+    })
+
+    it('lists archived words newest first, leaving out active and trashed ones', async () => {
+      await store(
+        makeWord('a', 'active'),
+        makeWord('o', 'older', { archivedAt: '2026-11-01T00:00:00.000Z' }),
+        makeWord('n', 'newer', { archivedAt: '2026-11-05T00:00:00.000Z' }),
+        makeWord('t', 'trashed', { archivedAt: '2026-11-06T00:00:00.000Z', deletedAt: TRASHED_AT }),
+      )
+      expect((await getArchivedWords()).map((w) => w.word)).toEqual(['newer', 'older'])
+    })
+
+    it('puts a word that is both archived and trashed back on the list', async () => {
+      await store(makeWord('a', 'apple', { archivedAt: TRASHED_AT, deletedAt: TRASHED_AT }))
+      await returnToList('a')
+      expect((await getWords()).map((w) => w.word)).toEqual(['apple'])
+      expect(await getWord('a')).not.toHaveProperty('archivedAt')
+      expect(await getWord('a')).not.toHaveProperty('deletedAt')
+    })
+
+    it('returns an archived word to the archive when it is restored from the trash', async () => {
+      await store(makeWord('a', 'apple', { archivedAt: TRASHED_AT }))
+      await trashWord('a', new Date(NOW))
+      expect(await getArchivedWords()).toEqual([])
+      await restoreWord('a')
+      expect((await getArchivedWords()).map((w) => w.word)).toEqual(['apple'])
+      expect(await getWords()).toEqual([])
     })
   })
 

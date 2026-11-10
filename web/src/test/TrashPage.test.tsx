@@ -5,7 +5,7 @@ import { IDBFactory } from 'fake-indexeddb'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import TrashPage from '@/pages/TrashPage'
 import { SAMPLE_WORDS } from '@/data/sampleWords'
-import { getWord, getWords, trashWord } from '@/services/WordRepository'
+import { archiveWord, getArchivedWords, getWord, getWords, trashWord } from '@/services/WordRepository'
 
 const [trashed, active] = SAMPLE_WORDS
 
@@ -42,6 +42,7 @@ describe('TrashPage', () => {
       renderPage()
       expect(await screen.findByText(trashed.word)).toBeInTheDocument()
       expect(screen.getByText('あと10日で完全削除')).toBeInTheDocument()
+      expect(screen.queryByText('元に戻すとアーカイブに戻ります')).not.toBeInTheDocument()
       expect(screen.queryByText(active.word)).not.toBeInTheDocument()
     })
 
@@ -78,6 +79,16 @@ describe('TrashPage', () => {
       expect(await screen.findByText('操作に失敗しました')).toBeInTheDocument()
       expect(screen.getByText(trashed.word)).toBeInTheDocument()
     })
+  })
+
+  it('says an archived word goes back to the archive, and sends it there', async () => {
+    await archiveWord(trashed.id)
+    await trashWord(trashed.id)
+    renderPage()
+    expect(await screen.findByText('元に戻すとアーカイブに戻ります')).toBeInTheDocument()
+    await userEvent.click(screen.getByLabelText(`「${trashed.word}」を元に戻す`))
+    expect(await screen.findByText('ゴミ箱は空です')).toBeInTheDocument()
+    expect((await getArchivedWords()).map((w) => w.id)).toEqual([trashed.id])
   })
 
   it("keeps one row's delete prompt open while another row is restored", async () => {

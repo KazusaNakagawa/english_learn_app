@@ -247,16 +247,46 @@ export async function trashWord(id: string, now = new Date()): Promise<void> {
   await modifyWord(id, (word) => ({ ...word, deletedAt: now.toISOString() }))
 }
 
-export async function restoreWord(id: string): Promise<void> {
+/** Clears the given dates, putting the word back where they took it from. */
+async function clearDates(id: string, keys: ('deletedAt' | 'archivedAt')[]): Promise<void> {
   await modifyWord(id, (word) => {
-    const restored = { ...word }
-    delete restored.deletedAt
-    return restored
+    const next = { ...word }
+    keys.forEach((key) => delete next[key])
+    return next
   })
+}
+
+/** Takes a word out of the trash. An archived word goes back to the archive, as on iOS. */
+export async function restoreWord(id: string): Promise<void> {
+  await clearDates(id, ['deletedAt'])
+}
+
+/** Puts a word back on the list whether it was trashed, archived, or both. */
+export async function returnToList(id: string): Promise<void> {
+  await clearDates(id, ['deletedAt', 'archivedAt'])
 }
 
 export async function deleteWordPermanently(id: string): Promise<void> {
   await modifyWord(id, () => null)
+}
+
+/** Takes a word off the list without deleting it. Unknown ids are ignored. */
+export async function archiveWord(id: string, now = new Date()): Promise<void> {
+  await modifyWord(id, (word) => ({ ...word, archivedAt: now.toISOString() }))
+}
+
+export async function unarchiveWord(id: string): Promise<void> {
+  await clearDates(id, ['archivedAt'])
+}
+
+/**
+ * Archived words, most recently archived first. A trashed word is shown in the
+ * trash only, and returns here if it is restored, as on iOS.
+ */
+export async function getArchivedWords(): Promise<Word[]> {
+  return (await allWords())
+    .filter((w) => w.archivedAt && !w.deletedAt)
+    .sort((a, b) => Date.parse(b.archivedAt ?? '') - Date.parse(a.archivedAt ?? ''))
 }
 
 /** Due for purging once the full retention period has passed, the moment the days left reach 0. */
