@@ -320,14 +320,47 @@ describe('WordRepository', () => {
       expect(trashed.map((w) => w.word)).toEqual(['newer', 'older'])
     })
 
-    it('purges words trashed more than 10 days ago, keeping one at exactly 10', async () => {
+    it('purges a word once it has been in the trash for 10 days, keeping one just under', async () => {
       await store(
-        makeWord('e', 'expired', { deletedAt: new Date(NOW - 10 * DAY - 1).toISOString() }),
-        makeWord('k', 'kept', { deletedAt: new Date(NOW - 10 * DAY).toISOString() }),
+        makeWord('e', 'expired', { deletedAt: new Date(NOW - 10 * DAY).toISOString() }),
+        makeWord('k', 'kept', { deletedAt: new Date(NOW - 10 * DAY + 1).toISOString() }),
       )
       const trashed = await getTrashedWords(NOW)
       expect(trashed.map((w) => w.word)).toEqual(['kept'])
       await expect(getWord('e')).resolves.toBeNull()
+    })
+
+    it('orders by time, not by how the date string is written', async () => {
+      await store(
+        makeWord('o', 'older', { deletedAt: '2026-11-09T01:00:00+09:00' }),
+        makeWord('n', 'newer', { deletedAt: '2026-11-08T20:00:00.000Z' }),
+      )
+      const trashed = await getTrashedWords(NOW)
+      expect(trashed.map((w) => w.word)).toEqual(['newer', 'older'])
+    })
+
+    it('lets a merge bring back an id whose trash entry has expired', async () => {
+      await store(makeWord('e', 'expired', { deletedAt: new Date(NOW - 11 * DAY).toISOString() }))
+      const result = await mergeWords([makeWord('e', 'imported')], NOW)
+      expect(result).toEqual({ added: 1, skipped: 0, duplicates: 0, hidden: 0 })
+      const word = await getWord('e')
+      expect(word?.word).toBe('imported')
+      expect(word?.deletedAt).toBeUndefined()
+    })
+
+    it('still skips an id that is in the trash and not yet expired', async () => {
+      await store(makeWord('t', 'trashed', { deletedAt: new Date(NOW - DAY).toISOString() }))
+      await expect(mergeWords([makeWord('t', 'imported')], NOW)).resolves.toMatchObject({ added: 0, skipped: 1 })
+    })
+
+    it('drops expired trash when replacing', async () => {
+      await store(
+        makeWord('e', 'expired', { deletedAt: new Date(NOW - 11 * DAY).toISOString() }),
+        makeWord('t', 'trashed', { deletedAt: new Date(NOW - DAY).toISOString() }),
+      )
+      await replaceWords([makeWord('b', 'banana')], NOW)
+      await expect(getWord('e')).resolves.toBeNull()
+      expect((await getWord('t'))?.word).toBe('trashed')
     })
 
     it('returns an empty trash when nothing is deleted', async () => {

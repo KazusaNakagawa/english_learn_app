@@ -9,6 +9,7 @@ import { playTTS, stopTTS, type VoiceType } from '@/services/AudioService'
 import { loadSettings } from '@/services/SettingsService'
 import { useWords } from '@/hooks/useWords'
 import { SwipeToDelete } from '@/components/SwipeToDelete'
+import { UNDO_TOAST_MS } from '@/lib/ui'
 import { restoreWord, trashWord } from '@/services/WordRepository'
 import type { Word } from '@/types/word'
 
@@ -26,8 +27,8 @@ export default function WordListPage() {
   const wordsState = useWords()
   // Trashing hides the word here instead of reloading, so the list does not flash.
   const [trashedIds, setTrashedIds] = useState<ReadonlySet<string>>(new Set())
-  const [lastTrashed, setLastTrashed] = useState<Word | null>(null)
-  const [trashError, setTrashError] = useState<string | null>(null)
+  // Undo covers the most recently trashed word only; earlier ones stay restorable from the trash page.
+  const [toast, setToast] = useState<{ text: string; undo: Word | null } | null>(null)
   const [openSwipeId, setOpenSwipeId] = useState<string | null>(null)
   const words = (wordsState.status === 'ready' ? wordsState.data : []).filter((w) => !trashedIds.has(w.id))
 
@@ -67,33 +68,44 @@ export default function WordListPage() {
     }
   }
 
+  useEffect(() => {
+    if (!toast) return
+    const timer = setTimeout(() => setToast(null), UNDO_TOAST_MS)
+    return () => clearTimeout(timer)
+  }, [toast])
+
   async function moveToTrash(word: Word) {
-    setTrashError(null)
+    // Its card is about to go, taking the only control that could stop it.
+    if (playingId?.startsWith(`${word.id}-`)) {
+      stopTTS()
+      setPlayingId(null)
+    }
     try {
       await trashWord(word.id)
       setTrashedIds((prev) => new Set(prev).add(word.id))
-      setLastTrashed(word)
+      setToast({ text: `「${word.word}」をゴミ箱に移動しました`, undo: word })
     } catch (err) {
       console.error('[WordListPage] trash failed:', err)
-      setTrashError('ゴミ箱に移動できませんでした')
+      // An undo still pending for an earlier word stays usable.
+      setToast((prev) => ({ text: 'ゴミ箱に移動できませんでした', undo: prev?.undo ?? null }))
       throw err
     }
   }
 
   async function undoTrash() {
-    if (!lastTrashed) return
-    setTrashError(null)
+    const word = toast?.undo
+    if (!word) return
     try {
-      await restoreWord(lastTrashed.id)
+      await restoreWord(word.id)
       setTrashedIds((prev) => {
         const next = new Set(prev)
-        next.delete(lastTrashed.id)
+        next.delete(word.id)
         return next
       })
-      setLastTrashed(null)
+      setToast(null)
     } catch (err) {
       console.error('[WordListPage] undo failed:', err)
-      setTrashError('元に戻せませんでした')
+      setToast({ text: '元に戻せませんでした', undo: word }) // keeps the button so it can be retried
     }
   }
 
@@ -143,16 +155,16 @@ export default function WordListPage() {
       </header>
 
       {/* Fixed above the tab bar, so undo stays visible after trashing a word far down the list */}
-      {(lastTrashed || trashError) && (
+      {toast && (
         <div className="fixed inset-x-0 bottom-20 z-20 px-4 pointer-events-none">
           <div
             role="status"
             className="max-w-2xl mx-auto bg-neutral-800 text-white rounded-2xl pl-4 pr-2 py-1.5 flex items-center justify-between gap-2 shadow-lg pointer-events-auto"
           >
             <p className="text-sm truncate py-1">
-              {trashError ?? `「${lastTrashed?.word}」をゴミ箱に移動しました`}
+              {toast.text}
             </p>
-            {!trashError && (
+            {toast.undo && (
               <Button size="sm" variant="ghost" className="shrink-0 text-[var(--ios-blue)] hover:bg-white/10" onClick={undoTrash}>
                 元に戻す
               </Button>
@@ -163,7 +175,7 @@ export default function WordListPage() {
 
       {/* Word list */}
       <main
-        className={cn('max-w-2xl mx-auto px-4 space-y-2', lastTrashed || trashError ? 'pb-20' : 'pb-4')}
+        className={cn('max-w-2xl mx-auto px-4 space-y-2', toast ? 'pb-20' : 'pb-4')}
         onPointerDownCapture={(e) => {
           // Touching anywhere but the open row closes it, as on iOS.
           if (openSwipeId && !(e.target as Element).closest('[data-swipe-open="true"]')) setOpenSwipeId(null)

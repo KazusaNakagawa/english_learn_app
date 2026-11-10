@@ -80,6 +80,16 @@ describe('TrashPage', () => {
     })
   })
 
+  it("keeps one row's delete prompt open while another row is restored", async () => {
+    await trashWord(trashed.id)
+    await trashWord(active.id)
+    renderPage()
+    await userEvent.click(await screen.findByLabelText(`「${trashed.word}」を完全に削除`))
+    await userEvent.click(screen.getByLabelText(`「${active.word}」を元に戻す`))
+    await vi.waitFor(() => expect(screen.queryByText(active.word)).not.toBeInTheDocument())
+    expect(screen.getByText('この操作は取り消せません')).toBeInTheDocument()
+  })
+
   it('shows a message when the trash cannot be loaded', async () => {
     vi.stubGlobal('indexedDB', { open: () => { throw new Error('blocked') } })
     vi.spyOn(console, 'error').mockImplementation(() => {})

@@ -13,6 +13,9 @@ vi.mock('@/services/AudioService', () => ({
   stopTTS: vi.fn(),
 }))
 
+// Short enough for waitFor, long enough to act on the notice before it goes.
+vi.mock('@/lib/ui', () => ({ UNDO_TOAST_MS: 300 }))
+
 const mockNavigate = vi.fn()
 vi.mock('react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('react-router')>()
@@ -222,6 +225,52 @@ describe('WordListPage', () => {
       fireEvent.pointerDown(card(b.word), { pointerId: 2, button: 0, clientX: 10, clientY: 10 })
       fireEvent.pointerUp(card(b.word), { pointerId: 2, clientX: 10, clientY: 10 })
       expect(screen.queryByText('削除')).not.toBeInTheDocument()
+    })
+
+    it('hides the notice after a few seconds', async () => {
+      await renderPage()
+      const word = first()
+      swipe(word.word, -250)
+      const notice = await screen.findByText(`「${word.word}」をゴミ箱に移動しました`)
+      await vi.waitFor(() => expect(notice).not.toBeInTheDocument())
+    })
+
+    it('stops the audio of a word that is being trashed', async () => {
+      vi.mocked(AudioService.playTTS).mockImplementationOnce(() => new Promise(() => {}))
+      await renderPage()
+      const word = first()
+      await userEvent.click(screen.getAllByTitle('英語を再生')[0])
+      expect(screen.getAllByTitle('英語を再生')[1]).toBeDisabled()
+      vi.mocked(AudioService.stopTTS).mockClear()
+      card(word.word).focus()
+      await userEvent.keyboard('{Delete}')
+      await screen.findByText(`「${word.word}」をゴミ箱に移動しました`)
+      expect(AudioService.stopTTS).toHaveBeenCalled()
+      expect(screen.getAllByTitle('英語を再生')[0]).toBeEnabled()
+    })
+
+    it('keeps undo available when the undo itself fails', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      await renderPage()
+      swipe(first().word, -250)
+      const undo = await screen.findByRole('button', { name: '元に戻す' })
+      vi.stubGlobal('indexedDB', { open: () => { throw new Error('blocked') } })
+      await userEvent.click(undo)
+      expect(await screen.findByText('元に戻せませんでした')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '元に戻す' })).toBeInTheDocument()
+    })
+
+    it('keeps the earlier undo when trashing another word fails', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      await renderPage()
+      const [a, b] = [...SAMPLE_WORDS].sort((x, y) => x.word.localeCompare(y.word))
+      swipe(a.word, -250)
+      await screen.findByText(`「${a.word}」をゴミ箱に移動しました`)
+      vi.stubGlobal('indexedDB', { open: () => { throw new Error('blocked') } })
+      card(b.word).focus()
+      await userEvent.keyboard('{Delete}')
+      expect(await screen.findByText('ゴミ箱に移動できませんでした')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '元に戻す' })).toBeInTheDocument()
     })
 
     it('deletes the focused card with the Delete key', async () => {

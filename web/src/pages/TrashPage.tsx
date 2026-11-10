@@ -21,7 +21,7 @@ export default function TrashPage() {
     try {
       await action(id)
       setDoneIds((prev) => new Set(prev).add(id))
-      setConfirmingId(null)
+      setConfirmingId((current) => (current === id ? null : current)) // another row's prompt stays open
     } catch (err) {
       console.error('[TrashPage] action failed:', err)
       setError('操作に失敗しました')
