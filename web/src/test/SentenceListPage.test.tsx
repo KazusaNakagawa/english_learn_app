@@ -16,6 +16,7 @@ vi.mock('@/services/SettingsService', () => ({
     enVoice: 'default',
     jaVoice: 'default',
     voicevoxStyle: '3',
+    voicevoxEndpoint: '',
     voicevoxApiKey: '',
     intervalSec: 0,
     playPattern: 'en-en',

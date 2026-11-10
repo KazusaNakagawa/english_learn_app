@@ -8,9 +8,8 @@
  */
 
 import { getCache, putCache, makeCacheKey, evictCache } from './AudioCacheService'
-import { isLocalEndpoint, voicevoxHeaders } from '@/lib/voicevox'
+import { defaultEndpoint, isLocalEndpoint, normalizeEndpoint, voicevoxHeaders } from '@/lib/voicevox'
 
-const VOICEVOX_BASE = import.meta.env.VITE_VOICEVOX_ENDPOINT_POC ?? ''
 const CACHE_MAX_BYTES = 50 * 1024 * 1024 // 50 MB
 const VOICE_LOAD_TIMEOUT_MS = 3000
 // Generous on purpose: reaching the limit cuts the speech off, and natural
@@ -23,6 +22,8 @@ export type VoiceType = 'default' | 'female' | 'male' | 'zundamon'
 export interface PlayOptions {
   voice: VoiceType
   speakerId?: string
+  /** The VOICEVOX engine to use; the build-time endpoint when omitted. Pages pass resolveVoicevox(settings). */
+  endpoint?: string
   apiKey?: string
   lang?: 'en' | 'ja'
   onColdStart?: () => void
@@ -112,6 +113,7 @@ async function speakWebSpeech(
 // ---- VOICEVOX helpers ----
 
 async function fetchVoicevoxWav(
+  base: string,
   text: string,
   speakerId: string,
   apiKey: string | undefined,
@@ -129,12 +131,12 @@ async function fetchVoicevoxWav(
     : null
   try {
     const qRes = await fetch(
-      `${VOICEVOX_BASE}/audio_query?text=${encodeURIComponent(text)}&speaker=${speakerId}`,
+      `${base}/audio_query?text=${encodeURIComponent(text)}&speaker=${speakerId}`,
       { method: 'POST', headers, signal },
     )
     if (!qRes.ok) throw new Error(`audio_query failed: ${qRes.status}`)
 
-    const sRes = await fetch(`${VOICEVOX_BASE}/synthesis?speaker=${speakerId}`, {
+    const sRes = await fetch(`${base}/synthesis?speaker=${speakerId}`, {
       method: 'POST',
       headers,
       signal,
@@ -223,10 +225,11 @@ export async function playTTS(
   options: PlayOptions,
 ): Promise<PlaySource> {
   const { voice, speakerId = '3', apiKey, lang = 'en', onColdStart, onColdStartEnd } = options
+  const base = options.endpoint === undefined ? defaultEndpoint() : normalizeEndpoint(options.endpoint)
 
   // A local engine needs no key. The AWS endpoint does: a request without one
   // gets 401 and counts toward the API's 4xx alarm, so it is never sent.
-  const useVoicevox = voice === 'zundamon' && !!VOICEVOX_BASE && (!!apiKey || isLocalEndpoint(VOICEVOX_BASE))
+  const useVoicevox = voice === 'zundamon' && !!base && (!!apiKey || isLocalEndpoint(base))
 
   stopTTS()
   const { signal } = _stopController
@@ -235,7 +238,7 @@ export async function playTTS(
   if (useVoicevox) {
     // crypto.subtle is undefined on non-secure origins such as a LAN dev URL.
     // Keyed by endpoint too, so switching engines does not replay another engine's clip.
-    const cacheKey = await makeCacheKey(text, speakerId, VOICEVOX_BASE).catch((err) => {
+    const cacheKey = await makeCacheKey(text, speakerId, base).catch((err) => {
       console.warn('[AudioService] cache unavailable:', err)
       return null
     })
@@ -259,7 +262,7 @@ export async function playTTS(
     // 2. VOICEVOX fetch
     try {
       console.debug('[AudioService] fetching from VOICEVOX, speaker:', speakerId)
-      const blob = await fetchVoicevoxWav(text, speakerId, apiKey, signal, onColdStart, onColdStartEnd)
+      const blob = await fetchVoicevoxWav(base, text, speakerId, apiKey, signal, onColdStart, onColdStartEnd)
       if (isStopped()) return 'cancelled'
       if (cacheKey) void storeInCache(cacheKey, text, speakerId, blob)
       console.debug('[AudioService] playing fetched clip, size:', blob.size)

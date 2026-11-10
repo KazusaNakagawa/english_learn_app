@@ -10,6 +10,8 @@ export interface AppSettings {
   enVoice: 'default' | 'female' | 'male' | 'zundamon'
   jaVoice: 'zundamon' | 'default'
   voicevoxStyle: string   // speaker ID
+  /** Empty means the build-time endpoint. Resolve with resolveVoicevox before use. */
+  voicevoxEndpoint: string
   voicevoxApiKey: string
   openAIKey: string
   openAIModel: string
@@ -21,6 +23,7 @@ const DEFAULTS: AppSettings = {
   enVoice: 'female',
   jaVoice: 'zundamon',
   voicevoxStyle: '22',
+  voicevoxEndpoint: '',
   voicevoxApiKey: '',
   openAIKey: '',
   openAIModel: 'gpt-4o-mini',
@@ -61,7 +64,8 @@ export function loadSettings(): AppSettings {
     const intervalSec = isFinite(rawInterval)
       ? Math.min(INTERVAL_MAX, Math.max(INTERVAL_MIN, rawInterval))
       : DEFAULTS.intervalSec
-    return { ...DEFAULTS, ...parsed, intervalSec, ...loadApiKeys() }
+    const voicevoxEndpoint = typeof parsed.voicevoxEndpoint === 'string' ? parsed.voicevoxEndpoint : DEFAULTS.voicevoxEndpoint
+    return { ...DEFAULTS, ...parsed, intervalSec, voicevoxEndpoint, ...loadApiKeys() }
   } catch {
     return { ...DEFAULTS, ...loadApiKeys() }
   }
