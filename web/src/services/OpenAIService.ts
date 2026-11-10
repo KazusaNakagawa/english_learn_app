@@ -69,8 +69,9 @@ function messageFor(status: number): string {
 
 export async function generateContent(word: string, { apiKey, model, signal }: Options): Promise<GeneratedContent> {
   if (!apiKey) throw new GenerationError('設定でOpenAI APIキーを入力してください')
-  // Flattened and capped, as on iOS, so the word cannot smuggle in instructions.
-  const cleanWord = word.replace(/\s*\n\s*/g, ' ').trim().slice(0, 100)
+  // Flattened and capped as on iOS, with 「」 removed so the word cannot close
+  // its quotes. This narrows prompt injection; it does not rule it out.
+  const cleanWord = word.replace(/\s*\n\s*/g, ' ').replace(/[「」]/g, '').trim().slice(0, 100)
   if (!cleanWord) throw new GenerationError('英単語を入力してください')
 
   let response: Response
@@ -94,12 +95,22 @@ export async function generateContent(word: string, { apiKey, model, signal }: O
   }
   if (!response.ok) throw new GenerationError(messageFor(response.status))
 
-  let parsed: unknown
+  let choice: { finish_reason?: string; message?: { content?: string | null; refusal?: string | null } } | undefined
   try {
-    const body = await response.json()
-    parsed = JSON.parse(body.choices[0].message.content)
+    choice = (await response.json()).choices?.[0]
   } catch (err) {
     if (err instanceof DOMException && err.name === 'AbortError') throw err
+    throw new GenerationError('例文を生成できませんでした')
+  }
+  if (choice?.message?.refusal) throw new GenerationError('OpenAIが生成を断りました。単語を見直してください')
+  // A reply cut off at the token limit is incomplete JSON. Smaller models hit this most.
+  if (choice?.finish_reason === 'length') {
+    throw new GenerationError('生成結果が長すぎて途中で切れました。もう一度試すか、別のモデルを選んでください')
+  }
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(choice?.message?.content ?? '')
+  } catch {
     throw new GenerationError('例文を生成できませんでした')
   }
   const fields = (typeof parsed === 'object' && parsed !== null ? parsed : {}) as Record<string, unknown>

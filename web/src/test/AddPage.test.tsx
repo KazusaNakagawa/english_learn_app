@@ -179,6 +179,72 @@ describe('AddPage', () => {
       expect(screen.queryByLabelText('例文4の英文')).not.toBeInTheDocument()
     })
 
+    const held = () => {
+      let release: (value: unknown) => void = () => {}
+      const promise = new Promise((resolve) => { release = resolve })
+      return { promise, release }
+    }
+    const completionWith = (english: string) => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ choices: [{ message: { content: JSON.stringify({ ...generated, sentences: [{ english, japanese: '訳', category: '' }] }) } }] }),
+    })
+
+    it('locks the word fields, the rows, and saving while generating', async () => {
+      const pending = held()
+      vi.stubGlobal('fetch', vi.fn(() => pending.promise))
+      render(<MemoryRouter><AddPage /></MemoryRouter>)
+      await type('英単語', 'apple')
+      await userEvent.click(screen.getByRole('button', { name: '例文を追加' }))
+      await generate()
+      expect(screen.getByLabelText('英単語')).toBeDisabled()
+      expect(screen.getByLabelText('意味')).toBeDisabled()
+      expect(screen.getByLabelText('例文1の英文')).toBeDisabled()
+      expect(screen.getByRole('button', { name: '例文を追加' })).toBeDisabled()
+      expect(screen.getByRole('button', { name: '保存' })).toBeDisabled()
+      expect(screen.getByRole('button', { name: '生成を中止' })).toBeEnabled()
+      pending.release(completion())
+      await screen.findByDisplayValue('I ate an apple.')
+      expect(screen.getByLabelText('英単語')).toBeEnabled()
+      expect(screen.getByRole('button', { name: '保存' })).toBeEnabled()
+    })
+
+    it('ignores a cancelled request that settles after a newer one started', async () => {
+      const first = held()
+      const fetchMock = vi.fn()
+        .mockImplementationOnce(() => first.promise) // ignores the abort, like a slow network
+        .mockImplementationOnce(async () => completionWith('From the second request.'))
+      vi.stubGlobal('fetch', fetchMock)
+      render(<MemoryRouter><AddPage /></MemoryRouter>)
+      await type('英単語', 'apple')
+      await generate()
+      await userEvent.click(screen.getByRole('button', { name: '生成を中止' }))
+      await generate()
+      await screen.findByDisplayValue('From the second request.')
+      first.release(completionWith('From the cancelled request.'))
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      expect(screen.queryByDisplayValue('From the cancelled request.')).not.toBeInTheDocument()
+      expect(screen.queryByLabelText('例文2の英文')).not.toBeInTheDocument()
+    })
+
+    it('replaces untouched generated rows when generating again, keeping edited ones', async () => {
+      const fetchMock = vi.fn()
+        .mockImplementationOnce(async () => completion())
+        .mockImplementationOnce(async () => completionWith('Second round.'))
+      vi.stubGlobal('fetch', fetchMock)
+      render(<MemoryRouter><AddPage /></MemoryRouter>)
+      await type('英単語', 'apple')
+      await generate()
+      await screen.findByDisplayValue('I ate an apple.')
+      await userEvent.type(screen.getByLabelText('例文2の和訳'), '（修正）')
+      await generate()
+      await screen.findByDisplayValue('Second round.')
+      expect(screen.queryByDisplayValue('I ate an apple.')).not.toBeInTheDocument()
+      expect(screen.getByLabelText('例文1の和訳')).toHaveValue('りんごは赤い。（修正）')
+      expect(screen.getByLabelText('例文2の英文')).toHaveValue('Second round.')
+      expect(screen.queryByLabelText('例文3の英文')).not.toBeInTheDocument()
+    })
+
     it('needs a word first', async () => {
       render(<MemoryRouter><AddPage /></MemoryRouter>)
       expect(screen.getByRole('button', { name: 'AIで例文を生成' })).toBeDisabled()
