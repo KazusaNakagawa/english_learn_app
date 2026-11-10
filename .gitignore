@@ -67,3 +67,5 @@ playground.xcworkspace
 
 # test
 output/
+data*
+
