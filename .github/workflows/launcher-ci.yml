@@ -1,0 +1,48 @@
+name: Launcher CI
+
+# Tests the npm launcher (#206). It has no dependencies, so there is no
+# install step; the web build it packages is validated by web-ci.yml.
+on:
+  push:
+    branches: [develop, main]
+    paths:
+      - 'launcher/**'
+      - '.github/workflows/launcher-ci.yml'
+  pull_request:
+    branches: [develop, main]
+    paths:
+      - 'launcher/**'
+      - '.github/workflows/launcher-ci.yml'
+
+concurrency:
+  group: launcher-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test launcher (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+
+    # The engines floor and the version the maintainer releases with.
+    strategy:
+      matrix:
+        node: ['20', '24']
+
+    defaults:
+      run:
+        working-directory: launcher
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Test
+        run: npm test

@@ -1,0 +1,29 @@
+{
+  "name": "english-learn-app",
+  "version": "0.1.0",
+  "description": "Run the English Learn App web version locally with one command",
+  "type": "module",
+  "bin": {
+    "english-learn-app": "bin/english-learn-app.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KazusaNakagawa/english_learn_app.git",
+    "directory": "launcher"
+  },
+  "scripts": {
+    "start": "node bin/english-learn-app.mjs",
+    "build": "node scripts/prepare-dist.mjs",
+    "prepack": "node scripts/prepare-dist.mjs",
+    "test": "node --test"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "dist",
+    "README.md"
+  ]
+}
