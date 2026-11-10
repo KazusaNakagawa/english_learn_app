@@ -8,6 +8,7 @@
  */
 
 import { getCache, putCache, makeCacheKey, evictCache } from './AudioCacheService'
+import { isLocalEndpoint, voicevoxHeaders } from '@/lib/voicevox'
 
 const VOICEVOX_BASE = import.meta.env.VITE_VOICEVOX_ENDPOINT_POC ?? ''
 const CACHE_MAX_BYTES = 50 * 1024 * 1024 // 50 MB
@@ -113,12 +114,15 @@ async function speakWebSpeech(
 async function fetchVoicevoxWav(
   text: string,
   speakerId: string,
-  apiKey: string,
+  apiKey: string | undefined,
   signal: AbortSignal,
   onColdStart?: () => void,
   onColdStartEnd?: () => void,
 ): Promise<Blob> {
-  const headers = { 'Content-Type': 'application/json', 'x-api-key': apiKey }
+  // These POSTs are preflighted either way, since application/json is not a
+  // CORS-safelisted type. x-api-key is sent only when there is a key, which a
+  // local engine does not need.
+  const headers = voicevoxHeaders(apiKey)
   let coldStartTriggered = false
   const coldStartTimer = onColdStart
     ? setTimeout(() => { coldStartTriggered = true; onColdStart() }, 3000)
@@ -220,7 +224,9 @@ export async function playTTS(
 ): Promise<PlaySource> {
   const { voice, speakerId = '3', apiKey, lang = 'en', onColdStart, onColdStartEnd } = options
 
-  const useVoicevox = voice === 'zundamon' && !!VOICEVOX_BASE && !!apiKey
+  // A local engine needs no key. The AWS endpoint does: a request without one
+  // gets 401 and counts toward the API's 4xx alarm, so it is never sent.
+  const useVoicevox = voice === 'zundamon' && !!VOICEVOX_BASE && (!!apiKey || isLocalEndpoint(VOICEVOX_BASE))
 
   stopTTS()
   const { signal } = _stopController
@@ -228,7 +234,8 @@ export async function playTTS(
 
   if (useVoicevox) {
     // crypto.subtle is undefined on non-secure origins such as a LAN dev URL.
-    const cacheKey = await makeCacheKey(text, speakerId).catch((err) => {
+    // Keyed by endpoint too, so switching engines does not replay another engine's clip.
+    const cacheKey = await makeCacheKey(text, speakerId, VOICEVOX_BASE).catch((err) => {
       console.warn('[AudioService] cache unavailable:', err)
       return null
     })
@@ -263,7 +270,7 @@ export async function playTTS(
       console.error('[AudioService] VOICEVOX failed, falling back to Web Speech:', err)
     }
   } else if (voice === 'zundamon') {
-    console.warn('[AudioService] zundamon selected but VOICEVOX_BASE or apiKey missing — falling back')
+    console.warn('[AudioService] zundamon selected but there is no VOICEVOX endpoint, or no API key for a remote one — falling back')
   }
 
   // 3. Web Speech API fallback

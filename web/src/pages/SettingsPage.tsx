@@ -440,7 +440,8 @@ export default function SettingsPage() {
                 onChange={(e) => setVvKey(e.target.value)}
                 className="border-0 shadow-none px-0 focus-visible:ring-0 text-sm"
               />
-              {!vvKey && (
+              {/* Only when there is a build-time key to fall back to; a local engine needs none. */}
+              {!vvKey && import.meta.env.VITE_VOICEVOX_API_KEY_POC && (
                 <InlineAlert type="warning" message="AppConfigのキーを使用中（設定で上書き可）" className="mt-1.5" />
               )}
             </Row>

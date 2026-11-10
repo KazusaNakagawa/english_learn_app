@@ -25,8 +25,9 @@ async function sha256(text: string): Promise<string> {
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
-export async function makeCacheKey(text: string, speakerId: string): Promise<string> {
-  return sha256(`${text}_${speakerId}`)
+/** Engines can differ in voice, so the endpoint is part of the key. */
+export async function makeCacheKey(text: string, speakerId: string, endpoint = ''): Promise<string> {
+  return sha256(`${text}_${speakerId}_${endpoint}`)
 }
 
 /**

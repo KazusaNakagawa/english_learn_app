@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { evictCache, getCache, putCache } from '@/services/AudioCacheService'
+import { evictCache, getCache, makeCacheKey, putCache } from '@/services/AudioCacheService'
 
 type Handler = (() => void) | null
 
@@ -188,5 +188,18 @@ describe('AudioCacheService when a transaction ends', () => {
       await expect(result).resolves.toBeUndefined()
       expect(tx.deletes).toHaveLength(0)
     })
+  })
+})
+
+describe('makeCacheKey', () => {
+  it('differs by endpoint, so engines do not share clips', async () => {
+    const local = await makeCacheKey('hello', '3', 'http://127.0.0.1:50021')
+    const remote = await makeCacheKey('hello', '3', 'https://voicevox.example')
+    expect(local).not.toBe(remote)
+    expect(local).toMatch(/^[0-9a-f]{64}$/)
+  })
+
+  it('is stable for the same text, speaker, and endpoint', async () => {
+    expect(await makeCacheKey('hello', '3', 'x')).toBe(await makeCacheKey('hello', '3', 'x'))
   })
 })

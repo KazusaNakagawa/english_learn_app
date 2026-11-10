@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { isLocalEndpoint, voicevoxHeaders } from '@/lib/voicevox'
 
 const BASE_URL = import.meta.env.VITE_VOICEVOX_ENDPOINT_POC ?? ''
 const API_KEY = import.meta.env.VITE_VOICEVOX_API_KEY_POC ?? ''
@@ -69,7 +70,7 @@ export default function VoicevoxTab({
         headers: {
           Origin: location.origin,
           'Access-Control-Request-Method': 'POST',
-          'Access-Control-Request-Headers': 'Content-Type, x-api-key',
+          'Access-Control-Request-Headers': API_KEY ? 'Content-Type, x-api-key' : 'Content-Type',
         },
       })
       const acao = res.headers.get('access-control-allow-origin')
@@ -94,12 +95,13 @@ export default function VoicevoxTab({
   }
 
   async function testVoicevox() {
-    if (!BASE_URL || !API_KEY) {
-      setVvResult('⚠ VITE_VOICEVOX_ENDPOINT_POC / VITE_VOICEVOX_API_KEY_POC not set in .env')
+    // A local engine needs no key; a remote one does.
+    if (!BASE_URL || (!API_KEY && !isLocalEndpoint(BASE_URL))) {
+      setVvResult('⚠ VITE_VOICEVOX_ENDPOINT_POC not set, or VITE_VOICEVOX_API_KEY_POC not set for a remote endpoint')
       setVvType('warn')
       return
     }
-    const headers = { 'Content-Type': 'application/json', 'x-api-key': API_KEY }
+    const headers = voicevoxHeaders(API_KEY)
     setTiming(null)
     setVvResult('⋯ Step 1: POST /audio_query (cold start may take 10–30s)…'); setVvType('')
     try {
