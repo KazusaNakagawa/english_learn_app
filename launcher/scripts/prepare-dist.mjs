@@ -9,7 +9,7 @@ import { cpSync, existsSync, readdirSync, readFileSync, rmSync, statSync } from 
 import { join, relative, sep } from "node:path"
 import { fileURLToPath } from "node:url"
 
-import { checkVersions, findLeakedSecrets, parseEnvFile, scrubbedBuildEnv, valuesToScan } from "./verify-dist.mjs"
+import { checkVersions, expandEnvRefs, findLeakedSecrets, parseEnvFile, scrubbedBuildEnv, valuesToScan } from "./verify-dist.mjs"
 
 const pkgRoot = fileURLToPath(new URL("..", import.meta.url))
 const webRoot = join(pkgRoot, "..", "web")
@@ -72,7 +72,9 @@ function main() {
       .map((p) => [relative(pkgRoot, p).split(sep).join("/"), readFileSync(p, "utf8")]),
   )
   const shellVite = Object.fromEntries(Object.entries(process.env).filter(([name]) => name.startsWith("VITE_")))
-  const leaked = findLeakedSecrets(textFiles, valuesToScan({ ...shellVite, ...fileVars }))
+  // Both forms: the raw text, and what Vite inlines after expanding ${VAR}.
+  const scanned = [...valuesToScan({ ...shellVite, ...fileVars }), ...valuesToScan(expandEnvRefs(fileVars, process.env))]
+  const leaked = findLeakedSecrets(textFiles, [...new Set(scanned)])
   if (leaked.length) fail(["a value from web/.env or a VITE_* variable was found in the build — refusing to package:", ...leaked])
   const dotenv = files.filter((p) => /(^|[\\/])\.env/.test(relative(dist, p)))
   if (dotenv.length) fail(["refusing to package .env files:", ...dotenv])

@@ -44,6 +44,30 @@ export function parseEnvFile(text) {
   return parseEnv(text)
 }
 
+const REF = /(\\)?\$(?:\{([A-Za-z_][A-Za-z0-9_]*)(?::?-([^}]*))?\}|([A-Za-z_][A-Za-z0-9_]*))/g
+// Deep enough for any real chain; a cycle just stops expanding.
+const MAX_DEPTH = 10
+
+/**
+ * Expand ${VAR}, $VAR, ${VAR:-default} and ${VAR-default} the way Vite's
+ * dotenv-expand does, so the scan looks for the value that actually gets
+ * inlined. References resolve against the file's own variables first, then
+ * the shell; an escaped \$ stays literal.
+ */
+export function expandEnvRefs(vars, env) {
+  const resolveName = (name, depth) => {
+    if (Object.hasOwn(vars, name)) return depth < MAX_DEPTH ? expand(vars[name], depth + 1) : ""
+    return env[name]
+  }
+  const expand = (value, depth) =>
+    value.replace(REF, (whole, escaped, braced, fallback, bare) => {
+      if (escaped) return whole.slice(1)
+      const resolved = resolveName(braced ?? bare, depth)
+      return resolved || (fallback ?? "")
+    })
+  return Object.fromEntries(Object.entries(vars).map(([name, value]) => [name, expand(value, 0)]))
+}
+
 // Short values would match by accident (e.g. "poc"), so they are not checked.
 const MIN_SECRET_LENGTH = 8
 

@@ -3,6 +3,7 @@ import { test } from "node:test"
 
 import {
   checkVersions,
+  expandEnvRefs,
   findLeakedSecrets,
   parseEnvFile,
   scrubbedBuildEnv,
@@ -76,4 +77,36 @@ test("scrubbedBuildEnv blanks every VITE_* from the shell and .env files and sta
   assert.equal("NOT_VITE" in env, false)
   assert.equal(env.VITE_APP_VERSION, "1.2.3")
   assert.equal(env.VITE_APP_ENV, "launcher")
+})
+
+test("expandEnvRefs resolves ${VAR}, $VAR and defaults the way Vite's dotenv-expand does", () => {
+  const vars = expandEnvRefs(
+    {
+      VITE_HOST: "abcdef.execute-api.example.com",
+      VITE_VOICEVOX_ENDPOINT_POC: "https://${VITE_HOST}/poc",
+      VITE_BARE: "$VITE_HOST",
+      VITE_FROM_SHELL: "${SHELL_ONLY}",
+      VITE_DEFAULTED: "${MISSING:-fallback-value}",
+      VITE_DASH_DEFAULT: "${MISSING-dash-value}",
+      VITE_ESCAPED: "\\${VITE_HOST}",
+    },
+    { SHELL_ONLY: "from-the-shell" },
+  )
+  assert.equal(vars.VITE_VOICEVOX_ENDPOINT_POC, "https://abcdef.execute-api.example.com/poc")
+  assert.equal(vars.VITE_BARE, "abcdef.execute-api.example.com")
+  assert.equal(vars.VITE_FROM_SHELL, "from-the-shell")
+  assert.equal(vars.VITE_DEFAULTED, "fallback-value")
+  assert.equal(vars.VITE_DASH_DEFAULT, "dash-value")
+  assert.equal(vars.VITE_ESCAPED, "${VITE_HOST}")
+})
+
+test("expandEnvRefs resolves chains and leaves unknown references empty", () => {
+  const vars = expandEnvRefs({ A: "${B}-x", B: "${C}", C: "deep-value", D: "${NOPE}" }, {})
+  assert.equal(vars.A, "deep-value-x")
+  assert.equal(vars.D, "")
+})
+
+test("expandEnvRefs stops on a reference cycle", () => {
+  const vars = expandEnvRefs({ A: "${B}", B: "${A}" }, {})
+  assert.equal(typeof vars.A, "string")
 })
