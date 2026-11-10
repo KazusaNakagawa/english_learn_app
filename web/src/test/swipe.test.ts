@@ -34,6 +34,12 @@ describe('swipeOutcome with two buttons', () => {
     expect(fullSwipeDistance(240, open)).toBe(open + OPEN_THRESHOLD)
     expect(swipeOutcome(-(open + OPEN_THRESHOLD), 240, open)).toBe('delete')
   })
+
+  it('still deletes on a row too narrow for the usual distance, by dragging all the way', () => {
+    expect(fullSwipeDistance(180, open)).toBe(180)
+    expect(swipeOutcome(-179, 180, open)).toBe('open')
+    expect(swipeOutcome(-180, 180, open)).toBe('delete')
+  })
 })
 
 describe('clampOffset', () => {

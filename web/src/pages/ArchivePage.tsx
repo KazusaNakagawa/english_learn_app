@@ -1,5 +1,5 @@
-import { useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { useRowActions } from '@/hooks/useRowActions'
 import { useArchivedWords } from '@/hooks/useWords'
 import { trashWord, unarchiveWord } from '@/services/WordRepository'
 
@@ -7,21 +7,8 @@ const formatDate = (iso: string) => new Date(iso).toLocaleDateString('ja-JP')
 
 export default function ArchivePage() {
   const archiveState = useArchivedWords()
-  // Words returned or trashed are dropped here instead of reloading the list.
-  const [doneIds, setDoneIds] = useState<ReadonlySet<string>>(new Set())
-  const [error, setError] = useState<string | null>(null)
+  const { doneIds, isPending, error, act } = useRowActions('ArchivePage')
   const words = (archiveState.status === 'ready' ? archiveState.data : []).filter((w) => !doneIds.has(w.id))
-
-  async function act(id: string, action: (id: string) => Promise<void>) {
-    setError(null)
-    try {
-      await action(id)
-      setDoneIds((prev) => new Set(prev).add(id))
-    } catch (err) {
-      console.error('[ArchivePage] action failed:', err)
-      setError('操作に失敗しました')
-    }
-  }
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-4">
@@ -56,6 +43,7 @@ export default function ArchivePage() {
                   variant="ghost"
                   className="text-[var(--ios-blue)]"
                   aria-label={`「${word.word}」を単語一覧に戻す`}
+                  disabled={isPending(word.id)}
                   onClick={() => act(word.id, unarchiveWord)}
                 >
                   元に戻す
@@ -65,6 +53,7 @@ export default function ArchivePage() {
                   variant="ghost"
                   className="text-[var(--ios-red)]"
                   aria-label={`「${word.word}」をゴミ箱へ移動`}
+                  disabled={isPending(word.id)}
                   onClick={() => act(word.id, (id) => trashWord(id))}
                 >
                   削除

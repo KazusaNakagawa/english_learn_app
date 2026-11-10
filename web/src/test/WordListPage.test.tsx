@@ -200,6 +200,21 @@ describe('WordListPage', () => {
       expect(await getArchivedWords()).toEqual([])
     })
 
+    it('covers the row with archive while archiving, and a second tap does not trash it', async () => {
+      await renderPage()
+      const word = first()
+      swipe(word.word, -100)
+      fireEvent.click(screen.getByRole('button', { name: `「${word.word}」をアーカイブ` }))
+      // Mid-animation: archive spans the row, delete is gone, and taps do nothing.
+      expect(screen.queryByRole('button', { name: `「${word.word}」をゴミ箱へ移動` })).not.toBeInTheDocument()
+      const archive = screen.getByRole('button', { name: `「${word.word}」をアーカイブ` })
+      expect(archive).toBeDisabled()
+      fireEvent.click(archive)
+      expect(await screen.findByText(`「${word.word}」をアーカイブしました`)).toBeInTheDocument()
+      expect((await getArchivedWords()).map((w) => w.id)).toEqual([word.id])
+      expect((await getArchivedWords())[0].deletedAt).toBeUndefined()
+    })
+
     it('hides the archive button during a full swipe, which trashes instead', async () => {
       await renderPage()
       const word = first()

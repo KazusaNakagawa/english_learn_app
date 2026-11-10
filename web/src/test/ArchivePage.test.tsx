@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { IDBFactory } from 'fake-indexeddb'
@@ -59,6 +59,19 @@ describe('ArchivePage', () => {
       expect(await screen.findByText('アーカイブは空です')).toBeInTheDocument()
       expect((await getTrashedWords()).map((w) => w.id)).toEqual([archived.id])
       expect(await getArchivedWords()).toEqual([])
+    })
+
+    it("disables a row's buttons while one of its actions runs", async () => {
+      renderPage()
+      const restore = await screen.findByLabelText(`「${archived.word}」を単語一覧に戻す`)
+      const trash = screen.getByLabelText(`「${archived.word}」をゴミ箱へ移動`)
+      fireEvent.click(trash)
+      expect(restore).toBeDisabled()
+      fireEvent.click(restore)
+      expect(await screen.findByText('アーカイブは空です')).toBeInTheDocument()
+      const [word] = await getTrashedWords()
+      expect(word.id).toBe(archived.id)
+      expect(word.archivedAt).toBeDefined()
     })
 
     it('reports a failure and keeps the word listed', async () => {

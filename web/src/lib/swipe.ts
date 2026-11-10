@@ -18,10 +18,11 @@ export function clampOffset(offset: number, width: number): number {
 
 /**
  * How far a drag must go to delete on release. It stays beyond the open
- * position, so a narrow row with two buttons can still rest open.
+ * position, so a narrow row with two buttons can still rest open, but never
+ * beyond the row itself, which a drag cannot pass.
  */
 export function fullSwipeDistance(width: number, openWidth = ACTION_WIDTH): number {
-  return Math.max(width * FULL_SWIPE_RATIO, openWidth + OPEN_THRESHOLD)
+  return Math.min(width, Math.max(width * FULL_SWIPE_RATIO, openWidth + OPEN_THRESHOLD))
 }
 
 /** `openWidth` is the width of all the buttons a short swipe reveals. */

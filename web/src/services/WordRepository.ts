@@ -247,12 +247,23 @@ export async function trashWord(id: string, now = new Date()): Promise<void> {
   await modifyWord(id, (word) => ({ ...word, deletedAt: now.toISOString() }))
 }
 
-export async function restoreWord(id: string): Promise<void> {
+/** Clears the given dates, putting the word back where they took it from. */
+async function clearDates(id: string, keys: ('deletedAt' | 'archivedAt')[]): Promise<void> {
   await modifyWord(id, (word) => {
-    const restored = { ...word }
-    delete restored.deletedAt
-    return restored
+    const next = { ...word }
+    keys.forEach((key) => delete next[key])
+    return next
   })
+}
+
+/** Takes a word out of the trash. An archived word goes back to the archive, as on iOS. */
+export async function restoreWord(id: string): Promise<void> {
+  await clearDates(id, ['deletedAt'])
+}
+
+/** Puts a word back on the list whether it was trashed, archived, or both. */
+export async function returnToList(id: string): Promise<void> {
+  await clearDates(id, ['deletedAt', 'archivedAt'])
 }
 
 export async function deleteWordPermanently(id: string): Promise<void> {
@@ -265,11 +276,7 @@ export async function archiveWord(id: string, now = new Date()): Promise<void> {
 }
 
 export async function unarchiveWord(id: string): Promise<void> {
-  await modifyWord(id, (word) => {
-    const unarchived = { ...word }
-    delete unarchived.archivedAt
-    return unarchived
-  })
+  await clearDates(id, ['archivedAt'])
 }
 
 /**

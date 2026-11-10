@@ -54,25 +54,34 @@ export function SwipeToDelete({ children, open, onOpenChange, onDelete, deleteLa
   const drag = useRef<Drag | null>(null)
   const swallowClick = useRef(false)
   const [dragOffset, setDragOffset] = useState<number | null>(null)
-  const [removing, setRemoving] = useState(false)
+  // Which button is taking the row away. Set synchronously too, so a second tap cannot start another removal.
+  const [removing, setRemoving] = useState<'delete' | 'secondary' | null>(null)
+  const removingRef = useRef(false)
 
-  const openWidth = ACTION_WIDTH * (secondaryAction ? 2 : 1)
   const width = () => rowRef.current?.offsetWidth || FALLBACK_WIDTH
+  // A row narrower than its buttons opens only as far as it is wide.
+  const openWidth = Math.min(ACTION_WIDTH * (secondaryAction ? 2 : 1), width())
   const offset = removing ? -width() : dragOffset ?? (open ? -openWidth : 0)
-  const pastFullSwipe = -offset >= fullSwipeDistance(width(), openWidth)
+  const pastFullSwipe = removing === 'delete' || (!removing && -offset >= fullSwipeDistance(width(), openWidth))
+  // The button doing the removal covers the row, so an archive does not look like a delete.
+  const showSecondary = !!secondaryAction && !pastFullSwipe
+  const showDelete = removing !== 'secondary'
+  const secondaryWidth = removing === 'secondary' ? -offset : ACTION_WIDTH
   // Delete takes whatever the secondary button does not, and all of it past a full swipe.
-  const showSecondary = !!secondaryAction && !pastFullSwipe && !removing
   const deleteWidth = Math.max(ACTION_WIDTH, -offset - (showSecondary ? ACTION_WIDTH : 0))
 
-  async function remove(action: () => Promise<void> = onDelete) {
-    setRemoving(true)
+  async function remove(which: 'delete' | 'secondary' = 'delete') {
+    if (removingRef.current) return
+    removingRef.current = true
+    setRemoving(which)
     await new Promise((resolve) => setTimeout(resolve, REMOVE_ANIMATION_MS))
     try {
-      await action()
+      await (which === 'secondary' && secondaryAction ? secondaryAction.onAction() : onDelete())
     } catch {
       // The caller reports the failure; the row just slides back.
     }
-    setRemoving(false)
+    removingRef.current = false
+    setRemoving(null)
     onOpenChange(false)
   }
 
@@ -135,23 +144,25 @@ export function SwipeToDelete({ children, open, onOpenChange, onDelete, deleteLa
           type="button"
           tabIndex={open ? 0 : -1}
           aria-label={secondaryAction.ariaLabel}
-          onClick={() => void remove(secondaryAction.onAction)}
-          style={{ width: ACTION_WIDTH, right: deleteWidth }}
+          disabled={!!removing}
+          onClick={() => void remove('secondary')}
+          style={{ width: secondaryWidth, right: showDelete ? deleteWidth : 0 }}
           className={cn(
             'absolute inset-y-0 flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium',
             secondaryAction.className,
-            dragOffset === null && 'transition-[right] duration-200 motion-reduce:transition-none',
+            dragOffset === null && 'transition-[right,width] duration-200 motion-reduce:transition-none',
           )}
         >
           {secondaryAction.icon}
           {secondaryAction.label}
         </button>
       )}
-      {offset < 0 && (
+      {offset < 0 && showDelete && (
         <button
           type="button"
           tabIndex={open ? 0 : -1}
           aria-label={deleteLabel}
+          disabled={!!removing}
           onClick={() => void remove()}
           style={{ width: deleteWidth }}
           className={cn(
@@ -171,7 +182,7 @@ export function SwipeToDelete({ children, open, onOpenChange, onDelete, deleteLa
           {secondaryAction && (
             <button
               type="button" tabIndex={-1} aria-label={secondaryAction.ariaLabel}
-              onClick={() => void remove(secondaryAction.onAction)} className="sr-only"
+              onClick={() => void remove('secondary')} className="sr-only"
             />
           )}
           <button type="button" tabIndex={-1} aria-label={deleteLabel} onClick={() => void remove()} className="sr-only" />

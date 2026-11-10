@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { useRowActions } from '@/hooks/useRowActions'
 import { useTrashedWords } from '@/hooks/useWords'
 import {
   daysUntilPurge,
@@ -10,21 +11,13 @@ import {
 
 export default function TrashPage() {
   const trashState = useTrashedWords()
-  // Restored or deleted words are dropped here instead of reloading the list.
-  const [doneIds, setDoneIds] = useState<ReadonlySet<string>>(new Set())
+  const { doneIds, isPending, error, act: runAction } = useRowActions('TrashPage')
   const [confirmingId, setConfirmingId] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
   const words = (trashState.status === 'ready' ? trashState.data : []).filter((w) => !doneIds.has(w.id))
 
   async function act(id: string, action: (id: string) => Promise<void>) {
-    setError(null)
-    try {
-      await action(id)
-      setDoneIds((prev) => new Set(prev).add(id))
+    if (await runAction(id, action)) {
       setConfirmingId((current) => (current === id ? null : current)) // another row's prompt stays open
-    } catch (err) {
-      console.error('[TrashPage] action failed:', err)
-      setError('操作に失敗しました')
     }
   }
 
@@ -55,6 +48,9 @@ export default function TrashPage() {
                       あと{daysUntilPurge(word.deletedAt)}日で完全削除
                     </p>
                   )}
+                  {word.archivedAt && (
+                    <p className="text-[11px] text-muted-foreground">元に戻すとアーカイブに戻ります</p>
+                  )}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   <Button
@@ -62,6 +58,7 @@ export default function TrashPage() {
                     variant="ghost"
                     className="text-[var(--ios-blue)]"
                     aria-label={`「${word.word}」を元に戻す`}
+                    disabled={isPending(word.id)}
                     onClick={() => act(word.id, restoreWord)}
                   >
                     元に戻す
@@ -71,6 +68,7 @@ export default function TrashPage() {
                     variant="ghost"
                     className="text-[var(--ios-red)]"
                     aria-label={`「${word.word}」を完全に削除`}
+                    disabled={isPending(word.id)}
                     onClick={() => setConfirmingId(word.id)}
                   >
                     削除
@@ -80,7 +78,7 @@ export default function TrashPage() {
               {confirmingId === word.id && (
                 <div className="mt-2 flex items-center justify-end gap-2">
                   <p className="text-xs text-muted-foreground mr-auto">この操作は取り消せません</p>
-                  <Button size="sm" variant="destructive" onClick={() => act(word.id, deleteWordPermanently)}>
+                  <Button size="sm" variant="destructive" disabled={isPending(word.id)} onClick={() => act(word.id, deleteWordPermanently)}>
                     完全に削除する
                   </Button>
                   <Button size="sm" variant="ghost" onClick={() => setConfirmingId(null)}>

@@ -10,7 +10,7 @@ import { loadSettings } from '@/services/SettingsService'
 import { useWords } from '@/hooks/useWords'
 import { SwipeToDelete } from '@/components/SwipeToDelete'
 import { UNDO_TOAST_MS } from '@/lib/ui'
-import { archiveWord, restoreWord, trashWord, unarchiveWord } from '@/services/WordRepository'
+import { archiveWord, returnToList, trashWord } from '@/services/WordRepository'
 import type { Word } from '@/types/word'
 
 const appVersion = import.meta.env.VITE_APP_VERSION ?? '—'
@@ -18,17 +18,15 @@ const appEnv = import.meta.env.VITE_APP_ENV ?? '—'
 
 const LETTERS = ['ALL', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')]
 
-/** The two ways a word leaves the list, each with its own undo. */
+/** The two ways a word leaves the list. */
 const REMOVALS = {
   trash: {
     act: (id: string) => trashWord(id),
-    undo: restoreWord,
     done: (word: string) => `「${word}」をゴミ箱に移動しました`,
     failed: 'ゴミ箱に移動できませんでした',
   },
   archive: {
     act: (id: string) => archiveWord(id),
-    undo: unarchiveWord,
     done: (word: string) => `「${word}」をアーカイブしました`,
     failed: 'アーカイブできませんでした',
   },
@@ -115,7 +113,8 @@ export default function WordListPage() {
     const pending = toast?.undo
     if (!pending) return
     try {
-      await REMOVALS[pending.removal].undo(pending.word.id)
+      // The word was on the list before, so undo clears both dates, whichever was set.
+      await returnToList(pending.word.id)
       setRemovedIds((prev) => {
         const next = new Set(prev)
         next.delete(pending.word.id)

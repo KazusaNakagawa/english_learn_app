@@ -17,6 +17,7 @@ import {
   mergeWords,
   replaceWords,
   restoreWord,
+  returnToList,
   SEEDED_MARKER_ID,
   trashWord,
   updateWord,
@@ -315,6 +316,14 @@ describe('WordRepository', () => {
         makeWord('t', 'trashed', { archivedAt: '2026-11-06T00:00:00.000Z', deletedAt: TRASHED_AT }),
       )
       expect((await getArchivedWords()).map((w) => w.word)).toEqual(['newer', 'older'])
+    })
+
+    it('puts a word that is both archived and trashed back on the list', async () => {
+      await store(makeWord('a', 'apple', { archivedAt: TRASHED_AT, deletedAt: TRASHED_AT }))
+      await returnToList('a')
+      expect((await getWords()).map((w) => w.word)).toEqual(['apple'])
+      expect(await getWord('a')).not.toHaveProperty('archivedAt')
+      expect(await getWord('a')).not.toHaveProperty('deletedAt')
     })
 
     it('returns an archived word to the archive when it is restored from the trash', async () => {
