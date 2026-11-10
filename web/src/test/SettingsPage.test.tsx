@@ -7,6 +7,7 @@ import SettingsPage from '@/pages/SettingsPage'
 import * as AudioService from '@/services/AudioService'
 import { getCacheUsage } from '@/services/AudioCacheService'
 import { getWords } from '@/services/WordRepository'
+import { loadSettings, saveSettings } from '@/services/SettingsService'
 
 vi.mock('@/services/AudioService', () => ({
   playTTS: vi.fn().mockResolvedValue('webspeech'),
@@ -76,6 +77,110 @@ describe('SettingsPage', () => {
       vi.stubEnv('VITE_VOICEVOX_API_KEY_POC', 'build-key')
       await renderPage()
       expect(screen.getByText(warning)).toBeInTheDocument()
+    })
+
+    it('goes away once another endpoint is typed, since the build-time key is not sent there', async () => {
+      vi.stubEnv('VITE_VOICEVOX_ENDPOINT_POC', 'https://aws.test')
+      vi.stubEnv('VITE_VOICEVOX_API_KEY_POC', 'build-key')
+      await renderPage()
+      await userEvent.type(screen.getByLabelText('VOICEVOXの接続先'), 'http://127.0.0.1:50021')
+      expect(screen.queryByText(warning)).not.toBeInTheDocument()
+    })
+  })
+
+  describe('VOICEVOX endpoint', () => {
+    const field = () => screen.getByLabelText('VOICEVOXの接続先')
+
+    beforeEach(() => {
+      localStorage.clear()
+      sessionStorage.clear()
+      vi.stubEnv('VITE_VOICEVOX_ENDPOINT_POC', 'https://aws.test')
+      vi.stubEnv('VITE_VOICEVOX_API_KEY_POC', 'build-key')
+      vi.mocked(AudioService.playTTS).mockClear()
+    })
+
+    afterEach(() => {
+      vi.unstubAllEnvs()
+      vi.unstubAllGlobals()
+      localStorage.clear()
+    })
+
+    it('shows the build-time endpoint as the placeholder while empty', async () => {
+      await renderPage()
+      expect(field()).toHaveAttribute('placeholder', 'https://aws.test')
+      expect(screen.getByText('空欄のときは、ビルド時の接続先を使います')).toBeInTheDocument()
+    })
+
+    it('saves a typed endpoint, and playback uses it without the build-time key', async () => {
+      await renderPage()
+      await userEvent.type(field(), 'http://127.0.0.1:50021')
+      expect(loadSettings().voicevoxEndpoint).toBe('http://127.0.0.1:50021')
+      await userEvent.click(screen.getByText('日本語サンプルを再生'))
+      expect(AudioService.playTTS).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+        endpoint: 'http://127.0.0.1:50021', apiKey: '',
+      }))
+    })
+
+    it('restores the saved endpoint on the next visit, and 既定に戻す clears it', async () => {
+      saveSettings({ voicevoxEndpoint: 'http://127.0.0.1:50021' })
+      await renderPage()
+      expect(field()).toHaveValue('http://127.0.0.1:50021')
+      await userEvent.click(screen.getByRole('button', { name: '既定に戻す' }))
+      expect(field()).toHaveValue('')
+      expect(loadSettings().voicevoxEndpoint).toBe('')
+    })
+
+    it('says an invalid URL is not used', async () => {
+      await renderPage()
+      await userEvent.type(field(), '127.0.0.1:50021')
+      expect(screen.getByText('http:// か https:// で始まる URL を入力してください。いまはビルド時の接続先を使います')).toBeInTheDocument()
+    })
+
+    it('warns that a remote endpoint without a key falls back to the browser voice', async () => {
+      await renderPage()
+      await userEvent.type(field(), 'https://other.test')
+      expect(screen.getByText('この接続先にはAPIキーが必要です。キーがないあいだはブラウザの音声で読みます')).toBeInTheDocument()
+    })
+
+    it('does not show a late result under an endpoint typed after the test started', async () => {
+      let answer: (res: Response) => void = () => {}
+      vi.stubGlobal('fetch', vi.fn((_: string, init: RequestInit) => new Promise<Response>((resolve, reject) => {
+        answer = resolve
+        init.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))
+      })))
+      await renderPage()
+      await userEvent.click(screen.getByRole('button', { name: '接続テスト' }))
+      expect(screen.getByRole('button', { name: '接続中…' })).toBeInTheDocument()
+      await userEvent.type(field(), 'http://127.0.0.1:50021')
+      await act(async () => { answer(new Response('[]')) })
+      expect(screen.queryByText(/接続できました/)).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '接続テスト' })).toBeEnabled()
+    })
+
+    it('sends a typed key only to the endpoint it was typed for', async () => {
+      await renderPage()
+      await userEvent.type(screen.getByLabelText('VOICEVOXのAPIキー'), 'mine')
+      await userEvent.click(screen.getByText('日本語サンプルを再生'))
+      expect(AudioService.playTTS).toHaveBeenLastCalledWith(expect.any(String), expect.objectContaining({
+        endpoint: 'https://aws.test', apiKey: 'mine',
+      }))
+
+      await userEvent.type(field(), 'https://other.test')
+      expect(screen.getByText('このキーは別の接続先（https://aws.test）用のため、いまの接続先には送りません。使うなら入力し直してください')).toBeInTheDocument()
+      await userEvent.click(screen.getByText('日本語サンプルを再生'))
+      expect(AudioService.playTTS).toHaveBeenLastCalledWith(expect.any(String), expect.objectContaining({
+        endpoint: 'https://other.test', apiKey: '',
+      }))
+    })
+
+    it('tests the connection and shows the engine version', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify('0.25.1')))
+      vi.stubGlobal('fetch', fetchMock)
+      await renderPage()
+      await userEvent.type(field(), 'http://127.0.0.1:50021')
+      await userEvent.click(screen.getByRole('button', { name: '接続テスト' }))
+      expect(await screen.findByText('接続できました（VOICEVOX 0.25.1）')).toBeInTheDocument()
+      expect(fetchMock).toHaveBeenCalledWith('http://127.0.0.1:50021/version', expect.anything())
     })
   })
 

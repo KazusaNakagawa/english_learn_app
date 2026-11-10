@@ -521,6 +521,27 @@ describe('playTTS with stopTTS', () => {
     })
   })
 
+  describe('the endpoint option', () => {
+    const urlOf = (call: number) => fetchMock.mock.calls[call][0] as string
+
+    it('sends requests to the endpoint passed in, not the build-time one', async () => {
+      const { playTTS } = await load()
+      const result = playTTS('hello', { ...options, endpoint: 'https://other.test/' })
+      await audioStarted()
+      FakeAudio.instances[0].onended?.()
+      await expect(result).resolves.toBe('voicevox')
+      expect(urlOf(0)).toMatch(/^https:\/\/other\.test\/audio_query\?/)
+      expect(urlOf(1)).toMatch(/^https:\/\/other\.test\/synthesis\?/)
+      expect(cache.makeCacheKey).toHaveBeenCalledWith('hello', expect.any(String), 'https://other.test')
+    })
+
+    it('reads aloud with Web Speech when the endpoint passed in is empty', async () => {
+      const { playTTS } = await load()
+      await expect(playTTS('hello', { ...options, endpoint: '' })).resolves.toBe('webspeech')
+      expect(fetchMock).not.toHaveBeenCalled()
+    })
+  })
+
   describe('a VOICEVOX engine without an API key', () => {
     const noKey = { voice: 'zundamon', lang: 'en' } as const
     const headersOf = (call: number) => fetchMock.mock.calls[call][1].headers as Record<string, string>

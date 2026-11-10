@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { Archive, Volume2, Loader2 } from 'lucide-react'
 import { playTTS, stopTTS, type VoiceType } from '@/services/AudioService'
+import { resolveVoicevox } from '@/lib/voicevox'
 import { loadSettings } from '@/services/SettingsService'
 import { useWords } from '@/hooks/useWords'
 import { SwipeToDelete } from '@/components/SwipeToDelete'
@@ -74,7 +75,7 @@ export default function WordListPage() {
       await playTTS(text, {
         voice: (lang === 'en' ? s.enVoice : s.jaVoice) as VoiceType,
         speakerId: s.voicevoxStyle,
-        apiKey: s.voicevoxApiKey || (import.meta.env.VITE_VOICEVOX_API_KEY_POC ?? ''),
+        ...resolveVoicevox(s),
         lang,
       })
     } catch (err) {

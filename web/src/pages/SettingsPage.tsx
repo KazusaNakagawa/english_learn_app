@@ -14,6 +14,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
+import { checkEndpoint, defaultEndpoint, endpointError, endpointOrigin, isLocalEndpoint, resolveVoicevox } from '@/lib/voicevox'
 
 const VOICEVOX_STYLES = [
   { id: '3',  label: 'ノーマル' },
@@ -161,6 +162,8 @@ function initFromSettings() {
     interval:  Number.isFinite(v) ? Math.min(5, Math.max(0.5, v)) : 1.5,
     vvStyle:   s.voicevoxStyle,
     vvKey:     s.voicevoxApiKey,
+    vvEndpoint: s.voicevoxEndpoint,
+    vvKeyOrigin: s.voicevoxApiKeyOrigin,
     openAIKey: s.openAIKey,
     aiModel:   s.openAIModel,
   }
@@ -287,6 +290,10 @@ export default function SettingsPage() {
   const [interval,  setIntervalSRaw] = useState(init.interval)
   const [vvStyle,   setVvStyleRaw]   = useState(init.vvStyle)
   const [vvKey,     setVvKeyRaw]     = useState(init.vvKey)
+  const [vvEndpoint, setVvEndpointRaw] = useState(init.vvEndpoint)
+  const [vvKeyOrigin, setVvKeyOriginRaw] = useState(init.vvKeyOrigin)
+  const endpointCheckRun = useRef<AbortController | null>(null)
+  const [endpointCheck, setEndpointCheck] = useState<{ ok: boolean; message: string } | 'checking' | null>(null)
   const [openAIKey, setOpenAIKeyRaw] = useState(init.openAIKey)
   const [aiModel,   setAiModelRaw]   = useState(init.aiModel)
   const [playing,     setPlaying]    = useState(false)
@@ -301,7 +308,22 @@ export default function SettingsPage() {
   const setPattern   = (v: Pattern) => { setPatternRaw(v);   saveSettings({ playPattern: PATTERN_RMAP[v] as AppSettings['playPattern'] }) }
   const setIntervalS = (v: number)  => { setIntervalSRaw(v); saveSettings({ intervalSec: v }) }
   const setVvStyle   = (v: string)  => { setVvStyleRaw(v);   saveSettings({ voicevoxStyle: v }) }
-  const setVvKey     = (v: string)  => { setVvKeyRaw(v);     saveSettings({ voicevoxApiKey: v }) }
+  // A result for the old endpoint or key must not show under the new one.
+  const resetEndpointCheck = () => {
+    endpointCheckRun.current?.abort()
+    endpointCheckRun.current = null
+    setEndpointCheck(null)
+  }
+  // A key is tied to the endpoint it is typed for, so it never goes to an endpoint typed later.
+  const setVvKey = (v: string) => {
+    const origin = endpointOrigin(resolveVoicevox({ voicevoxEndpoint: vvEndpoint, voicevoxApiKey: '', voicevoxApiKeyOrigin: '' }).endpoint)
+    setVvKeyRaw(v)
+    setVvKeyOriginRaw(origin)
+    resetEndpointCheck()
+    saveSettings({ voicevoxApiKey: v, voicevoxApiKeyOrigin: origin })
+  }
+  // Saved as typed; an invalid URL is ignored at playback, which falls back to the default.
+  const setVvEndpoint = (v: string) => { setVvEndpointRaw(v); resetEndpointCheck(); saveSettings({ voicevoxEndpoint: v.trim() }) }
   const setOpenAIKey = (v: string)  => { setOpenAIKeyRaw(v); saveSettings({ openAIKey: v }) }
   const setAiModel   = (v: string)  => { setAiModelRaw(v);   saveSettings({ openAIModel: v }) }
 
@@ -318,7 +340,26 @@ export default function SettingsPage() {
     return () => { stopTTS() }
   }, [])
 
-  const resolvedVvKey = vvKey || (import.meta.env.VITE_VOICEVOX_API_KEY_POC ?? '')
+  const voicevox = resolveVoicevox({ voicevoxEndpoint: vvEndpoint, voicevoxApiKey: vvKey, voicevoxApiKeyOrigin: vvKeyOrigin })
+  const buildEndpoint = defaultEndpoint()
+  const vvEndpointError = endpointError(vvEndpoint)
+  const usingBuildKey = voicevox.keySource === 'build'
+  const keyHeldBack = !!vvKey && voicevox.keySource !== 'settings' && !!voicevox.endpoint
+  const needsKey = !!voicevox.endpoint && !voicevox.apiKey && !isLocalEndpoint(voicevox.endpoint)
+
+  async function testEndpoint() {
+    resetEndpointCheck()
+    const run = new AbortController()
+    endpointCheckRun.current = run
+    setEndpointCheck('checking')
+    const result = await checkEndpoint(voicevox.endpoint, voicevox.apiKey, run.signal)
+    if (result && endpointCheckRun.current === run) {
+      endpointCheckRun.current = null
+      setEndpointCheck(result)
+    }
+  }
+
+  useEffect(() => () => endpointCheckRun.current?.abort(), [])
 
   async function playSample(text: string, lang: 'en' | 'ja') {
     if (playing) return
@@ -329,7 +370,7 @@ export default function SettingsPage() {
       await playTTS(text, {
         voice,
         speakerId: vvStyle,
-        apiKey: resolvedVvKey,
+        ...voicevox,
         lang,
         onColdStart: () => setColdStart(true),
         onColdStartEnd: () => setColdStart(false),
@@ -424,6 +465,40 @@ export default function SettingsPage() {
           <SectionLabel label="VOICEVOX設定" />
           <GroupCard>
             <Row>
+              <Input
+                type="url" inputMode="url" autoComplete="off" spellCheck={false}
+                aria-label="VOICEVOXの接続先"
+                placeholder={buildEndpoint || '接続先 URL（例: http://127.0.0.1:50021）'}
+                value={vvEndpoint} onChange={(e) => setVvEndpoint(e.target.value)}
+                className="border-0 shadow-none px-0 focus-visible:ring-0 text-sm"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                {buildEndpoint
+                  ? '空欄のときは、ビルド時の接続先を使います'
+                  : '空欄のときは、ブラウザの音声で読みます。ローカルの Docker なら http://127.0.0.1:50021'}
+              </p>
+              {vvEndpointError && (
+                <InlineAlert type="error" message={`${vvEndpointError}。いまは${buildEndpoint ? 'ビルド時の接続先' : 'ブラウザの音声'}を使います`} className="mt-1.5" />
+              )}
+              <div className="flex items-center gap-2 mt-2">
+                <Button
+                  type="button" size="sm" variant="outline"
+                  disabled={!voicevox.endpoint || endpointCheck === 'checking'}
+                  onClick={testEndpoint}
+                >
+                  {endpointCheck === 'checking' ? '接続中…' : '接続テスト'}
+                </Button>
+                {vvEndpoint && (
+                  <Button type="button" size="sm" variant="ghost" className="text-[var(--ios-blue)]" onClick={() => setVvEndpoint('')}>
+                    既定に戻す
+                  </Button>
+                )}
+              </div>
+              {endpointCheck && endpointCheck !== 'checking' && (
+                <InlineAlert type={endpointCheck.ok ? 'success' : 'error'} message={endpointCheck.message} className="mt-1.5" />
+              )}
+            </Row>
+            <Row>
               <div className="flex items-center justify-between">
                 <span className="text-sm">スタイル</span>
                 <select
@@ -436,13 +511,23 @@ export default function SettingsPage() {
             </Row>
             <Row>
               <Input
-                type="password" placeholder="APIキー" value={vvKey}
+                type="password" placeholder="APIキー" aria-label="VOICEVOXのAPIキー" value={vvKey}
                 onChange={(e) => setVvKey(e.target.value)}
                 className="border-0 shadow-none px-0 focus-visible:ring-0 text-sm"
               />
-              {/* Only when there is a build-time key to fall back to; a local engine needs none. */}
-              {!vvKey && import.meta.env.VITE_VOICEVOX_API_KEY_POC && (
+              {/* The build-time key goes only to the build-time endpoint; a local engine needs none. */}
+              {usingBuildKey && (
                 <InlineAlert type="warning" message="AppConfigのキーを使用中（設定で上書き可）" className="mt-1.5" />
+              )}
+              {keyHeldBack && (
+                <InlineAlert
+                  type="warning"
+                  message={`このキーは別の接続先（${vvKeyOrigin || buildEndpoint}）用のため、いまの接続先には送りません。使うなら入力し直してください`}
+                  className="mt-1.5"
+                />
+              )}
+              {needsKey && !keyHeldBack && (
+                <InlineAlert type="warning" message="この接続先にはAPIキーが必要です。キーがないあいだはブラウザの音声で読みます" className="mt-1.5" />
               )}
             </Row>
             <Row><p className="text-xs text-muted-foreground">© VOICEVOX:ずんだもん</p></Row>

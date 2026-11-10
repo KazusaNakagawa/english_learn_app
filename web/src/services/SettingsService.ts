@@ -10,7 +10,11 @@ export interface AppSettings {
   enVoice: 'default' | 'female' | 'male' | 'zundamon'
   jaVoice: 'zundamon' | 'default'
   voicevoxStyle: string   // speaker ID
+  /** Empty means the build-time endpoint. Resolve with resolveVoicevox before use. */
+  voicevoxEndpoint: string
   voicevoxApiKey: string
+  /** The origin voicevoxApiKey was typed for; it is sent nowhere else. Empty means the build-time endpoint. */
+  voicevoxApiKeyOrigin: string
   openAIKey: string
   openAIModel: string
   playPattern: 'bilingual' | 'en-only'
@@ -21,7 +25,9 @@ const DEFAULTS: AppSettings = {
   enVoice: 'female',
   jaVoice: 'zundamon',
   voicevoxStyle: '22',
+  voicevoxEndpoint: '',
   voicevoxApiKey: '',
+  voicevoxApiKeyOrigin: '',
   openAIKey: '',
   openAIModel: 'gpt-4o-mini',
   playPattern: 'bilingual',
@@ -34,21 +40,24 @@ const API_KEYS_KEY  = 'english_learn_app_api_keys'
 const INTERVAL_MIN = 0.5
 const INTERVAL_MAX = 5.0
 
-function loadApiKeys(): Pick<AppSettings, 'voicevoxApiKey' | 'openAIKey'> {
+type ApiKeys = Pick<AppSettings, 'voicevoxApiKey' | 'voicevoxApiKeyOrigin' | 'openAIKey'>
+const API_KEY_FIELDS = ['voicevoxApiKey', 'voicevoxApiKeyOrigin', 'openAIKey'] as const
+const NO_API_KEYS: ApiKeys = { voicevoxApiKey: '', voicevoxApiKeyOrigin: '', openAIKey: '' }
+
+function loadApiKeys(): ApiKeys {
   try {
     const raw = sessionStorage.getItem(API_KEYS_KEY)
-    if (!raw) return { voicevoxApiKey: '', openAIKey: '' }
+    if (!raw) return { ...NO_API_KEYS }
     const parsed = JSON.parse(raw)
-    return {
-      voicevoxApiKey: typeof parsed.voicevoxApiKey === 'string' ? parsed.voicevoxApiKey : '',
-      openAIKey:      typeof parsed.openAIKey      === 'string' ? parsed.openAIKey      : '',
-    }
+    const keys = { ...NO_API_KEYS }
+    for (const field of API_KEY_FIELDS) if (typeof parsed[field] === 'string') keys[field] = parsed[field]
+    return keys
   } catch {
-    return { voicevoxApiKey: '', openAIKey: '' }
+    return { ...NO_API_KEYS }
   }
 }
 
-function saveApiKeys(keys: Partial<Pick<AppSettings, 'voicevoxApiKey' | 'openAIKey'>>): void {
+function saveApiKeys(keys: Partial<ApiKeys>): void {
   const current = loadApiKeys()
   sessionStorage.setItem(API_KEYS_KEY, JSON.stringify({ ...current, ...keys }))
 }
@@ -61,23 +70,24 @@ export function loadSettings(): AppSettings {
     const intervalSec = isFinite(rawInterval)
       ? Math.min(INTERVAL_MAX, Math.max(INTERVAL_MIN, rawInterval))
       : DEFAULTS.intervalSec
-    return { ...DEFAULTS, ...parsed, intervalSec, ...loadApiKeys() }
+    const voicevoxEndpoint = typeof parsed.voicevoxEndpoint === 'string' ? parsed.voicevoxEndpoint : DEFAULTS.voicevoxEndpoint
+    return { ...DEFAULTS, ...parsed, intervalSec, voicevoxEndpoint, ...loadApiKeys() }
   } catch {
     return { ...DEFAULTS, ...loadApiKeys() }
   }
 }
 
 export function saveSettings(settings: Partial<AppSettings>): void {
-  const { voicevoxApiKey, openAIKey, ...otherSettings } = settings
-
-  if (voicevoxApiKey !== undefined || openAIKey !== undefined) {
-    saveApiKeys({ ...(voicevoxApiKey !== undefined ? { voicevoxApiKey } : {}), ...(openAIKey !== undefined ? { openAIKey } : {}) })
-  }
+  const { voicevoxApiKey, voicevoxApiKeyOrigin, openAIKey, ...otherSettings } = settings
+  const keys = Object.fromEntries(
+    Object.entries({ voicevoxApiKey, voicevoxApiKeyOrigin, openAIKey }).filter(([, value]) => value !== undefined),
+  ) as Partial<ApiKeys>
+  if (Object.keys(keys).length > 0) saveApiKeys(keys)
 
   if (Object.keys(otherSettings).length > 0) {
     const current = loadSettings()
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { voicevoxApiKey: _vv, openAIKey: _oa, ...persistedSettings } = current
+    const { voicevoxApiKey: _vv, voicevoxApiKeyOrigin: _vo, openAIKey: _oa, ...persistedSettings } = current
     localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...persistedSettings, ...otherSettings }))
   }
 }

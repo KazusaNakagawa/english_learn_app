@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { playTTS, stopTTS, type VoiceType } from '@/services/AudioService'
+import { resolveVoicevox } from '@/lib/voicevox'
 import { loadSettings } from '@/services/SettingsService'
 import { useWord } from '@/hooks/useWords'
 import type { Sentence } from '@/types/word'
@@ -64,7 +65,7 @@ export default function SentenceListPage() {
   const grouped = groupByCategory(word.sentences)
   const flatSentences = grouped.flatMap(([, sents]) => sents)
   const s = loadSettings()
-  const resolvedVvKey = s.voicevoxApiKey || (import.meta.env.VITE_VOICEVOX_API_KEY_POC ?? '')
+  const voicevox = resolveVoicevox(s)
 
   // A stopped playTTS can stay pending through a cold start, so a shared flag
   // would be reset by the next tap. Each run checks its own id instead.
@@ -89,7 +90,7 @@ export default function SentenceListPage() {
       await playTTS(lang === 'en' ? word!.word : word!.meaning, {
         voice: (lang === 'en' ? s.enVoice : s.jaVoice) as VoiceType,
         speakerId: s.voicevoxStyle,
-        apiKey: resolvedVvKey,
+        ...voicevox,
         lang,
       })
     } catch (err) {
@@ -115,7 +116,7 @@ export default function SentenceListPage() {
         await playTTS(sentence.english, {
           voice: s.enVoice as VoiceType,
           speakerId: s.voicevoxStyle,
-          apiKey: resolvedVvKey,
+          ...voicevox,
           lang: 'en',
         })
         if (isCancelled()) break
@@ -127,7 +128,7 @@ export default function SentenceListPage() {
           await playTTS(sentence.japanese, {
             voice: s.jaVoice as VoiceType,
             speakerId: s.voicevoxStyle,
-            apiKey: resolvedVvKey,
+            ...voicevox,
             lang: 'ja',
           })
           if (isCancelled()) break
@@ -136,7 +137,7 @@ export default function SentenceListPage() {
           await playTTS(sentence.english, {
             voice: s.enVoice as VoiceType,
             speakerId: s.voicevoxStyle,
-            apiKey: resolvedVvKey,
+            ...voicevox,
             lang: 'en',
           })
         } else {
@@ -144,7 +145,7 @@ export default function SentenceListPage() {
           await playTTS(sentence.english, {
             voice: s.enVoice as VoiceType,
             speakerId: s.voicevoxStyle,
-            apiKey: resolvedVvKey,
+            ...voicevox,
             lang: 'en',
           })
         }

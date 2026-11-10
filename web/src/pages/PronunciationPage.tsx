@@ -4,6 +4,7 @@ import { ChevronLeft, Volume2, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { playTTS, stopTTS, type VoiceType } from '@/services/AudioService'
+import { resolveVoicevox } from '@/lib/voicevox'
 import { loadSettings } from '@/services/SettingsService'
 import { useWord } from '@/hooks/useWords'
 
@@ -42,12 +43,12 @@ export default function PronunciationPage() {
     if (playingLang) return
     setPlayingLang(lang)
     const s = loadSettings()
-    const resolvedVvKey = s.voicevoxApiKey || (import.meta.env.VITE_VOICEVOX_API_KEY_POC ?? '')
+    const voicevox = resolveVoicevox(s)
     try {
       await playTTS(lang === 'en' ? sentence!.english : sentence!.japanese, {
         voice: (lang === 'en' ? s.enVoice : s.jaVoice) as VoiceType,
         speakerId: s.voicevoxStyle,
-        apiKey: resolvedVvKey,
+        ...voicevox,
         lang,
       })
     } catch (err) {

@@ -1,6 +1,6 @@
 # 英語学習アプリ (EnglishLearnApp)
 
-AI による例文生成と音声合成を組み合わせた、発音練習に特化した iOS アプリです。
+AI による例文生成と音声合成を組み合わせた、発音練習に特化した iOS アプリです。ブラウザで動く [Web 版](#web-版ブラウザ) もあります。
 
 ## 機能一覧
 
@@ -113,52 +113,6 @@ OpenAI の API キーを入力すると、単語追加時に例文を自動生�
 スキップして後から設定画面で入力することも可能です。
 
 > API キーは iOS Keychain に安全に保存されます。
-
----
-
-## Web 版（ブラウザ）の起動手順
-
-`web/` にブラウザで動く版（React + Vite）があります。単語や例文はブラウザの IndexedDB に保存され、サーバーは要りません。
-
-### 1. 依存パッケージのインストール
-
-```bash
-cd web
-npm install
-```
-
-### 2. 環境変数ファイルの作成（任意）
-
-```bash
-cp .env.example .env
-```
-
-VOICEVOX の接続先（`VITE_VOICEVOX_ENDPOINT_POC`）が空のままなら、音声はブラウザの読み上げ（Web Speech API）だけになります。ずんだもん音声を手元の Docker で鳴らす手順は [docs/web/local-voicevox.md](docs/web/local-voicevox.md) を参照してください。
-
-`.env` の値はビルド時に埋め込まれるので、書き換えたら開発サーバーを起動し直してください。
-
-### 3. 開発サーバーの起動
-
-```bash
-npm run dev
-```
-
-ブラウザで http://localhost:5173 を開くと、サンプルの単語が並んだ単語一覧が表示されます。
-
-### 4. OpenAI API キーの設定（任意）
-
-設定画面で OpenAI の API キーを入力すると、単語の追加・編集画面で例文を生成できます。
-
-> Web 版の API キーは sessionStorage に保存されるため、タブを閉じると消えます。
-
-### その他のコマンド
-
-| コマンド | 内容 |
-|---------|------|
-| `npm test` | 単体テスト（Vitest） |
-| `npm run lint` | ESLint |
-| `npm run build` | 型チェックと本番ビルド（`dist/`） |
-| `npm run preview` | ビルドしたものをローカルで確認 |
 
 ---
 
@@ -282,6 +236,62 @@ npm run dev
 
 - 設定画面で OpenAI API キーが入力されているか確認
 - API キーの使用制限・クレジット残高を OpenAI ダッシュボードで確認
+
+---
+
+## Web 版（ブラウザ）
+
+`web/` に、ブラウザで動く版があります（React + Vite）。単語データはブラウザの IndexedDB に保存し、サーバーは要りません。
+
+できること:
+
+- 単語の追加・編集・ゴミ箱（10 日間は復元可能）・アーカイブ
+- iOS 版と同じ形式の JSON で単語データをインポート（追加 / 置き換え）・エクスポート
+- 例文の読み上げ（ずんだもん / ブラウザの音声）と連続再生、音声キャッシュ
+- OpenAI API による例文の自動生成（API キーを設定画面で入力）
+
+> Web 版の API キー（OpenAI / VOICEVOX）は sessionStorage に保存されるため、タブを閉じると消えます。
+
+### 起動
+
+Node.js 20 以上が必要です（Node.js 24 で動作確認）。
+
+```bash
+cd web
+npm install
+cp .env.example .env   # 初回のみ。中身は空のままでも動きます
+npm run dev
+```
+
+ブラウザで http://localhost:5173/ を開くと、サンプルの単語が並んだ単語一覧が表示されます。単語データ、音声キャッシュ、設定は、開いた URL（ポート番号を含む）ごとに保存されます。別のポートで開くと、登録した単語は見えません。
+
+### ずんだもん音声の接続先
+
+接続先は、設定画面の「VOICEVOX設定」で入力します。入力した値は次の再生から使われ、再ビルドや開発サーバーの再起動は要りません。
+
+| 使い方 | 設定画面の接続先 | API キー |
+|------|------|------|
+| ローカルの Docker | `http://127.0.0.1:50021` | 不要 |
+| AWS（このリポジトリの CDK スタック） | API Gateway の URL | 必要 |
+| 使わない | 空欄（`.env` にも接続先がないとき） | — |
+
+- 欄が空のときは、`.env` の `VITE_VOICEVOX_ENDPOINT_POC` を既定の接続先として使います。`.env` の `VITE_VOICEVOX_API_KEY_POC` は、この既定の接続先にだけ送ります。
+- 設定画面で入力した API キーは、入力したときの接続先にだけ送ります。
+- 「接続テスト」で、つながるかと、API キーが正しいかを確かめられます。
+- 接続先がない、つながらない、キーがないときは、ブラウザの音声で読みます。
+
+ローカルの Docker でエンジンを動かす手順は [docs/web/local-voicevox.md](docs/web/local-voicevox.md) を参照してください。
+
+### テスト・ビルド
+
+```bash
+cd web
+npm test          # vitest
+npx tsc -b        # 型チェック（ルートの tsconfig は参照だけなので -b が必要）
+npm run lint
+npm run build     # 型チェックと本番ビルド（dist/）
+npm run preview   # ビルドしたものをローカルで確認
+```
 
 ---
 
