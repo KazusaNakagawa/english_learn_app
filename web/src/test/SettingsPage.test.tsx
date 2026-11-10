@@ -143,7 +143,7 @@ describe('SettingsPage', () => {
     })
 
     it('does not show a late result under an endpoint typed after the test started', async () => {
-      let answer = (_: Response) => {}
+      let answer: (res: Response) => void = () => {}
       vi.stubGlobal('fetch', vi.fn((_: string, init: RequestInit) => new Promise<Response>((resolve, reject) => {
         answer = resolve
         init.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))
