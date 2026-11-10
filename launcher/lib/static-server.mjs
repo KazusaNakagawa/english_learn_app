@@ -37,19 +37,16 @@ function send(res, status, body, headers = {}) {
   res.end(body)
 }
 
-/** Map a request path to a file under root, or return an HTTP status. */
-function resolveFile(root, rawPath) {
+/** Decode a request path, mapping "/" to the index. Null when it is malformed. */
+function decodePath(rawPath) {
   let path
   try {
     path = decodeURIComponent(rawPath)
   } catch {
-    return 400
+    return null
   }
-  if (path.includes("\0")) return 400
-  if (path === "/" || path === "") path = "/index.html"
-  const file = resolve(root, `.${path}`)
-  if (file !== root && !file.startsWith(root + sep)) return 403
-  return file
+  if (path.includes("\0")) return null
+  return path === "/" || path === "" ? "/index.html" : path
 }
 
 /**
@@ -73,8 +70,12 @@ export function createAppServer({ root, version }) {
       })
     }
 
-    const file = resolveFile(base, pathname)
-    if (typeof file === "number") return send(res, file, file === 400 ? "Bad Request" : "Forbidden")
+    const path = decodePath(pathname)
+    if (path === null) return send(res, 400, "Bad Request")
+    // Kept inline (not in a helper) so static analysis sees the containment
+    // check guarding the file system calls below.
+    const file = resolve(base, `.${path}`)
+    if (!file.startsWith(base + sep)) return send(res, 403, "Forbidden")
 
     let stat
     try {
