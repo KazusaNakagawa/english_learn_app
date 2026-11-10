@@ -7,6 +7,8 @@
  */
 
 import { SAMPLE_WORDS } from '@/data/sampleWords'
+import { newId } from '@/lib/id'
+import type { WordInput } from '@/lib/wordForm'
 import type { Word } from '@/types/word'
 import { openDB } from './db'
 
@@ -276,4 +278,22 @@ export function getTrashedWords(now = Date.now()): Promise<Word[]> {
       finish(trashed.sort((a, b) => Date.parse(b.deletedAt ?? '') - Date.parse(a.deletedAt ?? '')))
     }
   })
+}
+
+/** Stores a word typed in by the user, giving it and its sentences new ids. */
+export async function addWord(input: WordInput, now = new Date()): Promise<Word> {
+  const word: Word = {
+    id: newId(),
+    word: input.word,
+    meaning: input.meaning,
+    phonetic: input.phonetic,
+    sentences: input.sentences.map((s) => ({ id: newId(), ...s })),
+    createdAt: now.toISOString(),
+    isFavorite: false,
+  }
+  await update<void>((store, finish) => {
+    store.put(word)
+    finish()
+  })
+  return word
 }
