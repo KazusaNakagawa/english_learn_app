@@ -35,7 +35,7 @@ EnglishLearnApp を Xcode でビルド・実行します。
 ビルド前に以下のファイルが必要:
 
 - `EnglishLearnApp/EnglishLearnApp/AppConfig.swift` - `AppConfig.swift.example` からコピー
-- `EnglishLearnApp/Config.xcconfig` - `Config.xcconfig.example` からコピー
+- `EnglishLearnApp/EnglishLearnApp/Config.xcconfig` - `Config.xcconfig.example` からコピー
 
 ## 引数
 
