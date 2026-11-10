@@ -13,3 +13,17 @@ Blob.prototype.text ??= function (this: Blob) {
     reader.readAsText(this)
   })
 }
+
+// jsdom has no PointerEvent, so fireEvent.pointer* would drop clientX and pointerId
+if (!('PointerEvent' in window)) {
+  class PointerEventPolyfill extends MouseEvent {
+    pointerId: number
+    pointerType: string
+    constructor(type: string, init: PointerEventInit = {}) {
+      super(type, init)
+      this.pointerId = init.pointerId ?? 1
+      this.pointerType = init.pointerType ?? 'touch'
+    }
+  }
+  Object.assign(window, { PointerEvent: PointerEventPolyfill })
+}

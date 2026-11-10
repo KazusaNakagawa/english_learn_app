@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getWord, getWords } from '@/services/WordRepository'
+import { getTrashedWords, getWord, getWords } from '@/services/WordRepository'
 import type { Word } from '@/types/word'
 
 export type LoadState<T> =
@@ -7,28 +7,34 @@ export type LoadState<T> =
   | { status: 'ready'; data: T }
   | { status: 'error' }
 
-/** Feeds a load into state, ignoring it once the effect is cleaned up. */
-function track<T>(load: Promise<T>, setState: (state: LoadState<T>) => void): () => void {
-  let active = true
-  setState({ status: 'loading' })
-  load.then(
-    (data) => { if (active) setState({ status: 'ready', data }) },
-    (err) => {
-      console.error('[useWords] failed to load words:', err)
-      if (active) setState({ status: 'error' })
-    },
-  )
-  return () => { active = false }
+/** Loads once per `key`, ignoring a result that arrives after the effect is cleaned up. */
+function useLoad<T>(load: () => Promise<T>, key: unknown): LoadState<T> {
+  const [state, setState] = useState<LoadState<T>>({ status: 'loading' })
+  useEffect(() => {
+    let active = true
+    setState({ status: 'loading' })
+    load().then(
+      (data) => { if (active) setState({ status: 'ready', data }) },
+      (err) => {
+        console.error('[useWords] failed to load words:', err)
+        if (active) setState({ status: 'error' })
+      },
+    )
+    return () => { active = false }
+    // `load` is a new closure on every render; `key` says when it really changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key])
+  return state
 }
 
 export function useWords(): LoadState<Word[]> {
-  const [state, setState] = useState<LoadState<Word[]>>({ status: 'loading' })
-  useEffect(() => track(getWords(), setState), [])
-  return state
+  return useLoad(getWords, 'words')
 }
 
 export function useWord(id: string | undefined): LoadState<Word | null> {
-  const [state, setState] = useState<LoadState<Word | null>>({ status: 'loading' })
-  useEffect(() => track(id ? getWord(id) : Promise.resolve(null), setState), [id])
-  return state
+  return useLoad(() => (id ? getWord(id) : Promise.resolve(null)), id)
+}
+
+export function useTrashedWords(): LoadState<Word[]> {
+  return useLoad(getTrashedWords, 'trash')
 }

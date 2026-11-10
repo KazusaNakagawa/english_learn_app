@@ -8,6 +8,10 @@ import { Volume2, Loader2 } from 'lucide-react'
 import { playTTS, stopTTS, type VoiceType } from '@/services/AudioService'
 import { loadSettings } from '@/services/SettingsService'
 import { useWords } from '@/hooks/useWords'
+import { SwipeToDelete } from '@/components/SwipeToDelete'
+import { UNDO_TOAST_MS } from '@/lib/ui'
+import { restoreWord, trashWord } from '@/services/WordRepository'
+import type { Word } from '@/types/word'
 
 const appVersion = import.meta.env.VITE_APP_VERSION ?? '—'
 const appEnv = import.meta.env.VITE_APP_ENV ?? '—'
@@ -21,7 +25,12 @@ export default function WordListPage() {
   const [playingId, setPlayingId] = useState<string | null>(null) // `${id}-en` | `${id}-ja`
 
   const wordsState = useWords()
-  const words = wordsState.status === 'ready' ? wordsState.data : []
+  // Trashing hides the word here instead of reloading, so the list does not flash.
+  const [trashedIds, setTrashedIds] = useState<ReadonlySet<string>>(new Set())
+  // Undo covers the most recently trashed word only; earlier ones stay restorable from the trash page.
+  const [toast, setToast] = useState<{ text: string; undo: Word | null } | null>(null)
+  const [openSwipeId, setOpenSwipeId] = useState<string | null>(null)
+  const words = (wordsState.status === 'ready' ? wordsState.data : []).filter((w) => !trashedIds.has(w.id))
 
   const filtered = words.filter((w) => {
     const matchesSearch =
@@ -56,6 +65,47 @@ export default function WordListPage() {
       console.error('[WordListPage] playback failed:', err)
     } finally {
       setPlayingId(null)
+    }
+  }
+
+  useEffect(() => {
+    if (!toast) return
+    const timer = setTimeout(() => setToast(null), UNDO_TOAST_MS)
+    return () => clearTimeout(timer)
+  }, [toast])
+
+  async function moveToTrash(word: Word) {
+    // Its card is about to go, taking the only control that could stop it.
+    if (playingId?.startsWith(`${word.id}-`)) {
+      stopTTS()
+      setPlayingId(null)
+    }
+    try {
+      await trashWord(word.id)
+      setTrashedIds((prev) => new Set(prev).add(word.id))
+      setToast({ text: `「${word.word}」をゴミ箱に移動しました`, undo: word })
+    } catch (err) {
+      console.error('[WordListPage] trash failed:', err)
+      // An undo still pending for an earlier word stays usable.
+      setToast((prev) => ({ text: 'ゴミ箱に移動できませんでした', undo: prev?.undo ?? null }))
+      throw err
+    }
+  }
+
+  async function undoTrash() {
+    const word = toast?.undo
+    if (!word) return
+    try {
+      await restoreWord(word.id)
+      setTrashedIds((prev) => {
+        const next = new Set(prev)
+        next.delete(word.id)
+        return next
+      })
+      setToast(null)
+    } catch (err) {
+      console.error('[WordListPage] undo failed:', err)
+      setToast({ text: '元に戻せませんでした', undo: word }) // keeps the button so it can be retried
     }
   }
 
@@ -104,27 +154,65 @@ export default function WordListPage() {
         </p>
       </header>
 
+      {/* Fixed above the tab bar, so undo stays visible after trashing a word far down the list */}
+      {toast && (
+        <div className="fixed inset-x-0 bottom-20 z-20 px-4 pointer-events-none">
+          <div
+            role="status"
+            className="max-w-2xl mx-auto bg-neutral-800 text-white rounded-2xl pl-4 pr-2 py-1.5 flex items-center justify-between gap-2 shadow-lg pointer-events-auto"
+          >
+            <p className="text-sm truncate py-1">
+              {toast.text}
+            </p>
+            {toast.undo && (
+              <Button size="sm" variant="ghost" className="shrink-0 text-[var(--ios-blue)] hover:bg-white/10" onClick={undoTrash}>
+                元に戻す
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Word list */}
-      <main className="max-w-2xl mx-auto px-4 pb-4 space-y-2">
+      <main
+        className={cn('max-w-2xl mx-auto px-4 space-y-2', toast ? 'pb-20' : 'pb-4')}
+        onPointerDownCapture={(e) => {
+          // Touching anywhere but the open row closes it, as on iOS.
+          if (openSwipeId && !(e.target as Element).closest('[data-swipe-open="true"]')) setOpenSwipeId(null)
+        }}
+      >
         {wordsState.status === 'loading' ? null : wordsState.status === 'error' ? (
           <p className="text-sm text-muted-foreground text-center py-12">単語データを読み込めませんでした</p>
         ) : filtered.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-12">該当する単語がありません</p>
         ) : (
           filtered.map((word) => (
-            <div
+            <SwipeToDelete
               key={word.id}
+              open={openSwipeId === word.id}
+              onOpenChange={(open) => setOpenSwipeId(open ? word.id : null)}
+              onDelete={() => moveToTrash(word)}
+              deleteLabel={`「${word.word}」をゴミ箱へ移動`}
+            >
+            <div
               role="button"
               tabIndex={0}
               aria-label={`${word.word} — 例文一覧へ`}
               onClick={() => navigate(`/words/${word.id}/sentences`)}
               onKeyDown={(e) => {
+                // Keys pressed on the buttons inside the card belong to those buttons.
+                if (e.target !== e.currentTarget) return
+                if (e.key === 'Delete' || e.key === 'Backspace') {
+                  e.preventDefault()
+                  void moveToTrash(word).catch(() => {})
+                  return
+                }
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault()
                   navigate(`/words/${word.id}/sentences`)
                 }
               }}
-              className="bg-white rounded-2xl px-4 py-3 flex items-center gap-3 cursor-pointer active:opacity-70 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ios-blue)]"
+              className="bg-white px-4 py-3 flex items-center gap-3 cursor-pointer active:opacity-70 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ios-blue)]"
             >
               {/* Left: text info */}
               <div className="flex-1 min-w-0">
@@ -172,6 +260,7 @@ export default function WordListPage() {
                 })}
               </div>
             </div>
+            </SwipeToDelete>
           ))
         )}
       </main>

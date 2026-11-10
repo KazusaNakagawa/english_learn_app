@@ -148,11 +148,17 @@ export interface MergeResult {
 }
 
 /** Adds words whose id is not stored yet, trash included, as iOS does. */
-export function mergeWords(imported: Word[]): Promise<MergeResult> {
+export function mergeWords(imported: Word[], now = Date.now()): Promise<MergeResult> {
   return update((store, finish) => {
-    const keys = store.getAllKeys()
-    keys.onsuccess = () => {
-      const stored = new Set(keys.result.map(sameId))
+    const all: IDBRequest<unknown[]> = store.getAll()
+    all.onsuccess = () => {
+      const stored = new Set<string>()
+      for (const record of all.result) {
+        if (!isRecord(record) || typeof record.id !== 'string') continue
+        // Expired trash is as good as gone, so its id may come back.
+        if (isWord(record) && isExpiredTrash(record, now)) store.delete(record.id)
+        else stored.add(sameId(record.id))
+      }
       const seen = new Set<string>()
       let duplicates = 0
       const fresh = imported.filter((w) => {
@@ -178,7 +184,7 @@ export interface ReplaceResult {
 }
 
 /** Replaces everything except trashed words whose id is not being imported. */
-export function replaceWords(imported: Word[]): Promise<ReplaceResult> {
+export function replaceWords(imported: Word[], now = Date.now()): Promise<ReplaceResult> {
   const words = lastPerId(imported)
   const ids = new Set(words.map((w) => sameId(w.id)))
   return update((store, finish) => {
@@ -189,13 +195,85 @@ export function replaceWords(imported: Word[]): Promise<ReplaceResult> {
       if (current) {
         const record: unknown = current.value
         const isMarker = isRecord(record) && record.id === SEEDED_MARKER_ID
-        const keep = isMarker || (isWord(record) && !!record.deletedAt && !ids.has(sameId(record.id)))
+        const keep = isMarker || (
+          isWord(record) && !!record.deletedAt && !isExpiredTrash(record, now) && !ids.has(sameId(record.id))
+        )
         if (!keep) current.delete()
         current.continue()
         return
       }
       words.forEach((w) => store.put(w))
       finish({ stored: words.length, hidden: words.filter(isHidden).length })
+    }
+  })
+}
+
+export const TRASH_RETENTION_DAYS = 10
+const DAY_MS = 24 * 60 * 60 * 1000
+
+/** Rewrites one word, or deletes it when `change` returns null. Unknown ids are ignored. */
+function modifyWord(id: string, change: (word: Word) => Word | null): Promise<void> {
+  return update<void>((store, finish) => {
+    const request = store.get(id)
+    request.onsuccess = () => {
+      const record: unknown = request.result
+      if (isWord(record)) {
+        const next = change(record)
+        if (next) store.put(next)
+        else store.delete(id)
+      }
+      finish()
+    }
+  })
+}
+
+export function trashWord(id: string, now = new Date()): Promise<void> {
+  return modifyWord(id, (word) => ({ ...word, deletedAt: now.toISOString() }))
+}
+
+export function restoreWord(id: string): Promise<void> {
+  return modifyWord(id, (word) => {
+    const restored = { ...word }
+    delete restored.deletedAt
+    return restored
+  })
+}
+
+export function deleteWordPermanently(id: string): Promise<void> {
+  return modifyWord(id, () => null)
+}
+
+/** Due for purging once the full retention period has passed, the moment the days left reach 0. */
+function isExpiredTrash(word: Word, now: number): boolean {
+  return !!word.deletedAt && Date.parse(word.deletedAt) + TRASH_RETENTION_DAYS * DAY_MS <= now
+}
+
+/** Whole days left, rounded up, so a word trashed just now shows the full 10. */
+export function daysUntilPurge(deletedAt: string, now = Date.now()): number {
+  const left = Date.parse(deletedAt) + TRASH_RETENTION_DAYS * DAY_MS - now
+  return Math.max(0, Math.ceil(left / DAY_MS))
+}
+
+/**
+ * Trashed words, newest first. Words trashed more than 10 days ago are purged
+ * on the way, as the iOS app does.
+ */
+export function getTrashedWords(now = Date.now()): Promise<Word[]> {
+  return update<Word[]>((store, finish) => {
+    const trashed: Word[] = []
+    const cursor = store.openCursor()
+    cursor.onsuccess = () => {
+      const current = cursor.result
+      if (current) {
+        const record: unknown = current.value
+        if (isWord(record) && record.deletedAt) {
+          if (isExpiredTrash(record, now)) current.delete()
+          else trashed.push(record)
+        }
+        current.continue()
+        return
+      }
+      finish(trashed.sort((a, b) => Date.parse(b.deletedAt ?? '') - Date.parse(a.deletedAt ?? '')))
     }
   })
 }

@@ -2,7 +2,19 @@ import { IDBFactory } from 'fake-indexeddb'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { SAMPLE_WORDS } from '@/data/sampleWords'
 import { openDB } from '@/services/db'
-import { getWord, getWords, getWordsForExport, mergeWords, replaceWords, SEEDED_MARKER_ID } from '@/services/WordRepository'
+import {
+  daysUntilPurge,
+  deleteWordPermanently,
+  getTrashedWords,
+  getWord,
+  getWords,
+  getWordsForExport,
+  mergeWords,
+  replaceWords,
+  restoreWord,
+  SEEDED_MARKER_ID,
+  trashWord,
+} from '@/services/WordRepository'
 import { parseWordFile, serializeWords } from '@/services/WordTransfer'
 import type { Word } from '@/types/word'
 
@@ -261,6 +273,109 @@ describe('WordRepository', () => {
       await expect(replaceWords([makeWord('c', 'cherry'), bad])).rejects.toBeDefined()
       const words = await getWords()
       expect(words.map((w) => w.word)).toEqual(['apple'])
+    })
+  })
+
+  describe('trash', () => {
+    const DAY = 24 * 60 * 60 * 1000
+    const NOW = Date.parse('2026-11-10T12:00:00.000Z')
+
+    it('moves a word to the trash, hiding it from the list and the export', async () => {
+      await store(makeWord('a', 'apple'), makeWord('b', 'banana'))
+      await trashWord('a', new Date(NOW))
+      expect((await getWords()).map((w) => w.word)).toEqual(['banana'])
+      expect((await getWordsForExport()).map((w) => w.word)).toEqual(['banana'])
+      expect((await getWord('a'))?.deletedAt).toBe('2026-11-10T12:00:00.000Z')
+    })
+
+    it('restores a word to the list', async () => {
+      await store(makeWord('a', 'apple', { deletedAt: TRASHED_AT }))
+      await restoreWord('a')
+      expect((await getWords()).map((w) => w.word)).toEqual(['apple'])
+      expect(await getWord('a')).not.toHaveProperty('deletedAt')
+    })
+
+    it('deletes a word permanently', async () => {
+      await store(makeWord('a', 'apple', { deletedAt: TRASHED_AT }), makeWord('b', 'banana'))
+      await deleteWordPermanently('a')
+      await expect(getWord('a')).resolves.toBeNull()
+      expect((await getWords()).map((w) => w.word)).toEqual(['banana'])
+    })
+
+    it('ignores an unknown id', async () => {
+      await store(makeWord('a', 'apple'))
+      await expect(trashWord('missing')).resolves.toBeUndefined()
+      await expect(restoreWord('missing')).resolves.toBeUndefined()
+      await expect(deleteWordPermanently('missing')).resolves.toBeUndefined()
+      expect((await getWords()).map((w) => w.word)).toEqual(['apple'])
+    })
+
+    it('lists trashed words newest first, without active ones', async () => {
+      await store(
+        makeWord('a', 'active'),
+        makeWord('o', 'older', { deletedAt: new Date(NOW - 2 * DAY).toISOString() }),
+        makeWord('n', 'newer', { deletedAt: new Date(NOW - DAY).toISOString() }),
+      )
+      const trashed = await getTrashedWords(NOW)
+      expect(trashed.map((w) => w.word)).toEqual(['newer', 'older'])
+    })
+
+    it('purges a word once it has been in the trash for 10 days, keeping one just under', async () => {
+      await store(
+        makeWord('e', 'expired', { deletedAt: new Date(NOW - 10 * DAY).toISOString() }),
+        makeWord('k', 'kept', { deletedAt: new Date(NOW - 10 * DAY + 1).toISOString() }),
+      )
+      const trashed = await getTrashedWords(NOW)
+      expect(trashed.map((w) => w.word)).toEqual(['kept'])
+      await expect(getWord('e')).resolves.toBeNull()
+    })
+
+    it('orders by time, not by how the date string is written', async () => {
+      await store(
+        makeWord('o', 'older', { deletedAt: '2026-11-09T01:00:00+09:00' }),
+        makeWord('n', 'newer', { deletedAt: '2026-11-08T20:00:00.000Z' }),
+      )
+      const trashed = await getTrashedWords(NOW)
+      expect(trashed.map((w) => w.word)).toEqual(['newer', 'older'])
+    })
+
+    it('lets a merge bring back an id whose trash entry has expired', async () => {
+      await store(makeWord('e', 'expired', { deletedAt: new Date(NOW - 11 * DAY).toISOString() }))
+      const result = await mergeWords([makeWord('e', 'imported')], NOW)
+      expect(result).toEqual({ added: 1, skipped: 0, duplicates: 0, hidden: 0 })
+      const word = await getWord('e')
+      expect(word?.word).toBe('imported')
+      expect(word?.deletedAt).toBeUndefined()
+    })
+
+    it('still skips an id that is in the trash and not yet expired', async () => {
+      await store(makeWord('t', 'trashed', { deletedAt: new Date(NOW - DAY).toISOString() }))
+      await expect(mergeWords([makeWord('t', 'imported')], NOW)).resolves.toMatchObject({ added: 0, skipped: 1 })
+    })
+
+    it('drops expired trash when replacing', async () => {
+      await store(
+        makeWord('e', 'expired', { deletedAt: new Date(NOW - 11 * DAY).toISOString() }),
+        makeWord('t', 'trashed', { deletedAt: new Date(NOW - DAY).toISOString() }),
+      )
+      await replaceWords([makeWord('b', 'banana')], NOW)
+      await expect(getWord('e')).resolves.toBeNull()
+      expect((await getWord('t'))?.word).toBe('trashed')
+    })
+
+    it('returns an empty trash when nothing is deleted', async () => {
+      await store(makeWord('a', 'apple'))
+      await expect(getTrashedWords(NOW)).resolves.toEqual([])
+    })
+
+    it.each([
+      ['just trashed', 0, 10],
+      ['one hour in', 1 / 24, 10],
+      ['nine and a half days in', 9.5, 1],
+      ['exactly ten days in', 10, 0],
+    ])('counts days left until purge when %s', (_, daysAgo, left) => {
+      const deletedAt = new Date(NOW - daysAgo * DAY).toISOString()
+      expect(daysUntilPurge(deletedAt, NOW)).toBe(left)
     })
   })
 
