@@ -76,6 +76,14 @@ describe('WordRepository', () => {
       await expect(getWords()).resolves.toHaveLength(SAMPLE_WORDS.length)
     })
 
+    it('ignores records written by the PoC screen, which have no sentences', async () => {
+      const poc = { id: 'purge-test-1', word: 'poc', meaning: 'x', status: 'active', deleted_at: null }
+      await store(makeWord('a', 'apple'), poc as unknown as Word)
+      const words = await getWords()
+      expect(words.map((w) => w.word)).toEqual(['apple'])
+      await expect(getWord('purge-test-1')).resolves.toBeNull()
+    })
+
     it('rejects when the database cannot be opened', async () => {
       vi.stubGlobal('indexedDB', { open: () => { throw new Error('blocked') } })
       await expect(getWords()).rejects.toThrow('blocked')
