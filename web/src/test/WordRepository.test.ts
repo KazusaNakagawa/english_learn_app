@@ -2,7 +2,7 @@ import { IDBFactory } from 'fake-indexeddb'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { SAMPLE_WORDS } from '@/data/sampleWords'
 import { openDB } from '@/services/db'
-import { getWord, getWords, getWordsForExport, mergeWords, replaceWords } from '@/services/WordRepository'
+import { getWord, getWords, getWordsForExport, mergeWords, replaceWords, SEEDED_MARKER_ID } from '@/services/WordRepository'
 import { parseWordFile, serializeWords } from '@/services/WordTransfer'
 import type { Word } from '@/types/word'
 
@@ -85,6 +85,40 @@ describe('WordRepository', () => {
       const words = await getWords()
       expect(words.map((w) => w.word)).toEqual(['apple'])
       await expect(getWord('purge-test-1')).resolves.toBeNull()
+    })
+
+    it('seeds the samples when the store holds only PoC records', async () => {
+      await store({ id: 'purge-test-1', word: 'poc', meaning: 'x' } as unknown as Word)
+      await expect(getWords()).resolves.toHaveLength(SAMPLE_WORDS.length)
+    })
+
+    it('does not seed again once the list has been emptied', async () => {
+      await getWords()
+      const db = await openDB()
+      const tx = db.transaction('words', 'readwrite')
+      SAMPLE_WORDS.forEach((w) => tx.objectStore('words').delete(w.id))
+      await new Promise((resolve) => { tx.oncomplete = resolve })
+      db.close()
+      await expect(getWords()).resolves.toEqual([])
+    })
+
+    it('marks a store that already held words as seeded without adding samples', async () => {
+      await store(makeWord('a', 'apple'))
+      await getWords()
+      const db = await openDB()
+      const marker = await new Promise((resolve) => {
+        const req = db.transaction('words').objectStore('words').get(SEEDED_MARKER_ID)
+        req.onsuccess = () => resolve(req.result)
+      })
+      db.close()
+      expect(marker).toBeDefined()
+      await expect(getWords()).resolves.toHaveLength(1)
+    })
+
+    it('ignores a word whose sentences are malformed', async () => {
+      await store(makeWord('a', 'apple'), makeWord('b', 'broken', { sentences: [{ id: 'x' }] as unknown as Word['sentences'] }))
+      const words = await getWords()
+      expect(words.map((w) => w.word)).toEqual(['apple'])
     })
 
     it('rejects when the database cannot be opened', async () => {
@@ -200,6 +234,12 @@ describe('WordRepository', () => {
       await store(makeWord('abcdef01-0000-4000-8000-000000000001', 'trashed', { deletedAt: TRASHED_AT }))
       await replaceWords([makeWord('ABCDEF01-0000-4000-8000-000000000001', 'restored')])
       await expect(getWord('abcdef01-0000-4000-8000-000000000001')).resolves.toBeNull()
+    })
+
+    it('does not bring the samples back after replacing', async () => {
+      await getWords()
+      await replaceWords([makeWord('b', 'banana')])
+      await expect(getWords()).resolves.toEqual([makeWord('b', 'banana')])
     })
 
     it('removes records written by the PoC screen', async () => {

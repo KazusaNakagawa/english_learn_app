@@ -2,7 +2,8 @@
  * WordRepository — the user's word list in IndexedDB.
  *
  * Words are stored with their sentences nested, matching the iOS words.json.
- * The sample words seed an empty store, so they disappear once replaced.
+ * The sample words seed a new database once, so they disappear once replaced
+ * and do not come back when the list is emptied.
  */
 
 import { SAMPLE_WORDS } from '@/data/sampleWords'
@@ -10,6 +11,9 @@ import type { Word } from '@/types/word'
 import { openDB } from './db'
 
 const STORE = 'words'
+
+/** Not a word, so every read skips it. Its presence means seeding is done. */
+export const SEEDED_MARKER_ID = '__samples_seeded__'
 
 function result<T>(request: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -32,13 +36,23 @@ function inTransaction<T>(
   })
 }
 
-/** Count and writes share one transaction, so racing first loads cannot double up. */
-function seedIfEmpty(db: IDBDatabase): Promise<void> {
+/**
+ * Seeds the samples the first time a database is used, unless it already holds
+ * words. The check and the writes share one transaction, so racing first loads
+ * cannot double up.
+ */
+function seedOnce(db: IDBDatabase): Promise<void> {
   return inTransaction<void>(db, (store, finish) => {
-    const count = store.count()
-    count.onsuccess = () => {
-      if (count.result === 0) SAMPLE_WORDS.forEach((word) => store.put(word))
-      finish()
+    const marker = store.get(SEEDED_MARKER_ID)
+    marker.onsuccess = () => {
+      if (marker.result) return finish()
+      // Only the first read of a database gets here, so reading it all is cheap.
+      const all = store.getAll()
+      all.onsuccess = () => {
+        if (!all.result.some(isWord)) SAMPLE_WORDS.forEach((word) => store.put(word))
+        store.put({ id: SEEDED_MARKER_ID })
+        finish()
+      }
     }
   })
 }
@@ -46,7 +60,7 @@ function seedIfEmpty(db: IDBDatabase): Promise<void> {
 async function read<T>(query: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
   const db = await openDB()
   try {
-    await seedIfEmpty(db)
+    await seedOnce(db)
     return await result(query(db.transaction(STORE).objectStore(STORE)))
   } finally {
     db.close()
@@ -62,18 +76,30 @@ async function update<T>(work: (store: IDBObjectStore, finish: (value: T) => voi
   }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function isSentence(value: unknown): boolean {
+  return isRecord(value)
+    && typeof value.id === 'string'
+    && typeof value.english === 'string'
+    && typeof value.japanese === 'string'
+    && typeof value.category === 'string'
+}
+
 /**
- * The PoC screen writes records of its own shape into this store, without
- * sentences. Pages would crash on them, so only well-formed words are read.
+ * Older builds of the PoC screen wrote records of their own shape into this
+ * store, and pages would crash on them, so only well-formed words are read.
  */
 function isWord(value: unknown): value is Word {
-  if (typeof value !== 'object' || value === null) return false
-  const w = value as Record<string, unknown>
-  return typeof w.id === 'string'
-    && typeof w.word === 'string'
-    && typeof w.meaning === 'string'
-    && typeof w.phonetic === 'string'
-    && Array.isArray(w.sentences)
+  return isRecord(value)
+    && typeof value.id === 'string'
+    && typeof value.word === 'string'
+    && typeof value.meaning === 'string'
+    && typeof value.phonetic === 'string'
+    && Array.isArray(value.sentences)
+    && value.sentences.every(isSentence)
 }
 
 function byWord(a: Word, b: Word): number {
@@ -162,7 +188,8 @@ export function replaceWords(imported: Word[]): Promise<ReplaceResult> {
       const current = cursor.result
       if (current) {
         const record: unknown = current.value
-        const keep = isWord(record) && !!record.deletedAt && !ids.has(sameId(record.id))
+        const isMarker = isRecord(record) && record.id === SEEDED_MARKER_ID
+        const keep = isMarker || (isWord(record) && !!record.deletedAt && !ids.has(sameId(record.id)))
         if (!keep) current.delete()
         current.continue()
         return

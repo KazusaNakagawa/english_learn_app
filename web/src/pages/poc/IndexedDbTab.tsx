@@ -18,6 +18,9 @@ function Result({ state }: { state: ResultState }) {
   )
 }
 
+// Kept apart from the app's EnglishLearnDB, which holds the real word list.
+const POC_DB_NAME = 'EnglishLearnPocDB'
+
 export default function IndexedDbTab({
   onResult,
 }: {
@@ -39,7 +42,7 @@ export default function IndexedDbTab({
 
   async function initDB() {
     try {
-      const req = indexedDB.open('EnglishLearnDB', 1)
+      const req = indexedDB.open(POC_DB_NAME, 1)
       req.onupgradeneeded = (e) => {
         const d = (e.target as IDBOpenDBRequest).result
 
@@ -61,7 +64,7 @@ export default function IndexedDbTab({
       })
       dbRef.current = db
       const stores = Array.from(db.objectStoreNames).join(', ')
-      setInitResult({ text: `✓ EnglishLearnDB v${db.version}\nStores: ${stores}`, type: 'ok' })
+      setInitResult({ text: `✓ ${POC_DB_NAME} v${db.version}\nStores: ${stores}`, type: 'ok' })
       onResult('idb_init', true)
     } catch (err) {
       setInitResult({ text: `✗ ${err}`, type: 'err' })
@@ -73,7 +76,7 @@ export default function IndexedDbTab({
     dbRef.current?.close()
     dbRef.current = null
     await new Promise<void>((res, rej) => {
-      const req = indexedDB.deleteDatabase('EnglishLearnDB')
+      const req = indexedDB.deleteDatabase(POC_DB_NAME)
       req.onsuccess = () => res()
       req.onerror = () => rej(req.error)
     })
