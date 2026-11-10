@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import VoicevoxTab from '@/pages/poc/VoicevoxTab'
@@ -43,6 +43,15 @@ describe('PoC VoicevoxTab', () => {
     await userEvent.click(screen.getByRole('button', { name: /WAV/ }))
     expect(fetchMock).not.toHaveBeenCalled()
     expect(screen.getByText(/no API key for this remote endpoint/)).toBeInTheDocument()
+  })
+
+  it('picks up an endpoint changed in Settings after the tab opened', async () => {
+    render(<VoicevoxTab onResult={() => {}} />)
+    saveSettings({ voicevoxEndpoint: 'http://localhost:50021' })
+    fireEvent.focus(window)
+    expect(screen.getByText('http://localhost:50021')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'GET /version' }))
+    expect(requested()).toEqual(['http://localhost:50021/version'])
   })
 
   it('reports a missing endpoint', async () => {
