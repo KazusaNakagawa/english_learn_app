@@ -170,6 +170,12 @@ export default function SentenceListPage() {
             <ChevronLeft size={18} />
             単語一覧
           </button>
+          <button
+            onClick={() => navigate(`/words/${id}/edit`)}
+            className="ml-auto text-[var(--ios-blue)] text-sm font-medium"
+          >
+            編集
+          </button>
         </div>
         <h1 className="text-xl font-bold text-center">例文一覧</h1>
       </header>

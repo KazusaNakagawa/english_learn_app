@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { emptySentenceRow, validateWordForm, type WordForm } from '@/lib/wordForm'
+import { emptySentenceRow, formFromWord, validateWordForm, type WordForm } from '@/lib/wordForm'
 
 const form = (extra: Partial<WordForm> = {}): WordForm => ({
   word: 'apple',
@@ -62,5 +62,33 @@ describe('validateWordForm', () => {
   it('reports every problem at once', () => {
     const result = validateWordForm(form({ word: '', meaning: '', sentences: [{ key: 'k', english: '', japanese: 'だけ', category: '' }] }))
     expect(result.errors).toHaveLength(3)
+  })
+})
+
+describe('formFromWord', () => {
+  const word = {
+    id: 'W',
+    word: 'apple',
+    meaning: 'りんご',
+    phonetic: 'ˈæp.əl',
+    sentences: [{ id: 'S1', english: 'An apple.', japanese: 'りんご。', category: '' }],
+    createdAt: '2026-11-01T00:00:00.000Z',
+  }
+
+  it('fills the form from a stored word', () => {
+    const form = formFromWord(word)
+    expect(form).toMatchObject({ word: 'apple', meaning: 'りんご', phonetic: 'ˈæp.əl' })
+    expect(form.sentences).toEqual([expect.objectContaining({ id: 'S1', english: 'An apple.', japanese: 'りんご。' })])
+  })
+
+  it('keeps sentence ids through validation, so edits do not replace them', () => {
+    const { input } = validateWordForm(formFromWord(word))
+    expect(input?.sentences).toEqual([{ id: 'S1', english: 'An apple.', japanese: 'りんご。', category: '' }])
+  })
+
+  it('leaves new rows without an id', () => {
+    const form = formFromWord(word)
+    form.sentences.push({ ...emptySentenceRow(), english: 'New.', japanese: '新しい。' })
+    expect(validateWordForm(form).input?.sentences[1]).not.toHaveProperty('id')
   })
 })

@@ -4,6 +4,7 @@ import WordListPage from '@/pages/WordListPage'
 import SentenceListPage from '@/pages/SentenceListPage'
 import ArchivePage from '@/pages/ArchivePage'
 import AddPage from '@/pages/AddPage'
+import EditPage from '@/pages/EditPage'
 import TrashPage from '@/pages/TrashPage'
 import SettingsPage from '@/pages/SettingsPage'
 import PronunciationPage from '@/pages/PronunciationPage'
@@ -16,6 +17,7 @@ function App() {
         <Route path="/" element={<WordListPage />} />
         <Route path="/words/:id/sentences" element={<SentenceListPage />} />
         <Route path="/words/:id/pronunciation/:sentenceId" element={<PronunciationPage />} />
+        <Route path="/words/:id/edit" element={<EditPage />} />
         <Route path="/archive" element={<ArchivePage />} />
         <Route path="/add" element={<AddPage />} />
         <Route path="/trash" element={<TrashPage />} />

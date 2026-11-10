@@ -4,7 +4,7 @@ import { SAMPLE_WORDS } from '@/data/sampleWords'
 import { openDB } from '@/services/db'
 import {
   addWord,
-  getListedSpellings,
+  getIdsBySpelling,
   daysUntilPurge,
   deleteWordPermanently,
   getTrashedWords,
@@ -16,6 +16,7 @@ import {
   restoreWord,
   SEEDED_MARKER_ID,
   trashWord,
+  updateWord,
 } from '@/services/WordRepository'
 import { parseWordFile, serializeWords } from '@/services/WordTransfer'
 import type { Word } from '@/types/word'
@@ -419,19 +420,64 @@ describe('WordRepository', () => {
       expect((await getWords()).map((w) => w.word)).toEqual(['apple'])
     })
 
-    it('lists spellings of active and archived words, but not trashed ones', async () => {
+    it('maps spellings of active and archived words to their ids, leaving out trashed ones', async () => {
       await store(
         makeWord('a', 'Apple'),
         makeWord('r', 'archived', { archivedAt: TRASHED_AT }),
         makeWord('d', 'trashed', { deletedAt: TRASHED_AT }),
       )
-      await expect(getListedSpellings()).resolves.toEqual(new Set(['apple', 'archived']))
+      await store(makeWord('a2', 'APPLE'))
+      await expect(getIdsBySpelling()).resolves.toEqual(new Map([['apple', ['a', 'a2']], ['archived', ['r']]]))
     })
 
     it('survives an export and re-import with nothing added', async () => {
       await addWord(input)
       const exported = parseWordFile(serializeWords(await getWordsForExport()))
       await expect(mergeWords(exported)).resolves.toMatchObject({ added: 0 })
+    })
+  })
+
+  describe('updateWord', () => {
+    const stored = makeWord('A', 'aple', {
+      createdAt: '2026-11-01T00:00:00.000Z',
+      archivedAt: TRASHED_AT,
+      isFavorite: true,
+      sentences: [
+        { id: 'S1', english: 'An aple.', japanese: 'りんご。', category: '' },
+        { id: 'S2', english: 'Removed.', japanese: '消す。', category: '' },
+      ],
+    })
+
+    it('changes the text and keeps the id, dates, favorite, and kept sentence ids', async () => {
+      await store(stored)
+      await updateWord('A', {
+        word: 'apple',
+        meaning: 'りんご',
+        phonetic: 'ˈæp.əl',
+        sentences: [
+          { id: 'S1', english: 'An apple.', japanese: 'りんご。', category: '果物' },
+          { english: 'Added.', japanese: '追加。', category: '' },
+        ],
+      })
+      const word = await getWord('A')
+      expect(word).toMatchObject({
+        id: 'A',
+        word: 'apple',
+        meaning: 'りんご',
+        phonetic: 'ˈæp.əl',
+        createdAt: '2026-11-01T00:00:00.000Z',
+        archivedAt: TRASHED_AT,
+        isFavorite: true,
+      })
+      expect(word?.sentences.map((s) => s.english)).toEqual(['An apple.', 'Added.'])
+      expect(word?.sentences[0]).toEqual({ id: 'S1', english: 'An apple.', japanese: 'りんご。', category: '果物' })
+      expect(word?.sentences[1].id).toMatch(/^[0-9A-F-]{36}$/)
+    })
+
+    it('rejects an id that is not stored, changing nothing', async () => {
+      await store(stored)
+      await expect(updateWord('missing', { word: 'x', meaning: 'y', phonetic: '', sentences: [] })).rejects.toThrow()
+      expect((await getWord('A'))?.word).toBe('aple')
     })
   })
 

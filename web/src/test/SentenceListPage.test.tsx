@@ -99,6 +99,12 @@ describe('SentenceListPage', () => {
     expect(AudioService.stopTTS).toHaveBeenCalled()
   })
 
+  it('edit button opens the edit page', async () => {
+    await renderPage()
+    await userEvent.click(screen.getByRole('button', { name: '編集' }))
+    expect(mockNavigate).toHaveBeenCalledWith(`/words/${word.id}/edit`)
+  })
+
   it('back button navigates to word list', async () => {
     await renderPage()
     await userEvent.click(screen.getByText('単語一覧'))
