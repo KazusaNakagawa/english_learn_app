@@ -42,6 +42,20 @@ async function read<T>(query: (store: IDBObjectStore) => IDBRequest<T>): Promise
   }
 }
 
+/**
+ * The PoC screen writes records of its own shape into this store, without
+ * sentences. Pages would crash on them, so only well-formed words are read.
+ */
+function isWord(value: unknown): value is Word {
+  if (typeof value !== 'object' || value === null) return false
+  const w = value as Record<string, unknown>
+  return typeof w.id === 'string'
+    && typeof w.word === 'string'
+    && typeof w.meaning === 'string'
+    && typeof w.phonetic === 'string'
+    && Array.isArray(w.sentences)
+}
+
 function byWord(a: Word, b: Word): number {
   const [x, y] = [a.word.toLowerCase(), b.word.toLowerCase()]
   return x < y ? -1 : x > y ? 1 : 0
@@ -49,13 +63,13 @@ function byWord(a: Word, b: Word): number {
 
 /** Words on the active list, alphabetically. */
 export async function getWords(): Promise<Word[]> {
-  const words: Word[] = await read((store) => store.getAll())
-  return words.filter((w) => !w.deletedAt && !w.archivedAt).sort(byWord)
+  const records: unknown[] = await read((store) => store.getAll())
+  return records.filter(isWord).filter((w) => !w.deletedAt && !w.archivedAt).sort(byWord)
 }
 
 export async function getWord(id: string): Promise<Word | null> {
-  const word: Word | undefined = await read((store) => store.get(id))
-  return word ?? null
+  const record: unknown = await read((store) => store.get(id))
+  return isWord(record) ? record : null
 }
 
 /** Everything iOS would export: all words except those in the trash. */
