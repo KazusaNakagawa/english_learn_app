@@ -61,6 +61,23 @@ function readSentence(value: unknown): GeneratedSentence | null {
   return { english, japanese, category: isText(category) ? category : '' }
 }
 
+/**
+ * The usable part of a generated reply, or null when it has no sentence.
+ * Shared by the OpenAI and Claude Code paths (launcher/lib/generate.mjs mirrors it).
+ */
+export function readGeneratedContent(parsed: unknown): GeneratedContent | null {
+  const fields = (typeof parsed === 'object' && parsed !== null ? parsed : {}) as Record<string, unknown>
+  const sentences = (Array.isArray(fields.sentences) ? fields.sentences : [])
+    .map(readSentence)
+    .filter((s): s is GeneratedSentence => s !== null)
+  if (sentences.length === 0) return null
+  return {
+    meaning: isText(fields.meaning) ? fields.meaning.trim() : '',
+    phonetic: isText(fields.phonetic) ? fields.phonetic.trim().replace(/^\/+|\/+$/g, '') : '',
+    sentences,
+  }
+}
+
 function messageFor(status: number): string {
   if (status === 401) return 'APIキーが正しくありません'
   if (status === 429) return '利用上限に達したか混み合っています。しばらくしてから再試行してください'
@@ -113,15 +130,7 @@ export async function generateContent(word: string, { apiKey, model, signal }: O
   } catch {
     throw new GenerationError('例文を生成できませんでした')
   }
-  const fields = (typeof parsed === 'object' && parsed !== null ? parsed : {}) as Record<string, unknown>
-  const sentences = (Array.isArray(fields.sentences) ? fields.sentences : [])
-    .map(readSentence)
-    .filter((s): s is GeneratedSentence => s !== null)
-  if (sentences.length === 0) throw new GenerationError('例文を生成できませんでした')
-
-  return {
-    meaning: isText(fields.meaning) ? fields.meaning.trim() : '',
-    phonetic: isText(fields.phonetic) ? fields.phonetic.trim().replace(/^\/+|\/+$/g, '') : '',
-    sentences,
-  }
+  const content = readGeneratedContent(parsed)
+  if (!content) throw new GenerationError('例文を生成できませんでした')
+  return content
 }

@@ -175,7 +175,8 @@ describe('SettingsPage', () => {
     })
 
     it('tests the connection and shows the engine version', async () => {
-      const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify('0.25.1')))
+      // A fresh Response per call: the page also checks /api/health on mount.
+      const fetchMock = vi.fn(async () => new Response(JSON.stringify('0.25.1')))
       vi.stubGlobal('fetch', fetchMock)
       await renderPage()
       await userEvent.type(field(), 'http://127.0.0.1:50021')
@@ -305,6 +306,59 @@ describe('SettingsPage', () => {
       vi.stubGlobal('indexedDB', { open: () => { throw new Error('blocked') } })
       await userEvent.click(button)
       expect(await screen.findByText('単語の保存に失敗しました')).toBeInTheDocument()
+    })
+  })
+
+  describe('sentence generation provider', () => {
+    const health = (claude: object) => ({
+      ok: true, status: 200, json: async () => ({ app: 'english-learn-app', version: '0.1.0', claude }),
+    })
+
+    beforeEach(() => {
+      localStorage.clear()
+      sessionStorage.clear()
+    })
+    afterEach(() => vi.unstubAllGlobals())
+
+    it('defaults to Claude Code and shows that it is ready, with the plan', async () => {
+      vi.stubGlobal('fetch', vi.fn(async () => health({ installed: true, loggedIn: true, subscriptionType: 'max' })))
+      await renderPage()
+      expect(await screen.findByText('Claude Code（Max プラン）で生成できます')).toBeInTheDocument()
+      expect(screen.getByLabelText('使用モデル')).toHaveValue('sonnet')
+      expect(screen.queryByLabelText('OpenAI APIキー')).not.toBeInTheDocument()
+    })
+
+    it('shows the setup steps, including the dev server, when there is no local API', async () => {
+      vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 404, json: async () => ({}) })))
+      await renderPage()
+      expect(await screen.findByText('この画面では Claude Code で生成できません')).toBeInTheDocument()
+      expect(screen.getByText('npm run dev')).toBeInTheDocument()
+    })
+
+    it('saves the Claude model', async () => {
+      vi.stubGlobal('fetch', vi.fn(async () => health({ installed: true, loggedIn: true })))
+      await renderPage()
+      await userEvent.selectOptions(screen.getByLabelText('使用モデル'), 'haiku')
+      expect(loadSettings().claudeModel).toBe('haiku')
+    })
+
+    it('switching to OpenAI shows the key and model fields and saves the choice', async () => {
+      const fetchMock = vi.fn(async () => health({ installed: true, loggedIn: true }))
+      vi.stubGlobal('fetch', fetchMock)
+      await renderPage()
+      await userEvent.click(screen.getByRole('button', { name: 'OpenAI' }))
+      expect(loadSettings().aiProvider).toBe('openai')
+      expect(screen.getByLabelText('OpenAI APIキー')).toBeInTheDocument()
+      expect(screen.getByLabelText('使用モデル')).toHaveValue('gpt-4o-mini')
+      expect(screen.queryByText(/Claude Code（.*）で生成できます/)).not.toBeInTheDocument()
+    })
+
+    it('does not check the local API while OpenAI is selected', async () => {
+      saveSettings({ aiProvider: 'openai' })
+      const fetchMock = vi.fn(async () => health({ installed: true, loggedIn: true }))
+      vi.stubGlobal('fetch', fetchMock)
+      await renderPage()
+      expect(fetchMock).not.toHaveBeenCalledWith('/api/health', expect.anything())
     })
   })
 })

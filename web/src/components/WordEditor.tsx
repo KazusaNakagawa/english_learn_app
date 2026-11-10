@@ -2,8 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import { Loader2, Plus, Sparkles, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { ClaudeCodeSetup } from '@/components/ClaudeCodeSetup'
+import { useClaudeCodeStatus } from '@/hooks/useClaudeCodeStatus'
 import { useIdsBySpelling } from '@/hooks/useWords'
 import { emptySentenceRow, isBlankRow, validateWordForm, type SentenceRow, type WordForm, type WordInput } from '@/lib/wordForm'
+import { generateWithClaudeCode } from '@/services/ClaudeCodeService'
 import { generateContent, GenerationError, type GeneratedContent } from '@/services/OpenAIService'
 import { loadSettings } from '@/services/SettingsService'
 
@@ -47,7 +50,10 @@ export function WordEditor({ title, initial, ownId, onSave, onCancel }: Props) {
   const [generating, setGenerating] = useState(false)
   const [generateError, setGenerateError] = useState<string | null>(null)
   const generation = useRef<AbortController | null>(null)
-  const [{ openAIKey, openAIModel }] = useState(loadSettings)
+  const [{ openAIKey, openAIModel, aiProvider, claudeModel }] = useState(loadSettings)
+  const useClaude = aiProvider === 'claude-code'
+  const claude = useClaudeCodeStatus(useClaude)
+  const canGenerate = useClaude ? claude.state.kind === 'ready' : !!openAIKey
 
   useEffect(() => () => generation.current?.abort(), [])
 
@@ -74,7 +80,9 @@ export function WordEditor({ title, initial, ownId, onSave, onCancel }: Props) {
     setGenerating(true)
     setGenerateError(null)
     try {
-      const content = await generateContent(form.word, { apiKey: openAIKey, model: openAIModel, signal: controller.signal })
+      const content = useClaude
+        ? await generateWithClaudeCode(form.word, { model: claudeModel, signal: controller.signal })
+        : await generateContent(form.word, { apiKey: openAIKey, model: openAIModel, signal: controller.signal })
       if (generation.current === controller) setForm((prev) => withGenerated(prev, content))
     } catch (err) {
       if (generation.current !== controller) return
@@ -149,14 +157,15 @@ export function WordEditor({ title, initial, ownId, onSave, onCancel }: Props) {
             ) : (
               <Button
                 type="button" variant="ghost"
-                disabled={!openAIKey || !form.word.trim()}
+                disabled={!canGenerate || !form.word.trim()}
                 className="w-full bg-white rounded-2xl text-[var(--ios-blue)]"
                 onClick={generate}
               >
                 <Sparkles size={16} className="mr-1" />AIで例文を生成
               </Button>
             )}
-            {!openAIKey && (
+            {useClaude && !generating && <ClaudeCodeSetup state={claude.state} onRecheck={claude.recheck} />}
+            {!useClaude && !openAIKey && (
               <p className="text-xs text-muted-foreground px-1">設定で OpenAI の API キーを入力すると、例文を自動で生成できます</p>
             )}
             {generateError && <p role="alert" className="text-xs text-[var(--ios-red)] px-1">{generateError}</p>}

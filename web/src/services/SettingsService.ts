@@ -17,6 +17,9 @@ export interface AppSettings {
   voicevoxApiKeyOrigin: string
   openAIKey: string
   openAIModel: string
+  /** Who generates sentences: the Claude Code CLI through the local API, or OpenAI with a key. */
+  aiProvider: 'claude-code' | 'openai'
+  claudeModel: 'sonnet' | 'haiku' | 'opus'
   playPattern: 'bilingual' | 'en-only'
   intervalSec: number
 }
@@ -30,6 +33,9 @@ const DEFAULTS: AppSettings = {
   voicevoxApiKeyOrigin: '',
   openAIKey: '',
   openAIModel: 'gpt-4o-mini',
+  // No key to enter: the path a first-time user can take without any setup in the app.
+  aiProvider: 'claude-code',
+  claudeModel: 'sonnet',
   playPattern: 'bilingual',
   intervalSec: 1.5,
 }
@@ -71,7 +77,9 @@ export function loadSettings(): AppSettings {
       ? Math.min(INTERVAL_MAX, Math.max(INTERVAL_MIN, rawInterval))
       : DEFAULTS.intervalSec
     const voicevoxEndpoint = typeof parsed.voicevoxEndpoint === 'string' ? parsed.voicevoxEndpoint : DEFAULTS.voicevoxEndpoint
-    return { ...DEFAULTS, ...parsed, intervalSec, voicevoxEndpoint, ...loadApiKeys() }
+    const aiProvider = parsed.aiProvider === 'openai' ? 'openai' : 'claude-code'
+    const claudeModel = parsed.claudeModel === 'haiku' || parsed.claudeModel === 'opus' ? parsed.claudeModel : 'sonnet'
+    return { ...DEFAULTS, ...parsed, intervalSec, voicevoxEndpoint, aiProvider, claudeModel, ...loadApiKeys() }
   } catch {
     return { ...DEFAULTS, ...loadApiKeys() }
   }
