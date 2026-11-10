@@ -1,6 +1,6 @@
 /** Swipe-to-delete geometry, kept apart from the component so it can be tested directly. */
 
-/** Width of the delete button a short swipe reveals. */
+/** Width of each button a short swipe reveals. */
 export const ACTION_WIDTH = 80
 /** How far a row must be dragged before it stays open. */
 export const OPEN_THRESHOLD = 40
@@ -16,8 +16,17 @@ export function clampOffset(offset: number, width: number): number {
   return Math.min(0, Math.max(-width, offset))
 }
 
-export function swipeOutcome(offset: number, width: number): SwipeOutcome {
-  if (-offset >= width * FULL_SWIPE_RATIO) return 'delete'
+/**
+ * How far a drag must go to delete on release. It stays beyond the open
+ * position, so a narrow row with two buttons can still rest open.
+ */
+export function fullSwipeDistance(width: number, openWidth = ACTION_WIDTH): number {
+  return Math.max(width * FULL_SWIPE_RATIO, openWidth + OPEN_THRESHOLD)
+}
+
+/** `openWidth` is the width of all the buttons a short swipe reveals. */
+export function swipeOutcome(offset: number, width: number, openWidth = ACTION_WIDTH): SwipeOutcome {
+  if (-offset >= fullSwipeDistance(width, openWidth)) return 'delete'
   if (-offset >= OPEN_THRESHOLD) return 'open'
   return 'closed'
 }

@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import WordListPage from '@/pages/WordListPage'
 import { SAMPLE_WORDS } from '@/data/sampleWords'
 import * as AudioService from '@/services/AudioService'
-import { getWords } from '@/services/WordRepository'
+import { getArchivedWords, getWords } from '@/services/WordRepository'
 
 vi.mock('@/services/AudioService', () => ({
   playTTS: vi.fn().mockResolvedValue('webspeech'),
@@ -182,6 +182,46 @@ describe('WordListPage', () => {
       await userEvent.click(deleteButton(word.word))
       expect(await screen.findByText(`「${word.word}」をゴミ箱に移動しました`)).toBeInTheDocument()
       expect((await getWords()).map((w) => w.id)).not.toContain(word.id)
+    })
+
+    it('archives from the button beside delete, and undo brings the word back', async () => {
+      await renderPage()
+      const word = first()
+      swipe(word.word, -100)
+      const archive = screen.getByRole('button', { name: `「${word.word}」をアーカイブ` })
+      expect(archive).toHaveAttribute('tabindex', '0')
+      await userEvent.click(archive)
+      expect(await screen.findByText(`「${word.word}」をアーカイブしました`)).toBeInTheDocument()
+      expect((await getWords()).map((w) => w.id)).not.toContain(word.id)
+      expect((await getArchivedWords()).map((w) => w.id)).toEqual([word.id])
+
+      await userEvent.click(screen.getByRole('button', { name: '元に戻す' }))
+      expect(await screen.findByLabelText(`${word.word} — 例文一覧へ`)).toBeInTheDocument()
+      expect(await getArchivedWords()).toEqual([])
+    })
+
+    it('hides the archive button during a full swipe, which trashes instead', async () => {
+      await renderPage()
+      const word = first()
+      const row = card(word.word).parentElement as HTMLElement
+      fireEvent.pointerDown(row, { pointerId: 1, button: 0, clientX: 300, clientY: 100 })
+      fireEvent.pointerMove(row, { pointerId: 1, clientX: 175, clientY: 100 })
+      fireEvent.pointerMove(row, { pointerId: 1, clientX: 50, clientY: 100 })
+      expect(screen.queryByRole('button', { name: `「${word.word}」をアーカイブ` })).not.toBeInTheDocument()
+      fireEvent.pointerUp(row, { pointerId: 1, clientX: 50, clientY: 100 })
+      expect(await screen.findByText(`「${word.word}」をゴミ箱に移動しました`)).toBeInTheDocument()
+      expect(await getArchivedWords()).toEqual([])
+    })
+
+    it('reports a failed archive and keeps the word', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      await renderPage()
+      const word = first()
+      swipe(word.word, -100)
+      vi.stubGlobal('indexedDB', { open: () => { throw new Error('blocked') } })
+      await userEvent.click(screen.getByRole('button', { name: `「${word.word}」をアーカイブ` }))
+      expect(await screen.findByText('アーカイブできませんでした')).toBeInTheDocument()
+      expect(screen.getByLabelText(`${word.word} — 例文一覧へ`)).toBeInTheDocument()
     })
 
     it('deletes at once on a full swipe', async () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { ACTION_WIDTH, clampOffset, isHorizontalSwipe, OPEN_THRESHOLD, swipeOutcome } from '@/lib/swipe'
+import { ACTION_WIDTH, clampOffset, fullSwipeDistance, isHorizontalSwipe, OPEN_THRESHOLD, swipeOutcome } from '@/lib/swipe'
 
 describe('swipeOutcome', () => {
   const width = 300
@@ -14,6 +14,25 @@ describe('swipeOutcome', () => {
     ['the whole row', -width, 'delete'],
   ])('%s gives %s', (_, offset, outcome) => {
     expect(swipeOutcome(offset as number, width)).toBe(outcome)
+  })
+})
+
+describe('swipeOutcome with two buttons', () => {
+  const open = 2 * ACTION_WIDTH
+
+  it('rests open at the width of both buttons', () => {
+    expect(swipeOutcome(-open, 320, open)).toBe('open')
+  })
+
+  it('deletes at 60% of a wide row', () => {
+    expect(swipeOutcome(-239, 400, open)).toBe('open')
+    expect(swipeOutcome(-240, 400, open)).toBe('delete')
+  })
+
+  it('keeps a narrow row from deleting at its open position', () => {
+    expect(swipeOutcome(-open, 240, open)).toBe('open')
+    expect(fullSwipeDistance(240, open)).toBe(open + OPEN_THRESHOLD)
+    expect(swipeOutcome(-(open + OPEN_THRESHOLD), 240, open)).toBe('delete')
   })
 })
 

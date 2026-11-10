@@ -259,6 +259,29 @@ export async function deleteWordPermanently(id: string): Promise<void> {
   await modifyWord(id, () => null)
 }
 
+/** Takes a word off the list without deleting it. Unknown ids are ignored. */
+export async function archiveWord(id: string, now = new Date()): Promise<void> {
+  await modifyWord(id, (word) => ({ ...word, archivedAt: now.toISOString() }))
+}
+
+export async function unarchiveWord(id: string): Promise<void> {
+  await modifyWord(id, (word) => {
+    const unarchived = { ...word }
+    delete unarchived.archivedAt
+    return unarchived
+  })
+}
+
+/**
+ * Archived words, most recently archived first. A trashed word is shown in the
+ * trash only, and returns here if it is restored, as on iOS.
+ */
+export async function getArchivedWords(): Promise<Word[]> {
+  return (await allWords())
+    .filter((w) => w.archivedAt && !w.deletedAt)
+    .sort((a, b) => Date.parse(b.archivedAt ?? '') - Date.parse(a.archivedAt ?? ''))
+}
+
 /** Due for purging once the full retention period has passed, the moment the days left reach 0. */
 function isExpiredTrash(word: Word, now: number): boolean {
   return !!word.deletedAt && Date.parse(word.deletedAt) + TRASH_RETENTION_DAYS * DAY_MS <= now

@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 import {
   ACTION_WIDTH,
   clampOffset,
-  FULL_SWIPE_RATIO,
+  fullSwipeDistance,
   isHorizontalSwipe,
   swipeOutcome,
 } from '@/lib/swipe'
@@ -23,6 +23,17 @@ interface Drag {
   offset: number
 }
 
+/** A button shown to the left of delete, such as archive. */
+export interface SwipeAction {
+  label: string
+  ariaLabel: string
+  icon: React.ReactNode
+  /** Tailwind classes for the button's tint and text color. */
+  className: string
+  /** Resolves once the item is gone; a rejection puts the row back. */
+  onAction: () => Promise<void>
+}
+
 interface Props {
   children: React.ReactNode
   open: boolean
@@ -30,28 +41,34 @@ interface Props {
   /** Resolves once the item is gone; a rejection puts the row back. */
   onDelete: () => Promise<void>
   deleteLabel: string
+  secondaryAction?: SwipeAction
 }
 
 /**
- * A row that reveals a delete button when swiped left, as iOS lists do.
- * Swiping far enough deletes on release. Vertical drags stay page scrolls.
+ * A row that reveals a delete button when swiped left, as iOS lists do, with
+ * an optional second button beside it. Swiping far enough deletes on release.
+ * Vertical drags stay page scrolls.
  */
-export function SwipeToDelete({ children, open, onOpenChange, onDelete, deleteLabel }: Props) {
+export function SwipeToDelete({ children, open, onOpenChange, onDelete, deleteLabel, secondaryAction }: Props) {
   const rowRef = useRef<HTMLDivElement>(null)
   const drag = useRef<Drag | null>(null)
   const swallowClick = useRef(false)
   const [dragOffset, setDragOffset] = useState<number | null>(null)
   const [removing, setRemoving] = useState(false)
 
+  const openWidth = ACTION_WIDTH * (secondaryAction ? 2 : 1)
   const width = () => rowRef.current?.offsetWidth || FALLBACK_WIDTH
-  const offset = removing ? -width() : dragOffset ?? (open ? -ACTION_WIDTH : 0)
-  const pastFullSwipe = -offset >= width() * FULL_SWIPE_RATIO
+  const offset = removing ? -width() : dragOffset ?? (open ? -openWidth : 0)
+  const pastFullSwipe = -offset >= fullSwipeDistance(width(), openWidth)
+  // Delete takes whatever the secondary button does not, and all of it past a full swipe.
+  const showSecondary = !!secondaryAction && !pastFullSwipe && !removing
+  const deleteWidth = Math.max(ACTION_WIDTH, -offset - (showSecondary ? ACTION_WIDTH : 0))
 
-  async function remove() {
+  async function remove(action: () => Promise<void> = onDelete) {
     setRemoving(true)
     await new Promise((resolve) => setTimeout(resolve, REMOVE_ANIMATION_MS))
     try {
-      await onDelete()
+      await action()
     } catch {
       // The caller reports the failure; the row just slides back.
     }
@@ -65,9 +82,9 @@ export function SwipeToDelete({ children, open, onOpenChange, onDelete, deleteLa
       pointerId: e.pointerId,
       startX: e.clientX,
       startY: e.clientY,
-      base: open ? -ACTION_WIDTH : 0,
+      base: open ? -openWidth : 0,
       horizontal: null,
-      offset: open ? -ACTION_WIDTH : 0,
+      offset: open ? -openWidth : 0,
     }
   }
 
@@ -92,7 +109,7 @@ export function SwipeToDelete({ children, open, onOpenChange, onDelete, deleteLa
     if (!d.horizontal) return
     swallowClick.current = true // the click that ends a drag is not a tap
     setDragOffset(null)
-    const outcome = swipeOutcome(d.offset, width())
+    const outcome = swipeOutcome(d.offset, width(), openWidth)
     if (outcome === 'delete') void remove()
     else onOpenChange(outcome === 'open')
   }
@@ -113,13 +130,30 @@ export function SwipeToDelete({ children, open, onOpenChange, onDelete, deleteLa
 
   return (
     <div ref={rowRef} data-swipe-open={open} className="relative overflow-hidden rounded-2xl">
+      {offset < 0 && showSecondary && secondaryAction && (
+        <button
+          type="button"
+          tabIndex={open ? 0 : -1}
+          aria-label={secondaryAction.ariaLabel}
+          onClick={() => void remove(secondaryAction.onAction)}
+          style={{ width: ACTION_WIDTH, right: deleteWidth }}
+          className={cn(
+            'absolute inset-y-0 flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium',
+            secondaryAction.className,
+            dragOffset === null && 'transition-[right] duration-200 motion-reduce:transition-none',
+          )}
+        >
+          {secondaryAction.icon}
+          {secondaryAction.label}
+        </button>
+      )}
       {offset < 0 && (
         <button
           type="button"
           tabIndex={open ? 0 : -1}
           aria-label={deleteLabel}
           onClick={() => void remove()}
-          style={{ width: Math.max(ACTION_WIDTH, -offset) }}
+          style={{ width: deleteWidth }}
           className={cn(
             'absolute inset-y-0 right-0 flex flex-col justify-center gap-0.5 text-[var(--ios-red)] text-[11px] font-medium',
             // A soft tint, a little stronger once letting go would delete.
@@ -133,7 +167,15 @@ export function SwipeToDelete({ children, open, onOpenChange, onDelete, deleteLa
       )}
       {/* Present but out of sight when closed, so screen readers can still delete. */}
       {offset === 0 && (
-        <button type="button" tabIndex={-1} aria-label={deleteLabel} onClick={() => void remove()} className="sr-only" />
+        <>
+          {secondaryAction && (
+            <button
+              type="button" tabIndex={-1} aria-label={secondaryAction.ariaLabel}
+              onClick={() => void remove(secondaryAction.onAction)} className="sr-only"
+            />
+          )}
+          <button type="button" tabIndex={-1} aria-label={deleteLabel} onClick={() => void remove()} className="sr-only" />
+        </>
       )}
       <div
         onPointerDown={onPointerDown}

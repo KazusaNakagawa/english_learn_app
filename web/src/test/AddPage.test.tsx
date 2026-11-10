@@ -4,8 +4,7 @@ import { MemoryRouter } from 'react-router'
 import { IDBFactory } from 'fake-indexeddb'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import AddPage from '@/pages/AddPage'
-import { archiveForTest } from './helpers/archive'
-import { getWords } from '@/services/WordRepository'
+import { archiveWord, getWords } from '@/services/WordRepository'
 import { saveSettings } from '@/services/SettingsService'
 
 const mockNavigate = vi.fn()
@@ -94,7 +93,8 @@ describe('AddPage', () => {
   })
 
   it('warns about a word that is archived', async () => {
-    await archiveForTest('rarity')
+    const rarity = (await getWords()).find((w) => w.word === 'rarity')
+    await archiveWord(rarity!.id)
     render(<MemoryRouter><AddPage /></MemoryRouter>)
     await type('英単語', 'rarity')
     expect(await screen.findByText('「rarity」は登録済みです')).toBeInTheDocument()
