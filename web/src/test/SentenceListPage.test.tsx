@@ -30,14 +30,16 @@ vi.mock('react-router', async (importOriginal) => {
 
 const word = SAMPLE_WORDS[0]
 
-function renderPage() {
-  return render(
+async function renderPage() {
+  const view = render(
     <MemoryRouter initialEntries={[`/words/${word.id}/sentences`]}>
       <Routes>
         <Route path="/words/:id/sentences" element={<SentenceListPage />} />
       </Routes>
     </MemoryRouter>,
   )
+  await screen.findByText(word.word)
+  return view
 }
 
 describe('SentenceListPage', () => {
@@ -47,20 +49,20 @@ describe('SentenceListPage', () => {
     vi.mocked(AudioService.playTTS).mockClear()
   })
 
-  it('renders the word heading', () => {
-    renderPage()
+  it('renders the word heading', async () => {
+    await renderPage()
     expect(screen.getByText(word.word)).toBeInTheDocument()
   })
 
-  it('renders all sentences', () => {
-    renderPage()
+  it('renders all sentences', async () => {
+    await renderPage()
     for (const sentence of word.sentences) {
       expect(screen.getByText(sentence.english)).toBeInTheDocument()
     }
   })
 
   it('sentence row click navigates to PronunciationPage', async () => {
-    renderPage()
+    await renderPage()
     const firstSentence = word.sentences[0]
     // Row aria-label ends with "— 発音練習へ"
     const row = screen.getByRole('button', {
@@ -73,7 +75,7 @@ describe('SentenceListPage', () => {
   })
 
   it('play button click does NOT navigate to PronunciationPage', async () => {
-    renderPage()
+    await renderPage()
     const firstSentence = word.sentences[0]
     // Play button aria-label is 「...」を再生
     const playButton = screen.getByLabelText(`「${firstSentence.english}」を再生`)
@@ -83,24 +85,38 @@ describe('SentenceListPage', () => {
     )
   })
 
-  it('play button has accessible aria-label', () => {
-    renderPage()
+  it('play button has accessible aria-label', async () => {
+    await renderPage()
     const firstSentence = word.sentences[0]
     expect(
       screen.getByLabelText(`「${firstSentence.english}」を再生`),
     ).toBeInTheDocument()
   })
 
-  it('calls stopTTS on unmount', () => {
-    const { unmount } = renderPage()
+  it('calls stopTTS on unmount', async () => {
+    const { unmount } = await renderPage()
     unmount()
     expect(AudioService.stopTTS).toHaveBeenCalled()
   })
 
   it('back button navigates to word list', async () => {
-    renderPage()
+    await renderPage()
     await userEvent.click(screen.getByText('単語一覧'))
     expect(mockNavigate).toHaveBeenCalledWith('/')
+  })
+
+  it('shows a message when the words cannot be loaded', async () => {
+    vi.stubGlobal('indexedDB', { open: () => { throw new Error('blocked') } })
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    render(<MemoryRouter initialEntries={['/words/any/sentences']}><Routes><Route path="/words/:id/sentences" element={<SentenceListPage />} /></Routes></MemoryRouter>)
+    expect(await screen.findByText('単語データを読み込めませんでした')).toBeInTheDocument()
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it('shows not found for an unknown word', async () => {
+    render(<MemoryRouter initialEntries={['/words/missing/sentences']}><Routes><Route path="/words/:id/sentences" element={<SentenceListPage />} /></Routes></MemoryRouter>)
+    expect(await screen.findByText('単語が見つかりません')).toBeInTheDocument()
   })
 
   describe('stopping and replaying while audio is still pending', () => {
@@ -121,7 +137,7 @@ describe('SentenceListPage', () => {
       })
 
     it('does not resume a stopped sentence loop alongside the new one', async () => {
-      renderPage()
+      await renderPage()
       const sentence = word.sentences[0]
       const stale = holdNextPlay()
       holdNextPlay()
@@ -138,7 +154,7 @@ describe('SentenceListPage', () => {
     })
 
     it('keeps the new word playback active when the stopped call resolves late', async () => {
-      renderPage()
+      await renderPage()
       const stale = holdNextPlay()
       const current = holdNextPlay()
 

@@ -6,7 +6,8 @@ import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { playTTS, stopTTS, type VoiceType } from '@/services/AudioService'
 import { loadSettings } from '@/services/SettingsService'
-import { SAMPLE_WORDS, type Sentence } from '@/data/sampleWords'
+import { useWord } from '@/hooks/useWords'
+import type { Sentence } from '@/types/word'
 
 // ---- Helpers ----
 
@@ -26,7 +27,8 @@ function groupByCategory(sentences: Sentence[]): [string, Sentence[]][] {
 export default function SentenceListPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const word = SAMPLE_WORDS.find((w) => w.id === id)
+  const wordState = useWord(id)
+  const word = wordState.status === 'ready' ? wordState.data : null
 
   const [playingId, setPlayingId] = useState<string | null>(null) // sentence id or `word-en` / `word-ja`
   const sentenceRefs = useRef<Record<string, HTMLDivElement | null>>({})
@@ -46,10 +48,12 @@ export default function SentenceListPage() {
     }
   }, [])
 
+  if (wordState.status === 'loading') return null
+
   if (!word) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-        <p className="text-sm">単語が見つかりません</p>
+        <p className="text-sm">{wordState.status === 'error' ? '単語データを読み込めませんでした' : '単語が見つかりません'}</p>
         <button onClick={() => navigate('/')} className="mt-2 text-sm text-[var(--ios-blue)]">
           一覧に戻る
         </button>

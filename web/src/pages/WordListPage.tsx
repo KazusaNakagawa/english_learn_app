@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
 import { Volume2, Loader2 } from 'lucide-react'
 import { playTTS, stopTTS, type VoiceType } from '@/services/AudioService'
 import { loadSettings } from '@/services/SettingsService'
-import { SAMPLE_WORDS } from '@/data/sampleWords'
+import { useWords } from '@/hooks/useWords'
 
 const appVersion = import.meta.env.VITE_APP_VERSION ?? '—'
 const appEnv = import.meta.env.VITE_APP_ENV ?? '—'
@@ -20,7 +20,10 @@ export default function WordListPage() {
   const [activeLetter, setActiveLetter] = useState('ALL')
   const [playingId, setPlayingId] = useState<string | null>(null) // `${id}-en` | `${id}-ja`
 
-  const filtered = SAMPLE_WORDS.filter((w) => {
+  const wordsState = useWords()
+  const words = wordsState.status === 'ready' ? wordsState.data : []
+
+  const filtered = words.filter((w) => {
     const matchesSearch =
       search === '' ||
       w.word.toLowerCase().includes(search.toLowerCase()) ||
@@ -103,7 +106,9 @@ export default function WordListPage() {
 
       {/* Word list */}
       <main className="max-w-2xl mx-auto px-4 pb-4 space-y-2">
-        {filtered.length === 0 ? (
+        {wordsState.status === 'loading' ? null : wordsState.status === 'error' ? (
+          <p className="text-sm text-muted-foreground text-center py-12">単語データを読み込めませんでした</p>
+        ) : filtered.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-12">該当する単語がありません</p>
         ) : (
           filtered.map((word) => (
