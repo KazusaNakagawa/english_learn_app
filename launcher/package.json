@@ -7,7 +7,7 @@
     "english-learn-app": "bin/english-learn-app.mjs"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "repository": {
     "type": "git",
@@ -18,7 +18,7 @@
     "start": "node bin/english-learn-app.mjs",
     "build": "node scripts/prepare-dist.mjs",
     "prepack": "node scripts/prepare-dist.mjs",
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test"
   },
   "files": [
     "bin",

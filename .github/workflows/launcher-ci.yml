@@ -23,8 +23,13 @@ permissions:
 
 jobs:
   test:
-    name: Test launcher
+    name: Test launcher (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
+
+    # The engines floor and the version the maintainer releases with.
+    strategy:
+      matrix:
+        node: ['20', '24']
 
     defaults:
       run:
@@ -37,7 +42,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: '24'
+          node-version: ${{ matrix.node }}
 
       - name: Test
         run: npm test

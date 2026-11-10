@@ -2,6 +2,7 @@
 // HashRouter, so every route is "/" and no SPA fallback is needed.
 import { createReadStream, statSync } from "node:fs"
 import { createServer } from "node:http"
+import { pipeline } from "node:stream"
 import { extname, join, resolve, sep } from "node:path"
 
 /** What /api/health reports, so a second launch can recognise a running copy. */
@@ -92,8 +93,7 @@ export function createAppServer({ root, version }) {
       "cache-control": inAssets ? IMMUTABLE : "no-cache",
     })
     if (req.method === "HEAD") return res.end()
-    createReadStream(file)
-      .on("error", () => res.destroy())
-      .pipe(res)
+    // pipeline closes the file when the browser cancels the request.
+    pipeline(createReadStream(file), res, () => {})
   })
 }

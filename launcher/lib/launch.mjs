@@ -61,7 +61,8 @@ export async function launch({ root, port, version }) {
         `(a different port starts with an empty word list, because the browser stores data per port).`,
     )
   }
-  return { status: "started", url: urlFor(port), server }
+  // Read back the bound port so port 0 (any free port) reports a real URL.
+  return { status: "started", url: urlFor(server.address().port), server }
 }
 
 export function openBrowser(url) {

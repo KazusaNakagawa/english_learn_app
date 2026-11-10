@@ -44,8 +44,9 @@ async function main() {
   }
 
   if (result.status === "already-running") {
-    const note = result.runningVersion && result.runningVersion !== version ? ` (version ${result.runningVersion})` : ""
-    console.log(`${NAME} is already running${note} at ${result.url}`)
+    const stale = result.runningVersion && result.runningVersion !== version
+    console.log(`${NAME} is already running${stale ? ` (version ${result.runningVersion})` : ""} at ${result.url}`)
+    if (stale) console.log(`To use ${version} instead, stop the running copy (Ctrl-C in its terminal) and run this again.`)
     if (opts.browser) openBrowser(result.url)
     return 0
   }

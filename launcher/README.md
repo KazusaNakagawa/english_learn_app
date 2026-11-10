@@ -24,7 +24,7 @@ URL. Keep using the same port: the app opened on another port starts empty.
 
 ## Requirements
 
-- Node.js 18+
+- Node.js 20+ (releasing needs 20.12+)
 
 No API keys are needed. Speech falls back to the browser's voice when no
 VOICEVOX endpoint is set; OpenAI and VOICEVOX can be configured in Settings.
@@ -34,11 +34,13 @@ VOICEVOX endpoint is set; OpenAI and VOICEVOX can be configured in Settings.
 ```bash
 cd launcher
 npm test                              # node:test, no dependencies
-node scripts/prepare-dist.mjs         # build ../web and copy it into dist/
+node scripts/prepare-dist.mjs         # rebuild ../web and copy it into dist/
 npm start                             # serve dist/
 ```
 
 Releasing is `npm publish` in this directory: `prepack` builds `../web` with
-the VOICEVOX defaults from `web/.env` blanked, copies the output into `dist/`,
-and refuses to continue if the launcher and web versions differ or if a key
-from `web/.env` appears in the build. Tag the release with that version.
+every `VITE_*` variable blanked except `VITE_APP_VERSION` / `VITE_APP_ENV`
+(which it sets), copies the output into `dist/`, and refuses to continue if the
+launcher and web versions differ or if any value from `web/.env*` (or a
+`VITE_*` shell variable) appears in the build. It always rebuilds; an existing
+`web/dist` is never packaged as is. Tag the release with that version.

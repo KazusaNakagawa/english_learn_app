@@ -277,7 +277,7 @@ npm start                       # http://127.0.0.1:5280/ で配信し、ブラ�
 
 - ポートは 5280 で固定です。開発サーバー（5173）とは URL が違うので、それぞれ別の単語データになります。
 - 起動中にもう一度実行すると、ブラウザを開き直すだけで終了します。5280 を別のプログラムが使っているときはエラーで止まります。
-- 公開は `launcher/` で `npm publish` です。ビルド時に `web/.env` の VOICEVOX の接続先と API キーを空にし、キーがバンドルに残っていれば中止します。詳しくは [launcher/README.md](launcher/README.md)。
+- 公開は `launcher/` で `npm publish` です。毎回 `web/` を作り直し、そのとき `VITE_APP_VERSION` / `VITE_APP_ENV` 以外の `VITE_*`（VOICEVOX の接続先と API キーなど）を空にします。`web/.env*` の値がバンドルに残っていれば中止します。詳しくは [launcher/README.md](launcher/README.md)。
 
 ### ずんだもん音声の接続先
 

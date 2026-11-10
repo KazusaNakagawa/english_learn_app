@@ -22,14 +22,12 @@ const listen = (srv) => new Promise((r) => srv.listen(0, "127.0.0.1", () => r(sr
 const close = (srv) => new Promise((r) => srv.close(r))
 
 test("starts on 127.0.0.1 and reports the URL", async () => {
-  // Find a free port, then hand it to launch.
-  const probe = createServer()
-  const port = await listen(probe)
-  await close(probe)
-
-  const result = await launch({ root, port, version: "1.0.0" })
+  // Port 0 lets the OS pick, so no other process can take it in between.
+  const result = await launch({ root, port: 0, version: "1.0.0" })
   try {
     assert.equal(result.status, "started")
+    const { port } = result.server.address()
+    assert.ok(port > 0)
     assert.equal(result.url, `http://127.0.0.1:${port}/`)
     assert.equal(result.server.address().address, "127.0.0.1")
     const res = await fetch(result.url)
