@@ -7,11 +7,15 @@ on:
     branches: [develop, main]
     paths:
       - 'launcher/**'
+      # test/generate.test.mjs checks the prompt against this file.
+      - 'web/src/services/OpenAIService.ts'
       - '.github/workflows/launcher-ci.yml'
   pull_request:
     branches: [develop, main]
     paths:
       - 'launcher/**'
+      # test/generate.test.mjs checks the prompt against this file.
+      - 'web/src/services/OpenAIService.ts'
       - '.github/workflows/launcher-ci.yml'
 
 concurrency:
