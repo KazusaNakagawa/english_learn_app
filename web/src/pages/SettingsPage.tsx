@@ -613,8 +613,8 @@ export default function SettingsPage() {
         <div>
           <SectionLabel label="法的情報" />
           <GroupCard>
-            <ListRow icon={Shield}   label="プライバシーポリシー" chevron />
-            <ListRow icon={FileText} label="利用規約"             chevron />
+            <ListRow icon={Shield}   label="プライバシーポリシー" chevron onClick={() => navigate('/settings/privacy')} />
+            <ListRow icon={FileText} label="利用規約"             chevron onClick={() => navigate('/settings/terms')} />
           </GroupCard>
         </div>
 

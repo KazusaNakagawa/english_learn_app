@@ -9,6 +9,7 @@ import TrashPage from '@/pages/TrashPage'
 import SettingsPage from '@/pages/SettingsPage'
 import PronunciationPage from '@/pages/PronunciationPage'
 import PocPage from '@/pages/PocPage'
+import { PrivacyPolicyPage, TermsOfServicePage } from '@/pages/legal/LegalPage'
 
 function App() {
   return (
@@ -22,6 +23,8 @@ function App() {
         <Route path="/add" element={<AddPage />} />
         <Route path="/trash" element={<TrashPage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/settings/privacy" element={<PrivacyPolicyPage />} />
+        <Route path="/settings/terms" element={<TermsOfServicePage />} />
       </Route>
       <Route path="/poc" element={<PocPage />} />
     </Routes>
