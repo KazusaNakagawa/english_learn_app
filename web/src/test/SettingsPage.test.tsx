@@ -353,12 +353,23 @@ describe('SettingsPage', () => {
       expect(screen.queryByText(/Claude Code（.*）で生成できます/)).not.toBeInTheDocument()
     })
 
+    it('keeps an OpenAI key from before the provider setting on OpenAI', async () => {
+      localStorage.setItem('english_learn_app_settings', JSON.stringify({ openAIModel: 'gpt-4o' }))
+      saveSettings({ openAIKey: 'sk-existing' })
+      expect(loadSettings().aiProvider).toBe('openai')
+    })
+
+    it('an explicit choice wins over the key', async () => {
+      saveSettings({ openAIKey: 'sk-existing', aiProvider: 'claude-code' })
+      expect(loadSettings().aiProvider).toBe('claude-code')
+    })
+
     it('does not check the local API while OpenAI is selected', async () => {
       saveSettings({ aiProvider: 'openai' })
       const fetchMock = vi.fn(async () => health({ installed: true, loggedIn: true }))
       vi.stubGlobal('fetch', fetchMock)
       await renderPage()
-      expect(fetchMock).not.toHaveBeenCalledWith('/api/health', expect.anything())
+      expect(fetchMock).not.toHaveBeenCalled()
     })
   })
 })

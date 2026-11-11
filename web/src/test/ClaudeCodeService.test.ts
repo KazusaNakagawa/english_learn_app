@@ -55,7 +55,7 @@ describe('checkClaudeCode', () => {
     vi.stubGlobal('fetch', fetchMock)
     await checkClaudeCode()
     const [url, init] = (fetchMock.mock.calls as unknown[][])[0]
-    expect(url).toBe('/api/health')
+    expect(url).toBe('/api/health?claude=1')
     expect(init).toMatchObject({ cache: 'no-store' })
   })
 })
@@ -83,6 +83,13 @@ describe('generateWithClaudeCode', () => {
     vi.stubGlobal('fetch', fetchMock)
     await expect(generateWithClaudeCode('  ', { model: 'sonnet' })).rejects.toBeInstanceOf(GenerationError)
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('carries the server error code, so the form can recheck the CLI', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => json(401, { error: 'not-logged-in', message: 'ログインしてください' })))
+    const err = await generateWithClaudeCode('apple', { model: 'sonnet' }).catch((e) => e)
+    expect(err).toBeInstanceOf(GenerationError)
+    expect(err.code).toBe('not-logged-in')
   })
 
   it('shows the server message on an error', async () => {

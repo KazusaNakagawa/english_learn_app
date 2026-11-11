@@ -85,10 +85,21 @@ function readJson(req) {
  * path), false to let the caller serve it.
  */
 export function createApiHandler({ version, status = claudeStatus, generate = generateSentences } = {}) {
-  let busy = false
+  // The run in progress, if any. `aborting` marks one the page cancelled: it is
+  // still stopping its CLI, so a retry waits for it rather than getting 409.
+  let current = null
+  // Concurrent status checks (two tabs, a double mount) share one CLI call.
+  let statusInFlight = null
 
-  async function health(req, res) {
-    sendJson(res, 200, { app: APP_ID, version, claude: await status() })
+  function sharedStatus() {
+    statusInFlight ??= Promise.resolve(status()).finally(() => (statusInFlight = null))
+    return statusInFlight
+  }
+
+  // Plain /api/health only says which app this is, so a second launch can
+  // recognise a running copy without waiting for the CLI.
+  async function health(req, res, withClaude) {
+    sendJson(res, 200, withClaude ? { app: APP_ID, version, claude: await sharedStatus() } : { app: APP_ID, version })
   }
 
   async function generateHandler(req, res) {
@@ -103,31 +114,38 @@ export function createApiHandler({ version, status = claudeStatus, generate = ge
     const { word, model = DEFAULT_MODEL } = body.value ?? {}
     if (typeof word !== "string" || !word.trim()) return fail(res, 400, "bad-request", "英単語を入力してください")
     if (!MODELS.includes(model)) return fail(res, 400, "bad-request", "使えないモデルが指定されました")
-    if (busy) return fail(res, 409, "busy", "別の生成を実行中です。終わってからもう一度試してください。")
+    while (current?.aborting) await current.done
+    if (current) return fail(res, 409, "busy", "別の生成を実行中です。終わってからもう一度試してください。")
 
     // The page's 生成を中止 aborts its fetch, which closes this response.
     const controller = new AbortController()
+    const run = { aborting: false, done: null }
     const onClose = () => {
-      if (!res.writableEnded) controller.abort()
+      if (res.writableEnded) return
+      run.aborting = true
+      controller.abort()
     }
     res.on("close", onClose)
-    busy = true
-    try {
-      const content = await generate({ word, model, signal: controller.signal })
-      if (!controller.signal.aborted) sendJson(res, 200, content)
-    } catch (err) {
-      if (controller.signal.aborted || err?.name === "AbortError") return
-      if (err instanceof ClaudeError) return fail(res, STATUS_BY_CODE[err.code] ?? 502, err.code, err.message)
-      console.error("[api] generation failed:", err)
-      fail(res, 500, "failed", "例文を生成できませんでした。もう一度試してください。")
-    } finally {
-      busy = false
-      res.off("close", onClose)
-    }
+    current = run
+    run.done = (async () => {
+      try {
+        const content = await generate({ word, model, signal: controller.signal })
+        if (!controller.signal.aborted) sendJson(res, 200, content)
+      } catch (err) {
+        if (controller.signal.aborted || err?.name === "AbortError") return
+        if (err instanceof ClaudeError) return fail(res, STATUS_BY_CODE[err.code] ?? 502, err.code, err.message)
+        console.error("[api] generation failed:", err)
+        fail(res, 500, "failed", "例文を生成できませんでした。もう一度試してください。")
+      } finally {
+        current = null
+        res.off("close", onClose)
+      }
+    })()
+    await run.done
   }
 
   return function handle(req, res) {
-    const pathname = (req.url ?? "/").split("?")[0]
+    const [pathname, query = ""] = (req.url ?? "/").split("?")
     if (!pathname.startsWith("/api/")) return false
 
     const isGenerate = pathname === "/api/generate-sentences"
@@ -139,7 +157,7 @@ export function createApiHandler({ version, status = claudeStatus, generate = ge
 
     if (pathname === "/api/health") {
       if (req.method !== "GET" && req.method !== "HEAD") fail(res, 405, "bad-request", "Method Not Allowed", { allow: "GET, HEAD" })
-      else health(req, res).catch(() => fail(res, 500, "failed", "状態を確認できませんでした"))
+      else health(req, res, new URLSearchParams(query).get("claude") === "1").catch(() => fail(res, 500, "failed", "状態を確認できませんでした"))
       return true
     }
     if (isGenerate) {

@@ -288,7 +288,7 @@ npm start                       # http://127.0.0.1:5280/ で配信し、ブラ�
 
 単語の追加・編集画面の「AIで例文を生成」は、既定では、このパソコンの Claude Code を使います。API キーは要りません。生成には Pro / Max プランの利用枠を使います。
 
-初回だけ、次の準備をします。
+初回だけ、次の準備をします（macOS / Linux。Windows ではまだ動きません）。
 
 1. Claude Code をインストールします: `npm install -g @anthropic-ai/claude-code`
 2. ターミナルで `claude` を起動し、Pro または Max プランのアカウントでログインします
@@ -304,7 +304,7 @@ npm start                       # http://127.0.0.1:5280/ で配信し、ブラ�
 | Claude の利用上限に達しました | プランの上限に達しています。リセットされるまで待つか、Haiku を選んでください |
 
 - ランチャーと開発サーバーは、`/api/generate-sentences` で `claude -p` を起動します。CLI には、ツールなし・スラッシュコマンドなし・MCP サーバーなし・セッションを保存しない設定を付けます。
-- 環境変数に `ANTHROPIC_API_KEY` があっても、CLI には渡しません。API の従量課金ではなく、ログイン中のプランで生成するためです。
+- 環境変数に `ANTHROPIC_API_KEY`・`ANTHROPIC_BASE_URL`・`CLAUDE_CODE_USE_BEDROCK` などがあっても、CLI には渡しません。Claude Code の設定ファイル（フックなど）も読み込みません。API の従量課金ではなく、ログイン中のプランで生成するためです。
 - この API が受け付けるのは、`127.0.0.1` からの、アプリ自身のページ（同じ Origin）からのリクエストだけです。ほかのサイトからは呼べません。
 - 「生成を中止」を押すと、`claude` のプロセスも止めます。
 - OpenAI の API キーで生成する場合は、設定の「例文の生成方法」で OpenAI を選びます。

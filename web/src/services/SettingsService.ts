@@ -77,9 +77,13 @@ export function loadSettings(): AppSettings {
       ? Math.min(INTERVAL_MAX, Math.max(INTERVAL_MIN, rawInterval))
       : DEFAULTS.intervalSec
     const voicevoxEndpoint = typeof parsed.voicevoxEndpoint === 'string' ? parsed.voicevoxEndpoint : DEFAULTS.voicevoxEndpoint
-    const aiProvider = parsed.aiProvider === 'openai' ? 'openai' : 'claude-code'
+    const apiKeys = loadApiKeys()
+    // Someone who set up OpenAI before this setting existed keeps OpenAI.
+    const aiProvider = parsed.aiProvider === 'openai' || parsed.aiProvider === 'claude-code'
+      ? parsed.aiProvider
+      : apiKeys.openAIKey ? 'openai' : 'claude-code'
     const claudeModel = parsed.claudeModel === 'haiku' || parsed.claudeModel === 'opus' ? parsed.claudeModel : 'sonnet'
-    return { ...DEFAULTS, ...parsed, intervalSec, voicevoxEndpoint, aiProvider, claudeModel, ...loadApiKeys() }
+    return { ...DEFAULTS, ...parsed, intervalSec, voicevoxEndpoint, aiProvider, claudeModel, ...apiKeys }
   } catch {
     return { ...DEFAULTS, ...loadApiKeys() }
   }

@@ -30,7 +30,7 @@ const isAbort = (err: unknown) => err instanceof DOMException && err.name === 'A
 /** Ask the local API whether generation can run. Never throws except for an abort. */
 export async function checkClaudeCode(signal?: AbortSignal): Promise<ClaudeCodeStatus> {
   try {
-    const response = await fetch('/api/health', { cache: 'no-store', signal })
+    const response = await fetch('/api/health?claude=1', { cache: 'no-store', signal })
     if (!response.ok) return { kind: 'no-server' }
     const body = await response.json()
     if (body?.app !== APP_ID || typeof body.claude !== 'object' || body.claude === null) return { kind: 'no-server' }
@@ -75,9 +75,12 @@ export async function generateWithClaudeCode(word: string, { model, signal }: Op
     body = null
   }
   if (!response.ok) {
-    if (response.status === 404 || response.status === 405) throw new GenerationError(NO_SERVER_MESSAGE)
-    const message = (body as { message?: unknown } | null)?.message
-    throw new GenerationError(typeof message === 'string' && message ? message : `生成に失敗しました（ステータス ${response.status}）`)
+    if (response.status === 404 || response.status === 405) throw new GenerationError(NO_SERVER_MESSAGE, 'no-server')
+    const { message, error } = (body ?? {}) as { message?: unknown; error?: unknown }
+    throw new GenerationError(
+      typeof message === 'string' && message ? message : `生成に失敗しました（ステータス ${response.status}）`,
+      typeof error === 'string' ? error : undefined,
+    )
   }
   const content = readGeneratedContent(body)
   if (!content) throw new GenerationError('例文を生成できませんでした')

@@ -44,7 +44,15 @@ export interface GeneratedContent {
 }
 
 /** A generation that failed for a reason worth telling the user. Aborts are not wrapped. */
-export class GenerationError extends Error {}
+export class GenerationError extends Error {
+  /** The local API's error code (Claude Code path), e.g. 'not-logged-in'. */
+  readonly code?: string
+
+  constructor(message: string, code?: string) {
+    super(message)
+    this.code = code
+  }
+}
 
 interface Options {
   apiKey: string
@@ -70,6 +78,7 @@ export function readGeneratedContent(parsed: unknown): GeneratedContent | null {
   const sentences = (Array.isArray(fields.sentences) ? fields.sentences : [])
     .map(readSentence)
     .filter((s): s is GeneratedSentence => s !== null)
+    .slice(0, SENTENCE_COUNT)
   if (sentences.length === 0) return null
   return {
     meaning: isText(fields.meaning) ? fields.meaning.trim() : '',

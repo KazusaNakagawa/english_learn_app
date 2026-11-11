@@ -42,6 +42,22 @@ test("buildClaudeEnv removes API credentials so the CLI uses its subscription lo
   assert.equal(env.HOME, "/h")
 })
 
+test("buildClaudeEnv removes variables that route the CLI to another backend or endpoint", () => {
+  const env = buildClaudeEnv({
+    PATH: "/bin",
+    ANTHROPIC_BASE_URL: "https://proxy.example",
+    CLAUDE_CODE_USE_BEDROCK: "1",
+    CLAUDE_CODE_USE_VERTEX: "1",
+    CLAUDE_CODE_USE_FOUNDRY: "1",
+    HTTPS_PROXY: "http://corp-proxy:8080",
+  })
+  for (const name of ["ANTHROPIC_BASE_URL", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY"]) {
+    assert.equal(name in env, false, name)
+  }
+  // A network proxy is how the machine reaches the internet; it stays.
+  assert.equal(env.HTTPS_PROXY, "http://corp-proxy:8080")
+})
+
 test("buildClaudeEnv does not modify its input", () => {
   const input = { ANTHROPIC_API_KEY: "sk-ant-x" }
   buildClaudeEnv(input)
@@ -83,6 +99,8 @@ test("runClaude passes structured output, no tools, and isolation flags", async 
   for (const flag of ["--disable-slash-commands", "--strict-mcp-config", "--no-session-persistence"]) {
     assert.ok(args.includes(flag), flag)
   }
+  // No user/project/local settings: their hooks and env must not run on every generation.
+  assert.equal(value("--setting-sources"), "")
   // The prompt is the last argument, after "--", so a word can never be read as a flag.
   assert.equal(args.at(-2), "--")
   assert.equal(args.at(-1), "p")

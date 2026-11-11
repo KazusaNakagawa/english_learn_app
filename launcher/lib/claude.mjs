@@ -21,13 +21,21 @@ export const MESSAGES = {
   failed: "例文を生成できませんでした。もう一度試してください。",
 }
 
-// These make the CLI bill an API account instead of the subscription.
-const API_CREDENTIALS = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"]
+// These make the CLI bill an API account, a cloud provider, or another
+// endpoint instead of the subscription. A network proxy (HTTPS_PROXY) stays.
+const NOT_SUBSCRIPTION = [
+  "ANTHROPIC_API_KEY",
+  "ANTHROPIC_AUTH_TOKEN",
+  "ANTHROPIC_BASE_URL",
+  "CLAUDE_CODE_USE_BEDROCK",
+  "CLAUDE_CODE_USE_VERTEX",
+  "CLAUDE_CODE_USE_FOUNDRY",
+]
 
-/** The child env for the default `cli` mode: API credentials removed, everything else kept. */
+/** The child env for the default `cli` mode: everything that bypasses the subscription removed. */
 export function buildClaudeEnv(env) {
   const out = { ...env }
-  for (const name of API_CREDENTIALS) delete out[name]
+  for (const name of NOT_SUBSCRIPTION) delete out[name]
   return out
 }
 
@@ -119,6 +127,9 @@ export async function runClaude({
     "--disable-slash-commands",
     "--strict-mcp-config",
     "--no-session-persistence",
+    // Skip user/project/local settings, so their hooks, env, and model do not
+    // run on every generation. The login itself is not a setting and stays.
+    "--setting-sources", "",
     ...(model ? ["--model", model] : []),
     "--",
     prompt,

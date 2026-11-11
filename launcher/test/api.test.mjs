@@ -10,13 +10,18 @@ let port
 let origin
 let generateImpl
 let calls
+let statusCalls = 0
 
 const CONTENT = { meaning: "m", phonetic: "p", sentences: [{ english: "E.", japanese: "J。", category: "c" }] }
 
 before(async () => {
   const api = createApiHandler({
     version: "1.2.3",
-    status: async () => ({ installed: true, loggedIn: true, subscriptionType: "pro" }),
+    status: async () => {
+      statusCalls++
+      await new Promise((r) => setTimeout(r, 20))
+      return { installed: true, loggedIn: true, subscriptionType: "pro" }
+    },
     generate: (options) => {
       calls.push(options)
       return generateImpl(options)
@@ -71,15 +76,28 @@ const post = (body, headers = {}) =>
 
 // --- health ---
 
-test("GET /api/health reports the app, version, and CLI status", async () => {
+test("GET /api/health answers the app and version without starting the CLI", async () => {
+  statusCalls = 0
   const res = await send("/api/health")
   assert.equal(res.status, 200)
   assert.equal(res.headers["cache-control"], "no-store")
+  assert.deepEqual(res.json, { app: "english-learn-app", version: "1.2.3" })
+  assert.equal(statusCalls, 0)
+})
+
+test("GET /api/health?claude=1 adds the CLI status", async () => {
+  const res = await send("/api/health?claude=1")
   assert.deepEqual(res.json, {
     app: "english-learn-app",
     version: "1.2.3",
     claude: { installed: true, loggedIn: true, subscriptionType: "pro" },
   })
+})
+
+test("concurrent status checks share one CLI call", async () => {
+  statusCalls = 0
+  await Promise.all([send("/api/health?claude=1"), send("/api/health?claude=1"), send("/api/health?claude=1")])
+  assert.equal(statusCalls, 1)
 })
 
 test("health from a foreign Host (DNS rebinding) is 403", async () => {
@@ -202,6 +220,39 @@ test("a second generation while one runs is 409", async () => {
   assert.equal((await first).status, 200)
   generateImpl = async () => CONTENT
   assert.equal((await post({ word: "c" })).status, 200)
+})
+
+test("a retry right after cancelling waits for the cancelled run instead of 409", async () => {
+  let finishCancelled
+  let started
+  const startedP = new Promise((r) => (started = r))
+  generateImpl = ({ signal }) =>
+    new Promise((resolve, reject) => {
+      started()
+      // Like the CLI: the run settles only once the killed child has exited.
+      signal.addEventListener("abort", () => {
+        finishCancelled = () => reject(Object.assign(new Error("aborted"), { name: "AbortError" }))
+      })
+    })
+  const req = request({
+    host: "127.0.0.1",
+    port,
+    path: "/api/generate-sentences",
+    method: "POST",
+    headers: { origin, "content-type": "application/json" },
+  })
+  req.on("error", () => {})
+  req.end(JSON.stringify({ word: "x" }))
+  await startedP
+  req.destroy()
+  while (!finishCancelled) await new Promise((r) => setTimeout(r, 5))
+  generateImpl = async () => CONTENT
+  const retry = post({ word: "y" })
+  await new Promise((r) => setTimeout(r, 30))
+  finishCancelled()
+  const res = await retry
+  assert.equal(res.status, 200)
+  assert.deepEqual(res.json, CONTENT)
 })
 
 test("closing the request aborts the generation", async () => {

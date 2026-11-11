@@ -308,7 +308,7 @@ describe('AddPage', () => {
       onGenerate: (init: RequestInit) => unknown = () => reply(200, generated),
     ) {
       const fetchMock = vi.fn(async (url: string, init: RequestInit = {}) =>
-        url === '/api/health' ? onHealth() : onGenerate(init))
+        url.startsWith('/api/health') ? onHealth() : onGenerate(init))
       vi.stubGlobal('fetch', fetchMock)
       return fetchMock
     }
@@ -371,6 +371,20 @@ describe('AddPage', () => {
       await userEvent.click(screen.getByRole('button', { name: '再確認' }))
       await vi.waitFor(() => expect(generateButton()).toBeEnabled())
       expect(screen.queryByText('Claude Code にログインしていません')).not.toBeInTheDocument()
+    })
+
+    it('rechecks the CLI when generation reports a logged-out CLI, bringing back the steps', async () => {
+      let loggedIn = true
+      stubApi(() => health({ installed: true, loggedIn }), () => {
+        loggedIn = false // the login expired after the page loaded
+        return reply(401, { error: 'not-logged-in', message: 'Claude Code にログインしていません。' })
+      })
+      render(<MemoryRouter><AddPage /></MemoryRouter>)
+      await type('英単語', 'apple')
+      await vi.waitFor(() => expect(generateButton()).toBeEnabled())
+      await userEvent.click(generateButton())
+      expect(await screen.findByRole('button', { name: '再確認' })).toBeInTheDocument()
+      expect(generateButton()).toBeDisabled()
     })
 
     it('shows the server message when generation fails, such as a usage limit', async () => {

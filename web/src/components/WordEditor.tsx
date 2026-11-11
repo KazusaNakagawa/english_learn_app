@@ -12,6 +12,9 @@ import { loadSettings } from '@/services/SettingsService'
 
 const fieldClass = 'border-0 shadow-none px-0 focus-visible:ring-0 text-sm'
 
+/** Generation errors that mean the Claude Code setup itself needs attention. */
+const RECHECK_CODES = new Set(['not-logged-in', 'cli-missing', 'no-server'])
+
 /**
  * Fills what the user left empty and adds the sentences. Rows the user typed or
  * edited, and stored sentences, are kept; blank rows and untouched rows from an
@@ -88,6 +91,9 @@ export function WordEditor({ title, initial, ownId, onSave, onCancel }: Props) {
       if (generation.current !== controller) return
       if (!(err instanceof GenerationError)) console.error('[WordEditor] generation failed:', err)
       setGenerateError(err instanceof GenerationError ? err.message : '例文を生成できませんでした')
+      // The CLI changed since the page checked it (logged out, uninstalled,
+      // launcher stopped): check again so the setup steps come back.
+      if (useClaude && err instanceof GenerationError && RECHECK_CODES.has(err.code ?? '')) claude.recheck()
     } finally {
       if (generation.current === controller) {
         generation.current = null

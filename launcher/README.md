@@ -16,7 +16,8 @@ URL. Keep using the same port: the app opened on another port starts empty.
 ## Generating sentences with Claude Code
 
 AIで例文を生成 runs the Claude Code CLI on this machine, using your
-Pro/Max login. No API key is needed. One-time setup:
+Pro/Max login. No API key is needed. macOS and Linux only for now: on
+Windows the npm-installed `claude.cmd` is not started yet. One-time setup:
 
 ```bash
 npm install -g @anthropic-ai/claude-code
@@ -28,8 +29,10 @@ it is not. The local API behind it (`POST /api/generate-sentences`):
 
 - runs `claude -p` with structured output, no tools, no slash commands, no
   MCP servers, and no saved session;
-- removes `ANTHROPIC_API_KEY` / `ANTHROPIC_AUTH_TOKEN` from the CLI's
-  environment, so the subscription is used rather than API billing;
+- removes `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL`
+  and `CLAUDE_CODE_USE_BEDROCK` / `_VERTEX` / `_FOUNDRY` from the CLI's
+  environment, and skips your Claude Code settings (`--setting-sources ""`,
+  so no hooks run), so the subscription is used rather than API billing;
 - answers only loopback clients whose `Origin` is this page, so other sites
   cannot spend your subscription;
 - runs one generation at a time, gives up after 3 minutes, and stops the CLI
