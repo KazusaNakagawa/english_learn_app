@@ -4,6 +4,9 @@ import 'fake-indexeddb/auto'
 // jsdom does not implement scrollIntoView
 window.HTMLElement.prototype.scrollIntoView = () => {}
 
+// jsdom does not implement window.scrollTo
+window.scrollTo = (() => {}) as typeof window.scrollTo
+
 // jsdom does not implement Blob.text
 Blob.prototype.text ??= function (this: Blob) {
   return new Promise<string>((resolve, reject) => {
