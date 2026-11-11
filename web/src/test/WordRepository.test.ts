@@ -42,8 +42,7 @@ async function store(...words: Word[]) {
   db.close()
 }
 
-// Relative to now: a fixed date falls out of the 10-day trash and gets purged
-// once the calendar passes it, which broke these tests on 2026-11-11.
+// Trashed one day ago: a fixed date would age past TRASH_RETENTION_DAYS and be purged.
 const TRASHED_AT = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
 
 describe('WordRepository', () => {
