@@ -6,6 +6,7 @@ import { getWordsForExport, mergeWords, replaceWords } from '@/services/WordRepo
 import { exportFileName, parseWordFile, serializeWords, WordFileError } from '@/services/WordTransfer'
 import type { Word } from '@/types/word'
 import { loadSettings, saveSettings, type AppSettings } from '@/services/SettingsService'
+import { activePreset, loadPresetState } from '@/services/PromptPresetService'
 import {
   ChevronRight, FlaskConical, Volume2,
   Upload, Download, Trash2, FileText, Shield,
@@ -282,6 +283,7 @@ function WordTransferRows() {
 
 export default function SettingsPage() {
   const navigate = useNavigate()
+  const [activePresetName] = useState(() => activePreset(loadPresetState()).name)
 
   const [init] = useState(initFromSettings)
   const [enVoice,   setEnVoiceRaw]   = useState<EnVoice>(init.enVoice)
@@ -571,7 +573,7 @@ export default function SettingsPage() {
         <div>
           <SectionLabel label="例文生成の条件" />
           <GroupCard>
-            <ListRow label="プリセット管理" value="一般" chevron />
+            <ListRow label="プリセット管理" value={activePresetName} chevron onClick={() => navigate('/settings/presets')} />
           </GroupCard>
         </div>
 

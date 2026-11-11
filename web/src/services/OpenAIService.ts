@@ -4,17 +4,15 @@
  * Called straight from the browser with the user's own key.
  */
 
+import { GENERAL_PRESET } from './PromptPresetService'
+
 const ENDPOINT = 'https://api.openai.com/v1/chat/completions'
 
 /** iOS generates 20, the count its bundled word list uses. */
 export const SENTENCE_COUNT = 20
 
-/** The iOS built-in 「一般」 preset. Presets are not configurable on the Web yet. */
-export const DEFAULT_CONDITIONS = `条件：
-- 日常会話、ビジネス、学習など多様なシーンの例文を含めてください
-- カテゴリは「日常会話」「ビジネス」「学習・教育」「趣味・娯楽」「旅行」などから適切なものを選んでください
-- 自然で実用的な例文にしてください
-- 日本語訳は自然な日本語にしてください`
+/** Conditions used when none are passed: the built-in 「一般」 preset. */
+export const DEFAULT_CONDITIONS = GENERAL_PRESET.conditions
 
 const SYSTEM_PROMPT = `あなたは英語学習アプリ用のアシスタントです。
 与えられた英単語について、日本語の意味・IPA発音記号・自然な例文を生成してください。
@@ -49,6 +47,8 @@ export class GenerationError extends Error {}
 interface Options {
   apiKey: string
   model: string
+  /** The prompt preset's conditions; defaults to the 「一般」 preset. */
+  conditions?: string
   signal?: AbortSignal
 }
 
@@ -67,7 +67,7 @@ function messageFor(status: number): string {
   return `生成に失敗しました（ステータス ${status}）`
 }
 
-export async function generateContent(word: string, { apiKey, model, signal }: Options): Promise<GeneratedContent> {
+export async function generateContent(word: string, { apiKey, model, conditions = DEFAULT_CONDITIONS, signal }: Options): Promise<GeneratedContent> {
   if (!apiKey) throw new GenerationError('設定でOpenAI APIキーを入力してください')
   // Flattened and capped as on iOS, with 「」 removed so the word cannot close
   // its quotes. This narrows prompt injection; it does not rule it out.
@@ -83,7 +83,7 @@ export async function generateContent(word: string, { apiKey, model, signal }: O
         model,
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: `「${cleanWord}」の意味・発音記号・例文を${SENTENCE_COUNT}個生成してください。\n\n${DEFAULT_CONDITIONS}` },
+          { role: 'user', content: `「${cleanWord}」の意味・発音記号・例文を${SENTENCE_COUNT}個生成してください。\n\n${conditions}` },
         ],
         response_format: { type: 'json_object' },
       }),

@@ -9,6 +9,8 @@ import TrashPage from '@/pages/TrashPage'
 import SettingsPage from '@/pages/SettingsPage'
 import PronunciationPage from '@/pages/PronunciationPage'
 import PocPage from '@/pages/PocPage'
+import PromptPresetsPage from '@/pages/presets/PromptPresetsPage'
+import PresetEditPage from '@/pages/presets/PresetEditPage'
 
 function App() {
   return (
@@ -22,6 +24,9 @@ function App() {
         <Route path="/add" element={<AddPage />} />
         <Route path="/trash" element={<TrashPage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/settings/presets" element={<PromptPresetsPage />} />
+        <Route path="/settings/presets/new" element={<PresetEditPage />} />
+        <Route path="/settings/presets/:id" element={<PresetEditPage />} />
       </Route>
       <Route path="/poc" element={<PocPage />} />
     </Routes>
