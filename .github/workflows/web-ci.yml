@@ -10,11 +10,15 @@ on:
     branches: [develop, main]
     paths:
       - 'web/**'
+      # vite.config.ts mounts the launcher's local API on the dev server.
+      - 'launcher/lib/**'
       - '.github/workflows/web-ci.yml'
   pull_request:
     branches: [develop, main]
     paths:
       - 'web/**'
+      # vite.config.ts mounts the launcher's local API on the dev server.
+      - 'launcher/lib/**'
       - '.github/workflows/web-ci.yml'
 
 # A follow-up push should replace the run in flight, not race it.

@@ -17,11 +17,13 @@ export default function TabBar() {
     <nav className="fixed bottom-0 inset-x-0 bg-white/80 backdrop-blur border-t border-border z-50">
       <div className="flex max-w-2xl mx-auto">
         {TABS.map(({ to, icon: Icon, label }) => {
-          const active = pathname === to
+          // A nested route such as /settings/privacy keeps its tab selected.
+          const active = pathname === to || (to !== '/' && pathname.startsWith(`${to}/`))
           return (
             <Link
               key={to}
               to={to}
+              aria-current={active ? 'page' : undefined}
               className={cn(
                 'flex-1 flex flex-col items-center gap-0.5 py-2 transition-colors',
                 active

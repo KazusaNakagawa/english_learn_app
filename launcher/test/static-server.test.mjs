@@ -5,6 +5,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { after, before, test } from "node:test"
 
+import { createApiHandler } from "../lib/api.mjs"
 import { APP_ID, createAppServer } from "../lib/static-server.mjs"
 
 let root
@@ -23,7 +24,8 @@ before(async () => {
   writeFileSync(join(root, "assets", "font.woff2"), "x")
   writeFileSync(join(root, "assets", "blob.unknownext"), "x")
   writeFileSync(outside, "do not serve")
-  server = createAppServer({ root, version: "9.9.9" })
+  const status = async () => ({ installed: true, loggedIn: true, subscriptionType: "pro" })
+  server = createAppServer({ root, version: "9.9.9", api: createApiHandler({ version: "9.9.9", status }) })
   await new Promise((r) => server.listen(0, "127.0.0.1", r))
   port = server.address().port
 })
@@ -121,5 +123,6 @@ test("/api/health identifies the app and version", async () => {
   assert.equal(res.status, 200)
   assert.match(res.headers["content-type"], /^application\/json/)
   assert.equal(res.headers["cache-control"], "no-store")
-  assert.deepEqual(JSON.parse(res.body), { app: APP_ID, version: "9.9.9" })
+  assert.equal(JSON.parse(res.body).app, APP_ID)
+  assert.equal(JSON.parse(res.body).version, "9.9.9")
 })

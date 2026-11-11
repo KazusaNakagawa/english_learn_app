@@ -5,8 +5,9 @@ import { createServer } from "node:http"
 import { pipeline } from "node:stream"
 import { extname, join, resolve, sep } from "node:path"
 
-/** What /api/health reports, so a second launch can recognise a running copy. */
-export const APP_ID = "english-learn-app"
+import { createApiHandler } from "./api.mjs"
+
+export { APP_ID } from "./app-id.mjs"
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -52,23 +53,18 @@ function decodePath(rawPath) {
 
 /**
  * Build (but do not start) the HTTP server.
- * @param {{ root: string, version: string }} options
+ * @param {{ root: string, version: string, api?: (req, res) => boolean }} options
+ *   api handles /api/* (see api.mjs); tests pass one with a stubbed CLI.
  */
-export function createAppServer({ root, version }) {
+export function createAppServer({ root, version, api = createApiHandler({ version }) }) {
   const base = resolve(root)
   return createServer((req, res) => {
     res.setHeader("x-content-type-options", "nosniff")
+    if (api(req, res)) return
     const pathname = (req.url ?? "/").split("?")[0]
 
     if (req.method !== "GET" && req.method !== "HEAD") {
       return send(res, 405, "Method Not Allowed", { allow: "GET, HEAD" })
-    }
-
-    if (pathname === "/api/health") {
-      return send(res, 200, req.method === "HEAD" ? "" : JSON.stringify({ app: APP_ID, version }), {
-        "content-type": "application/json; charset=utf-8",
-        "cache-control": "no-store",
-      })
     }
 
     const path = decodePath(pathname)

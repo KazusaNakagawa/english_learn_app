@@ -2,13 +2,19 @@ import { useEffect, useRef, useState } from 'react'
 import { Loader2, Plus, Sparkles, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { ClaudeCodeSetup } from '@/components/ClaudeCodeSetup'
+import { useClaudeCodeStatus } from '@/hooks/useClaudeCodeStatus'
 import { useIdsBySpelling } from '@/hooks/useWords'
 import { emptySentenceRow, isBlankRow, validateWordForm, type SentenceRow, type WordForm, type WordInput } from '@/lib/wordForm'
+import { generateWithClaudeCode } from '@/services/ClaudeCodeService'
 import { generateContent, GenerationError, type GeneratedContent } from '@/services/OpenAIService'
 import { loadSettings } from '@/services/SettingsService'
 import { allPresets, findPreset, loadPresetState } from '@/services/PromptPresetService'
 
 const fieldClass = 'border-0 shadow-none px-0 focus-visible:ring-0 text-sm'
+
+/** Generation errors that mean the Claude Code setup itself needs attention. */
+const RECHECK_CODES = new Set(['not-logged-in', 'cli-missing', 'no-server'])
 
 /**
  * Fills what the user left empty and adds the sentences. Rows the user typed or
@@ -48,10 +54,13 @@ export function WordEditor({ title, initial, ownId, onSave, onCancel }: Props) {
   const [generating, setGenerating] = useState(false)
   const [generateError, setGenerateError] = useState<string | null>(null)
   const generation = useRef<AbortController | null>(null)
-  const [{ openAIKey, openAIModel }] = useState(loadSettings)
+  const [{ openAIKey, openAIModel, aiProvider, claudeModel }] = useState(loadSettings)
   const [presets] = useState(loadPresetState)
   // Starts at the active preset; a choice here applies to this word only, as on iOS.
   const [presetId, setPresetId] = useState(presets.activeId)
+  const useClaude = aiProvider === 'claude-code'
+  const claude = useClaudeCodeStatus(useClaude)
+  const canGenerate = useClaude ? claude.state.kind === 'ready' : !!openAIKey
 
   useEffect(() => () => generation.current?.abort(), [])
 
@@ -78,17 +87,22 @@ export function WordEditor({ title, initial, ownId, onSave, onCancel }: Props) {
     setGenerating(true)
     setGenerateError(null)
     try {
-      const content = await generateContent(form.word, {
-        apiKey: openAIKey,
-        model: openAIModel,
-        conditions: findPreset(presets, presetId)?.conditions,
-        signal: controller.signal,
-      })
+      const content = useClaude
+        ? await generateWithClaudeCode(form.word, { model: claudeModel, signal: controller.signal })
+        : await generateContent(form.word, {
+            apiKey: openAIKey,
+            model: openAIModel,
+            conditions: findPreset(presets, presetId)?.conditions,
+            signal: controller.signal,
+          })
       if (generation.current === controller) setForm((prev) => withGenerated(prev, content))
     } catch (err) {
       if (generation.current !== controller) return
       if (!(err instanceof GenerationError)) console.error('[WordEditor] generation failed:', err)
       setGenerateError(err instanceof GenerationError ? err.message : '例文を生成できませんでした')
+      // The CLI changed since the page checked it (logged out, uninstalled,
+      // launcher stopped): check again so the setup steps come back.
+      if (useClaude && err instanceof GenerationError && RECHECK_CODES.has(err.code ?? '')) claude.recheck()
     } finally {
       if (generation.current === controller) {
         generation.current = null
@@ -170,14 +184,15 @@ export function WordEditor({ title, initial, ownId, onSave, onCancel }: Props) {
             ) : (
               <Button
                 type="button" variant="ghost"
-                disabled={!openAIKey || !form.word.trim()}
+                disabled={!canGenerate || !form.word.trim()}
                 className="w-full bg-white rounded-2xl text-[var(--ios-blue)]"
                 onClick={generate}
               >
                 <Sparkles size={16} className="mr-1" />AIで例文を生成
               </Button>
             )}
-            {!openAIKey && (
+            {useClaude && !generating && <ClaudeCodeSetup state={claude.state} onRecheck={claude.recheck} />}
+            {!useClaude && !openAIKey && (
               <p className="text-xs text-muted-foreground px-1">設定で OpenAI の API キーを入力すると、例文を自動で生成できます</p>
             )}
             {generateError && <p role="alert" className="text-xs text-[var(--ios-red)] px-1">{generateError}</p>}

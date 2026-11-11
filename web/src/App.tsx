@@ -11,6 +11,7 @@ import PronunciationPage from '@/pages/PronunciationPage'
 import PocPage from '@/pages/PocPage'
 import PromptPresetsPage from '@/pages/presets/PromptPresetsPage'
 import PresetEditPage from '@/pages/presets/PresetEditPage'
+import { PrivacyPolicyPage, TermsOfServicePage } from '@/pages/legal/LegalPage'
 
 function App() {
   return (
@@ -27,6 +28,8 @@ function App() {
         <Route path="/settings/presets" element={<PromptPresetsPage />} />
         <Route path="/settings/presets/new" element={<PresetEditPage />} />
         <Route path="/settings/presets/:id" element={<PresetEditPage />} />
+        <Route path="/settings/privacy" element={<PrivacyPolicyPage />} />
+        <Route path="/settings/terms" element={<TermsOfServicePage />} />
       </Route>
       <Route path="/poc" element={<PocPage />} />
     </Routes>

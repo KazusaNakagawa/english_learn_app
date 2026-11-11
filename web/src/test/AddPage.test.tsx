@@ -149,7 +149,7 @@ describe('AddPage', () => {
 
     beforeEach(() => {
       sessionStorage.clear()
-      saveSettings({ openAIKey: 'sk-test' })
+      saveSettings({ openAIKey: 'sk-test', aiProvider: 'openai' })
     })
 
     it('generates with the active preset, or with the one chosen for this word', async () => {
@@ -310,6 +310,132 @@ describe('AddPage', () => {
       await generate()
       expect(await screen.findByDisplayValue('I ate an apple.')).toBeInTheDocument()
       expect(screen.queryByText('APIキーが正しくありません')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('generating sentences with Claude Code', () => {
+    const generated = {
+      meaning: 'りんご',
+      phonetic: 'ˈæp.əl',
+      sentences: [
+        { english: 'I ate an apple.', japanese: 'りんごを食べた。', category: '日常会話' },
+        { english: 'Apples are red.', japanese: 'りんごは赤い。', category: '学習・教育' },
+      ],
+    }
+    const reply = (status: number, body: unknown) => ({ ok: status >= 200 && status < 300, status, json: async () => body })
+    const health = (claude: { installed: boolean; loggedIn: boolean; subscriptionType?: string | null }) =>
+      reply(200, { app: 'english-learn-app', version: '0.1.0', claude: { subscriptionType: null, ...claude } })
+    const READY = { installed: true, loggedIn: true, subscriptionType: 'pro' }
+
+    /** Route /api/health and /api/generate-sentences to the given handlers. */
+    function stubApi(
+      onHealth: () => unknown,
+      onGenerate: (init: RequestInit) => unknown = () => reply(200, generated),
+    ) {
+      const fetchMock = vi.fn(async (url: string, init: RequestInit = {}) =>
+        url.startsWith('/api/health') ? onHealth() : onGenerate(init))
+      vi.stubGlobal('fetch', fetchMock)
+      return fetchMock
+    }
+    const generateButton = () => screen.getByRole('button', { name: 'AIで例文を生成' })
+
+    beforeEach(() => {
+      sessionStorage.clear()
+      saveSettings({ aiProvider: 'claude-code', claudeModel: 'sonnet' })
+    })
+
+    it('fills the form with no API key configured', async () => {
+      const fetchMock = stubApi(() => health(READY))
+      render(<MemoryRouter><AddPage /></MemoryRouter>)
+      await type('英単語', 'apple')
+      await vi.waitFor(() => expect(generateButton()).toBeEnabled())
+      await userEvent.click(generateButton())
+      expect(await screen.findByDisplayValue('I ate an apple.')).toBe(screen.getByLabelText('例文1の英文'))
+      expect(screen.getByLabelText('意味')).toHaveValue('りんご')
+      expect(screen.getByLabelText('発音記号')).toHaveValue('ˈæp.əl')
+      const call = fetchMock.mock.calls.find(([url]) => url === '/api/generate-sentences')
+      expect(JSON.parse(call?.[1]?.body as string)).toEqual({ word: 'apple', model: 'sonnet' })
+    })
+
+    it('sends the model chosen in Settings', async () => {
+      saveSettings({ claudeModel: 'haiku' })
+      const fetchMock = stubApi(() => health(READY))
+      render(<MemoryRouter><AddPage /></MemoryRouter>)
+      await type('英単語', 'apple')
+      await vi.waitFor(() => expect(generateButton()).toBeEnabled())
+      await userEvent.click(generateButton())
+      await screen.findByDisplayValue('I ate an apple.')
+      const call = fetchMock.mock.calls.find(([url]) => url === '/api/generate-sentences')
+      expect(JSON.parse(call?.[1]?.body as string).model).toBe('haiku')
+    })
+
+    it('explains how to open the app when there is no local API', async () => {
+      stubApi(() => reply(404, {}))
+      render(<MemoryRouter><AddPage /></MemoryRouter>)
+      await type('英単語', 'apple')
+      expect(await screen.findByText('この画面では Claude Code で生成できません')).toBeInTheDocument()
+      expect(screen.getByText('npx english-learn-app')).toBeInTheDocument()
+      expect(generateButton()).toBeDisabled()
+    })
+
+    it('gives the install command when the CLI is missing', async () => {
+      stubApi(() => health({ installed: false, loggedIn: false }))
+      render(<MemoryRouter><AddPage /></MemoryRouter>)
+      expect(await screen.findByText('Claude Code がインストールされていません')).toBeInTheDocument()
+      expect(screen.getByText('npm install -g @anthropic-ai/claude-code')).toBeInTheDocument()
+    })
+
+    it('explains a logged-out CLI, and 再確認 enables generation after logging in', async () => {
+      let loggedIn = false
+      stubApi(() => health({ installed: true, loggedIn }))
+      render(<MemoryRouter><AddPage /></MemoryRouter>)
+      await type('英単語', 'apple')
+      expect(await screen.findByText('Claude Code にログインしていません')).toBeInTheDocument()
+      expect(generateButton()).toBeDisabled()
+      loggedIn = true
+      await userEvent.click(screen.getByRole('button', { name: '再確認' }))
+      await vi.waitFor(() => expect(generateButton()).toBeEnabled())
+      expect(screen.queryByText('Claude Code にログインしていません')).not.toBeInTheDocument()
+    })
+
+    it('rechecks the CLI when generation reports a logged-out CLI, bringing back the steps', async () => {
+      let loggedIn = true
+      stubApi(() => health({ installed: true, loggedIn }), () => {
+        loggedIn = false // the login expired after the page loaded
+        return reply(401, { error: 'not-logged-in', message: 'Claude Code にログインしていません。' })
+      })
+      render(<MemoryRouter><AddPage /></MemoryRouter>)
+      await type('英単語', 'apple')
+      await vi.waitFor(() => expect(generateButton()).toBeEnabled())
+      await userEvent.click(generateButton())
+      expect(await screen.findByRole('button', { name: '再確認' })).toBeInTheDocument()
+      expect(generateButton()).toBeDisabled()
+    })
+
+    it('shows the server message when generation fails, such as a usage limit', async () => {
+      stubApi(() => health(READY), () => reply(429, { error: 'usage-limit', message: 'Claude の利用上限に達しました。' }))
+      render(<MemoryRouter><AddPage /></MemoryRouter>)
+      await type('英単語', 'apple')
+      await vi.waitFor(() => expect(generateButton()).toBeEnabled())
+      await userEvent.click(generateButton())
+      expect(await screen.findByRole('alert')).toHaveTextContent('Claude の利用上限に達しました。')
+    })
+
+    it('生成を中止 aborts the request so the server stops the CLI', async () => {
+      let signal: AbortSignal | undefined
+      stubApi(() => health(READY), (init) => new Promise((_, reject) => {
+        signal = init.signal ?? undefined
+        signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))
+      }))
+      render(<MemoryRouter><AddPage /></MemoryRouter>)
+      await type('英単語', 'apple')
+      await vi.waitFor(() => expect(generateButton()).toBeEnabled())
+      await userEvent.click(generateButton())
+      expect(screen.getByLabelText('英単語')).toBeDisabled()
+      await userEvent.click(screen.getByRole('button', { name: '生成を中止' }))
+      expect(signal?.aborted).toBe(true)
+      expect(await screen.findByRole('button', { name: 'AIで例文を生成' })).toBeEnabled()
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     })
   })
 })

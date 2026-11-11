@@ -13,6 +13,9 @@ import {
   CheckCircle2, TriangleAlert,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ClaudeCodeSetup } from '@/components/ClaudeCodeSetup'
+import { useClaudeCodeStatus } from '@/hooks/useClaudeCodeStatus'
+import { CLAUDE_MODELS, type ClaudeModel } from '@/services/ClaudeCodeService'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { checkEndpoint, defaultEndpoint, endpointError, endpointOrigin, isLocalEndpoint, resolveVoicevox } from '@/lib/voicevox'
@@ -31,6 +34,10 @@ const OPENAI_MODELS = [
   { id: 'gpt-4o',       label: 'GPT-4o' },
   { id: 'gpt-4.1-mini', label: 'GPT-4.1 mini' },
 ]
+
+const AI_PROVIDERS = ['Claude Code', 'OpenAI'] as const
+type AiProvider = typeof AI_PROVIDERS[number]
+const AI_PROVIDER_IDS: Record<AiProvider, AppSettings['aiProvider']> = { 'Claude Code': 'claude-code', OpenAI: 'openai' }
 
 const EN_VOICES  = ['デフォルト', '女性', '男性', 'ずんだもん'] as const
 const JA_VOICES  = ['ずんだもん', 'デフォルト'] as const
@@ -167,6 +174,8 @@ function initFromSettings() {
     vvKeyOrigin: s.voicevoxApiKeyOrigin,
     openAIKey: s.openAIKey,
     aiModel:   s.openAIModel,
+    aiProvider: (s.aiProvider === 'openai' ? 'OpenAI' : 'Claude Code') as AiProvider,
+    claudeModel: s.claudeModel as ClaudeModel,
   }
 }
 
@@ -298,6 +307,9 @@ export default function SettingsPage() {
   const [endpointCheck, setEndpointCheck] = useState<{ ok: boolean; message: string } | 'checking' | null>(null)
   const [openAIKey, setOpenAIKeyRaw] = useState(init.openAIKey)
   const [aiModel,   setAiModelRaw]   = useState(init.aiModel)
+  const [aiProvider, setAiProviderRaw] = useState<AiProvider>(init.aiProvider)
+  const [claudeModel, setClaudeModelRaw] = useState<ClaudeModel>(init.claudeModel)
+  const claude = useClaudeCodeStatus(aiProvider === 'Claude Code')
   const [playing,     setPlaying]    = useState(false)
   const [coldStart,   setColdStart]  = useState(false)
   const [playError,   setPlayError]  = useState<string | null>(null)
@@ -328,6 +340,8 @@ export default function SettingsPage() {
   const setVvEndpoint = (v: string) => { setVvEndpointRaw(v); resetEndpointCheck(); saveSettings({ voicevoxEndpoint: v.trim() }) }
   const setOpenAIKey = (v: string)  => { setOpenAIKeyRaw(v); saveSettings({ openAIKey: v }) }
   const setAiModel   = (v: string)  => { setAiModelRaw(v);   saveSettings({ openAIModel: v }) }
+  const setAiProvider = (v: AiProvider) => { setAiProviderRaw(v); saveSettings({ aiProvider: AI_PROVIDER_IDS[v] }) }
+  const setClaudeModel = (v: ClaudeModel) => { setClaudeModelRaw(v); saveSettings({ claudeModel: v }) }
 
   const refreshCacheUsage = useCallback(() => {
     return getCacheUsage()
@@ -536,36 +550,56 @@ export default function SettingsPage() {
           </GroupCard>
         </div>
 
-        {/* OpenAI API設定 */}
+        {/* 例文の生成方法 */}
         <div>
-          <SectionLabel label="OpenAI API設定" />
+          <SectionLabel label="例文の生成方法" />
           <GroupCard>
-            <Row>
-              <Input
-                type="password" placeholder="APIキー" value={openAIKey}
-                onChange={(e) => setOpenAIKey(e.target.value)}
-                className="border-0 shadow-none px-0 focus-visible:ring-0 text-sm"
-              />
-              {openAIKey && (
-                <InlineAlert type="success" message="APIキーが設定されています" className="mt-1.5" />
-              )}
+            <Row className="space-y-2">
+              <SegmentedControl options={AI_PROVIDERS} value={aiProvider} onChange={setAiProvider} />
+              <p className="text-xs text-muted-foreground">
+                {aiProvider === 'Claude Code'
+                  ? 'このパソコンの Claude Code（Pro / Max プラン）で生成します。API キーは要りません。'
+                  : 'OpenAI の API キーで生成します。利用料は OpenAI のアカウントに請求されます。'}
+              </p>
             </Row>
-          </GroupCard>
-        </div>
-
-        {/* AIモデル設定 */}
-        <div>
-          <SectionLabel label="AIモデル設定" />
-          <GroupCard>
-            <Row>
-              <p className="text-xs text-muted-foreground mb-1">使用モデル</p>
-              <select
-                className="w-full text-sm text-[var(--ios-blue)] bg-transparent border-0 outline-none cursor-pointer"
-                value={aiModel} onChange={(e) => setAiModel(e.target.value)}
-              >
-                {OPENAI_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-              </select>
-            </Row>
+            {aiProvider === 'Claude Code' ? (
+              <>
+                <Row><ClaudeCodeSetup state={claude.state} onRecheck={claude.recheck} detailed /></Row>
+                <Row>
+                  <label htmlFor="claude-model" className="block text-xs text-muted-foreground mb-1">使用モデル</label>
+                  <select
+                    id="claude-model"
+                    className="w-full text-sm text-[var(--ios-blue)] bg-transparent border-0 outline-none cursor-pointer"
+                    value={claudeModel} onChange={(e) => setClaudeModel(e.target.value as ClaudeModel)}
+                  >
+                    {CLAUDE_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+                  </select>
+                </Row>
+              </>
+            ) : (
+              <>
+                <Row>
+                  <Input
+                    type="password" placeholder="OpenAI APIキー" aria-label="OpenAI APIキー" value={openAIKey}
+                    onChange={(e) => setOpenAIKey(e.target.value)}
+                    className="border-0 shadow-none px-0 focus-visible:ring-0 text-sm"
+                  />
+                  {openAIKey && (
+                    <InlineAlert type="success" message="APIキーが設定されています" className="mt-1.5" />
+                  )}
+                </Row>
+                <Row>
+                  <label htmlFor="openai-model" className="block text-xs text-muted-foreground mb-1">使用モデル</label>
+                  <select
+                    id="openai-model"
+                    className="w-full text-sm text-[var(--ios-blue)] bg-transparent border-0 outline-none cursor-pointer"
+                    value={aiModel} onChange={(e) => setAiModel(e.target.value)}
+                  >
+                    {OPENAI_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+                  </select>
+                </Row>
+              </>
+            )}
           </GroupCard>
         </div>
 
@@ -615,8 +649,8 @@ export default function SettingsPage() {
         <div>
           <SectionLabel label="法的情報" />
           <GroupCard>
-            <ListRow icon={Shield}   label="プライバシーポリシー" chevron />
-            <ListRow icon={FileText} label="利用規約"             chevron />
+            <ListRow icon={Shield}   label="プライバシーポリシー" chevron onClick={() => navigate('/settings/privacy')} />
+            <ListRow icon={FileText} label="利用規約"             chevron onClick={() => navigate('/settings/terms')} />
           </GroupCard>
         </div>
 
@@ -645,12 +679,12 @@ export default function SettingsPage() {
                   body: '英語音声: デフォルト/女性/男性/ずんだもん から選択\n日本語音声: ずんだもん/デフォルト から選択',
                 },
                 {
-                  title: 'OpenAI APIキーを設定すると、単語追加時に自動で例文を生成できます。',
-                  body: 'APIキーはOpenAIのウェブサイトで取得できます。',
+                  title: '単語の追加・編集画面で「AIで例文を生成」を押すと、意味・発音記号・例文を自動で入力します。',
+                  body: 'Claude Code: このパソコンで Claude Code にログインしていれば、API キーなしで使えます（Pro / Max プランの利用上限の範囲内）。\nOpenAI: OpenAI のウェブサイトで取得した API キーを入力して使います。',
                 },
                 {
-                  title: 'AIモデルは精度やコストに応じて選択できます。',
-                  body: 'GPT-4o miniは高速で低コスト、GPT-4oは高性能です。',
+                  title: 'モデルは速さと品質に応じて選択できます。',
+                  body: 'Claude Code は Sonnet、OpenAI は GPT-4o mini がおすすめです。',
                 },
                 {
                   title: '例文の条件は「プリセット管理」から選択・編集できます。',
