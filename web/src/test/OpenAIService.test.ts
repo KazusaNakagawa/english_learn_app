@@ -41,6 +41,14 @@ describe('generateContent', () => {
       expect(user).toContain(DEFAULT_CONDITIONS)
     })
 
+    it('sends the conditions it is given instead of the default', async () => {
+      await generateContent('rarity', { ...options, conditions: '条件：\n- 旅行で使える例文にしてください' })
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body)
+      const user = body.messages.find((m: { role: string }) => m.role === 'user').content
+      expect(user).toContain('旅行で使える例文にしてください')
+      expect(user).not.toContain(DEFAULT_CONDITIONS)
+    })
+
     it('returns the meaning, the phonetic without slashes, and the sentences', async () => {
       await expect(generateContent('rarity', options)).resolves.toEqual({
         meaning: '珍しさ',

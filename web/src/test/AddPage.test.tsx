@@ -6,6 +6,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import AddPage from '@/pages/AddPage'
 import { archiveWord, getWords } from '@/services/WordRepository'
 import { saveSettings } from '@/services/SettingsService'
+import { BUILT_IN_PRESETS, loadPresetState, savePresetState, setActivePreset } from '@/services/PromptPresetService'
 
 const mockNavigate = vi.fn()
 vi.mock('react-router', async (importOriginal) => {
@@ -149,6 +150,30 @@ describe('AddPage', () => {
     beforeEach(() => {
       sessionStorage.clear()
       saveSettings({ openAIKey: 'sk-test', aiProvider: 'openai' })
+    })
+
+    it('generates with the active preset, or with the one chosen for this word', async () => {
+      const [, business, travel] = BUILT_IN_PRESETS
+      localStorage.clear()
+      savePresetState(setActivePreset(loadPresetState(), business.id))
+      const fetchMock = vi.fn<(url: string, init: RequestInit) => Promise<ReturnType<typeof completion>>>(async () => completion())
+      vi.stubGlobal('fetch', fetchMock)
+      const userPrompt = (call: number) =>
+        JSON.parse(fetchMock.mock.calls[call][1].body as string).messages.find((m: { role: string }) => m.role === 'user').content
+      render(<MemoryRouter><AddPage /></MemoryRouter>)
+      await type('英単語', 'apple')
+
+      const picker = screen.getByRole('combobox', { name: 'プリセット' })
+      expect(picker).toHaveValue(business.id)
+      await generate()
+      await screen.findByDisplayValue('I ate an apple.')
+      expect(userPrompt(0)).toContain(business.conditions)
+
+      await userEvent.selectOptions(picker, travel.id)
+      await generate()
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+      expect(userPrompt(1)).toContain(travel.conditions)
+      expect(loadPresetState().activeId).toBe(business.id) // choosing here does not change the setting
     })
 
     it('fills empty fields and adds the sentences as editable rows', async () => {

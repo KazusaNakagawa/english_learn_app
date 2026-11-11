@@ -18,6 +18,8 @@ import { ClaudeError } from "../lib/claude.mjs"
 
 const OPENAI_SERVICE = fileURLToPath(new URL("../../web/src/services/OpenAIService.ts", import.meta.url))
 
+const PRESET_SERVICE = fileURLToPath(new URL("../../web/src/services/PromptPresetService.ts", import.meta.url))
+
 function tsConstant(source, name) {
   const m = source.match(new RegExp(`const ${name} = \`([\\s\\S]*?)\``))
   return m?.[1]
@@ -26,7 +28,9 @@ function tsConstant(source, name) {
 test("the prompt matches web/src/services/OpenAIService.ts", { skip: !existsSync(OPENAI_SERVICE) && "web/ not present" }, () => {
   const source = readFileSync(OPENAI_SERVICE, "utf8")
   assert.equal(SYSTEM_PROMPT, tsConstant(source, "SYSTEM_PROMPT"))
-  assert.equal(DEFAULT_CONDITIONS, tsConstant(source, "DEFAULT_CONDITIONS"))
+  // The web keeps the default conditions as its first built-in preset (「一般」).
+  const general = readFileSync(PRESET_SERVICE, "utf8").match(/conditions: `([\s\S]*?)`/)?.[1]
+  assert.equal(DEFAULT_CONDITIONS, general)
   assert.match(source, new RegExp(`SENTENCE_COUNT = ${SENTENCE_COUNT}\\b`))
 })
 

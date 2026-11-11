@@ -9,6 +9,7 @@ import { emptySentenceRow, isBlankRow, validateWordForm, type SentenceRow, type 
 import { generateWithClaudeCode } from '@/services/ClaudeCodeService'
 import { generateContent, GenerationError, type GeneratedContent } from '@/services/OpenAIService'
 import { loadSettings } from '@/services/SettingsService'
+import { allPresets, findPreset, loadPresetState } from '@/services/PromptPresetService'
 
 const fieldClass = 'border-0 shadow-none px-0 focus-visible:ring-0 text-sm'
 
@@ -54,6 +55,9 @@ export function WordEditor({ title, initial, ownId, onSave, onCancel }: Props) {
   const [generateError, setGenerateError] = useState<string | null>(null)
   const generation = useRef<AbortController | null>(null)
   const [{ openAIKey, openAIModel, aiProvider, claudeModel }] = useState(loadSettings)
+  const [presets] = useState(loadPresetState)
+  // Starts at the active preset; a choice here applies to this word only, as on iOS.
+  const [presetId, setPresetId] = useState(presets.activeId)
   const useClaude = aiProvider === 'claude-code'
   const claude = useClaudeCodeStatus(useClaude)
   const canGenerate = useClaude ? claude.state.kind === 'ready' : !!openAIKey
@@ -85,7 +89,12 @@ export function WordEditor({ title, initial, ownId, onSave, onCancel }: Props) {
     try {
       const content = useClaude
         ? await generateWithClaudeCode(form.word, { model: claudeModel, signal: controller.signal })
-        : await generateContent(form.word, { apiKey: openAIKey, model: openAIModel, signal: controller.signal })
+        : await generateContent(form.word, {
+            apiKey: openAIKey,
+            model: openAIModel,
+            conditions: findPreset(presets, presetId)?.conditions,
+            signal: controller.signal,
+          })
       if (generation.current === controller) setForm((prev) => withGenerated(prev, content))
     } catch (err) {
       if (generation.current !== controller) return
@@ -152,6 +161,18 @@ export function WordEditor({ title, initial, ownId, onSave, onCancel }: Props) {
         <section>
           <p className="text-xs text-muted-foreground uppercase tracking-wide px-1 mb-1">例文（任意）</p>
           <div className="space-y-2">
+            <div className="bg-white rounded-2xl px-4 py-2 flex items-center gap-3">
+              <label htmlFor="generation-preset" className="text-sm shrink-0">プリセット</label>
+              <select
+                id="generation-preset"
+                value={presetId}
+                disabled={generating}
+                onChange={(e) => setPresetId(e.target.value)}
+                className="flex-1 min-w-0 text-sm text-right text-[var(--ios-blue)] bg-transparent border-0 outline-none cursor-pointer"
+              >
+                {allPresets(presets).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
             {generating ? (
               <div className="bg-white rounded-2xl pl-4 pr-2 py-1.5 flex items-center gap-2">
                 <Loader2 size={16} className="animate-spin text-[var(--ios-blue)]" />
