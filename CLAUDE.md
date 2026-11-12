@@ -46,13 +46,10 @@ npm run destroy:iam
 npx cdk bootstrap      # One-time per AWS account/region
 ```
 
-There are **two CDK apps**. `bin/app.ts` holds `VoicevoxStack-{env}`; `bin/iam-app.ts`
-holds `IamStack`, and the `:iam` scripts point at it with `--app`. They are separate
-because IAM changes lock people out of the account when wrong, and are reviewed and
-deployed on a different cadence from the application stack. (Originally there was a
-harder reason: a CDK app constructs every declared stack before the CLI applies a
-stack selector, and `VoicevoxStack` threw without `VOICEVOX_API_KEY_{ENV}`. That
-dependency is gone as of #182 — secrets are read from Secrets Manager at runtime.)
+There are **two CDK apps**: `bin/app.ts` holds `VoicevoxStack-{env}`; `bin/iam-app.ts`
+holds `IamStack` (the `:iam` scripts point at it with `--app`). They are kept separate
+because IAM changes lock people out of the account when wrong and are reviewed and
+deployed on a different cadence.
 
 `IamStack` has no environment suffix: IAM is account-global and poc/dev/pro share one
 account, so environment separation comes from ARN conditions inside the policies.
@@ -157,19 +154,12 @@ DEVELOPMENT_TEAM = "$(DEVELOPMENT_TEAM)";
 
 The VOICEVOX API requires `x-api-key` header authentication. See [docs/02.voicevox_api_authentication.md](docs/02.voicevox_api_authentication.md) for details.
 
-Both secrets the stack needs live in Secrets Manager and are **created by hand, once
-per environment** — the stack imports them by name and never sees a value, so nothing
-secret reaches a Lambda environment variable, the CloudFormation template, or `cdk.out`
-(#182). `cdk destroy` therefore does not delete them, which is deliberate: a deleted
-secret cannot be recreated under the same name for 7–30 days.
-
-| Secret | Read by |
-| --- | --- |
-| `/englishlearn/{env}/voicevox/api-key` | `voicevox-authorizer-{env}` |
-| `/englishlearn/{env}/voicevox/slack-webhook-url` | `voicevox-slack-alert-{env}` |
-
-Rotating either is a `put-secret-value` with no redeploy; allow up to 10 minutes for
-the API key (two 5-minute caches, see docs/02).
+Both secrets the stack needs (`/englishlearn/{env}/voicevox/api-key` and
+`/englishlearn/{env}/voicevox/slack-webhook-url`) live in Secrets Manager and are
+**created by hand, once per environment**; the stack imports them by name and never
+sees a value (#182). `cdk destroy` does not delete them, deliberately — a deleted
+secret cannot be recreated under the same name for 7–30 days. Setup and rotation:
+[docs/02.voicevox_api_authentication.md](docs/02.voicevox_api_authentication.md).
 
 Account access runs through IAM groups defined in `aws/lib/iam-stack.ts`. Read
 [docs/05.iam_group_design.md](docs/05.iam_group_design.md) before changing them —
