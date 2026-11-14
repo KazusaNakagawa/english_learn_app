@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+/// <reference types="vite-plugin-pwa/client" />
 
 // Web Speech API type declarations (not yet in lib.dom.d.ts for all environments)
 interface SpeechRecognitionEvent extends Event {
