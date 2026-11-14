@@ -10,6 +10,7 @@
 import { getCache, putCache, makeCacheKey, evictCache } from './AudioCacheService'
 import { defaultEndpoint, isLocalEndpoint, normalizeEndpoint, voicevoxHeaders } from '@/lib/voicevox'
 import { reportMissingVoicevoxKey } from '@/lib/voicevoxNotice'
+import { pickEnVoice } from '@/lib/enVoice'
 
 const CACHE_MAX_BYTES = 50 * 1024 * 1024 // 50 MB
 const VOICE_LOAD_TIMEOUT_MS = 3000
@@ -58,17 +59,6 @@ function loadVoices(signal: AbortSignal): Promise<SpeechSynthesisVoice[]> {
     synth.addEventListener('voiceschanged', finish, { signal: waiting.signal })
     signal.addEventListener('abort', finish, { signal: waiting.signal })
   })
-}
-
-function pickEnVoice(voices: SpeechSynthesisVoice[], type: VoiceType): SpeechSynthesisVoice | null {
-  const en = voices.filter((v) => v.lang.startsWith('en'))
-  if (type === 'female' || type === 'default') {
-    return en.find((v) => /female/i.test(v.name)) ?? null
-  }
-  if (type === 'male') {
-    return en.find((v) => /male/i.test(v.name) && !/female/i.test(v.name)) ?? null
-  }
-  return null
 }
 
 async function speakWebSpeech(
