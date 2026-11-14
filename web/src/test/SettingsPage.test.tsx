@@ -372,4 +372,76 @@ describe('SettingsPage', () => {
       expect(fetchMock).not.toHaveBeenCalled()
     })
   })
+
+  describe('zundamon availability', () => {
+    const LOCAL = 'http://127.0.0.1:50021'
+    const REMOTE = 'https://voicevox.example.com'
+    const zundamonButtons = () => screen.getAllByRole('button', { name: 'ずんだもん' })
+    const engine = (up: boolean) => vi.stubGlobal('fetch', vi.fn(async () => {
+      if (!up) throw new TypeError('Failed to fetch')
+      return new Response('"0.25.1"', { status: 200 })
+    }))
+
+    afterEach(() => {
+      vi.unstubAllGlobals()
+      vi.restoreAllMocks()
+      localStorage.clear()
+    })
+
+    it('disables zundamon for both languages while there is no endpoint, and says why', async () => {
+      await renderPage()
+      expect(zundamonButtons()).toHaveLength(2)
+      zundamonButtons().forEach((b) => expect(b).toBeDisabled())
+      expect(screen.getByText(/ずんだもんは、VOICEVOX の接続先と API キーを設定すると選べます/)).toBeInTheDocument()
+    })
+
+    it('keeps zundamon disabled for a remote endpoint without a key', async () => {
+      saveSettings({ voicevoxEndpoint: REMOTE })
+      await renderPage()
+      zundamonButtons().forEach((b) => expect(b).toBeDisabled())
+    })
+
+    it('enables zundamon when a local engine answers, and shows no hint', async () => {
+      engine(true)
+      saveSettings({ voicevoxEndpoint: LOCAL })
+      await renderPage()
+      zundamonButtons().forEach((b) => expect(b).toBeEnabled())
+      expect(screen.queryByText(/ずんだもん.*選べません|選べます/)).not.toBeInTheDocument()
+    })
+
+    it('disables zundamon when the local engine is not running, and says so', async () => {
+      engine(false)
+      saveSettings({ voicevoxEndpoint: LOCAL })
+      await renderPage()
+      zundamonButtons().forEach((b) => expect(b).toBeDisabled())
+      expect(screen.getByText(/エンジンに接続できない/)).toBeInTheDocument()
+    })
+
+    it('enables zundamon after the engine is started and the window regains focus', async () => {
+      engine(false)
+      saveSettings({ voicevoxEndpoint: LOCAL })
+      await renderPage()
+      zundamonButtons().forEach((b) => expect(b).toBeDisabled())
+      engine(true)
+      await act(async () => { window.dispatchEvent(new Event('focus')) })
+      zundamonButtons().forEach((b) => expect(b).toBeEnabled())
+    })
+
+    it('disables zundamon offline for a remote endpoint with a key, and re-enables it online', async () => {
+      saveSettings({ voicevoxEndpoint: REMOTE, voicevoxApiKey: 'key', voicevoxApiKeyOrigin: REMOTE })
+      const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+      await renderPage()
+      zundamonButtons().forEach((b) => expect(b).toBeDisabled())
+      expect(screen.getByText(/オフラインのため/)).toBeInTheDocument()
+      online.mockReturnValue(true)
+      await act(async () => { window.dispatchEvent(new Event('online')) })
+      zundamonButtons().forEach((b) => expect(b).toBeEnabled())
+    })
+
+    it('leaves the other voices selectable while zundamon is disabled', async () => {
+      await renderPage()
+      expect(screen.getByRole('button', { name: '女性' })).toBeEnabled()
+      expect(screen.getByRole('button', { name: '男性' })).toBeEnabled()
+    })
+  })
 })

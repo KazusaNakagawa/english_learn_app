@@ -10,6 +10,7 @@
 import { getCache, putCache, makeCacheKey, evictCache } from './AudioCacheService'
 import { defaultEndpoint, isLocalEndpoint, normalizeEndpoint, voicevoxHeaders } from '@/lib/voicevox'
 import { reportMissingVoicevoxKey } from '@/lib/voicevoxNotice'
+import { pickEnVoice } from '@/lib/enVoice'
 
 const CACHE_MAX_BYTES = 50 * 1024 * 1024 // 50 MB
 const VOICE_LOAD_TIMEOUT_MS = 3000
@@ -60,17 +61,6 @@ function loadVoices(signal: AbortSignal): Promise<SpeechSynthesisVoice[]> {
   })
 }
 
-function pickEnVoice(voices: SpeechSynthesisVoice[], type: VoiceType): SpeechSynthesisVoice | null {
-  const en = voices.filter((v) => v.lang.startsWith('en'))
-  if (type === 'female' || type === 'default') {
-    return en.find((v) => /female/i.test(v.name)) ?? null
-  }
-  if (type === 'male') {
-    return en.find((v) => /male/i.test(v.name) && !/female/i.test(v.name)) ?? null
-  }
-  return null
-}
-
 async function speakWebSpeech(
   text: string,
   lang: 'en' | 'ja',
@@ -80,8 +70,7 @@ async function speakWebSpeech(
   // Absent in some embedded browsers. SettingsPage shows this message; the other
   // pages only log it.
   if (!window.speechSynthesis) throw new Error('このブラウザは音声合成に対応していません')
-  // Only an English non-zundamon voice reads the list.
-  const voices = lang === 'en' && voice !== 'zundamon' ? await loadVoices(signal) : []
+  const voices = lang === 'en' ? await loadVoices(signal) : []
   if (signal.aborted) return
   return new Promise((resolve, reject) => {
     // An engine can fire neither end nor error, so the utterance cannot be
@@ -103,7 +92,9 @@ async function speakWebSpeech(
     utt.lang = lang === 'en' ? 'en-US' : 'ja-JP'
     if (lang === 'en') {
       const v = pickEnVoice(voices, voice)
-      if (v) utt.voice = v
+      // The utterance's lang must match the voice's own (Daniel is en-GB), or the
+      // engine may switch to a voice of another language.
+      if (v) { utt.voice = v; utt.lang = v.lang }
     }
     utt.onend = () => settle(resolve)
     utt.onerror = (e) => settle(() => reject(new Error(e.error)))
@@ -281,6 +272,8 @@ export async function playTTS(
 
   // 3. Web Speech API fallback
   if (isStopped()) return 'cancelled'
-  await speakWebSpeech(text, lang, voice, signal)
+  // Zundamon has no browser voice of its own. Leaving the choice to the browser
+  // can land on a harsh legacy voice, so it reads with the default (female) one.
+  await speakWebSpeech(text, lang, voice === 'zundamon' ? 'default' : voice, signal)
   return isStopped() ? 'cancelled' : 'webspeech'
 }
