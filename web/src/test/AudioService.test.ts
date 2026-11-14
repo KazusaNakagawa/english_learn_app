@@ -85,7 +85,7 @@ describe('playTTS with stopTTS', () => {
   const cached = { audio_data: new Blob(['cached']) }
   let fetchMock: ReturnType<typeof vi.fn>
   let speak: ReturnType<typeof vi.fn>
-  let voices: { lang: string; name: string }[]
+  let voices: { lang: string; name: string; localService?: boolean }[]
   let voicesChanged: (() => void) | null
 
   const okResponse = () => ({ ok: true, json: async () => ({}), blob: async () => new Blob(['wav']) })
