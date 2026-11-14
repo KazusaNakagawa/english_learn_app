@@ -92,7 +92,9 @@ async function speakWebSpeech(
     utt.lang = lang === 'en' ? 'en-US' : 'ja-JP'
     if (lang === 'en') {
       const v = pickEnVoice(voices, voice)
-      if (v) utt.voice = v
+      // The utterance's lang must match the voice's own (Daniel is en-GB), or the
+      // engine may switch to a voice of another language.
+      if (v) { utt.voice = v; utt.lang = v.lang }
     }
     utt.onend = () => settle(resolve)
     utt.onerror = (e) => settle(() => reject(new Error(e.error)))

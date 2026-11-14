@@ -768,6 +768,25 @@ describe('playTTS with stopTTS', () => {
       expect(voicesChanged).toBeNull()
     })
 
+    it('speaks in the chosen voice\'s own language, not the en-US default', async () => {
+      const daniel = { lang: 'en-GB', name: 'Daniel', localService: true }
+      voices = [{ lang: 'en-US', name: 'Samantha', localService: true }, daniel]
+      const { playTTS } = await load()
+      await expect(playTTS('hello', { voice: 'male', lang: 'en' })).resolves.toBe('webspeech')
+      const utterance = speak.mock.calls[0][0]
+      expect(utterance.voice).toBe(daniel)
+      expect(utterance.lang).toBe('en-GB')
+    })
+
+    it('keeps lang en-US when the browser is left to pick the voice', async () => {
+      voices = [{ lang: 'en-US', name: 'Albert', localService: true }]
+      const { playTTS } = await load()
+      await playTTS('hello', { voice: 'male', lang: 'en' })
+      const utterance = speak.mock.calls[0][0]
+      expect(utterance.voice).toBeUndefined()
+      expect(utterance.lang).toBe('en-US')
+    })
+
     it('reads the zundamon fallback with the default (female) browser voice', async () => {
       vi.spyOn(console, 'warn').mockImplementation(() => {})
       const samantha = { lang: 'en-US', name: 'Samantha', localService: true }
