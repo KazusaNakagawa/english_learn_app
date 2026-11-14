@@ -9,7 +9,7 @@ const googleMale = v('Google UK English Male', 'en-GB', false)
 const googleFemale = v('Google UK English Female', 'en-GB', false)
 const googleUs = v('Google US English', 'en-US', false)
 const samantha = v('Samantha')
-const daniel = v('Daniel', 'en-GB')
+const reed = v('Reed (英語(アメリカ合衆国))')
 const albert = v('Albert')
 const fred = v('Fred')
 const novelty = v('Bad News')
@@ -17,7 +17,7 @@ const japanese = v('Kyoko', 'ja-JP')
 
 describe('pickEnVoice', () => {
   describe('offline-safe (local voices first)', () => {
-    const voices = [googleMale, googleFemale, googleUs, albert, novelty, fred, daniel, samantha, japanese]
+    const voices = [googleMale, googleFemale, googleUs, albert, novelty, fred, reed, samantha, japanese]
 
     it('picks a known local female voice over a network one', () => {
       expect(pickEnVoice(voices, 'female')).toBe(samantha)
@@ -25,7 +25,7 @@ describe('pickEnVoice', () => {
     })
 
     it('picks a known local male voice over a network one', () => {
-      expect(pickEnVoice(voices, 'male')).toBe(daniel)
+      expect(pickEnVoice(voices, 'male')).toBe(reed)
     })
 
     it('matches a voice whose name carries a locale suffix', () => {
@@ -34,7 +34,7 @@ describe('pickEnVoice', () => {
     })
 
     it('prefers the better sounding name over list order', () => {
-      expect(pickEnVoice([albert, fred, daniel], 'male')).toBe(daniel)
+      expect(pickEnVoice([albert, fred, reed], 'male')).toBe(reed)
       expect(pickEnVoice([v('Flo'), v('Karen', 'en-AU'), samantha], 'female')).toBe(samantha)
     })
 

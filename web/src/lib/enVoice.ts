@@ -4,10 +4,12 @@ import type { VoiceType } from '@/services/AudioService'
 // best sounding first. The old macOS synthesizer voices (Albert, Fred, Ralph,
 // Junior, Kathy) and the novelty ones are left out on purpose: they sound
 // robotic or hoarse, so unmatched means the browser's own default voice.
+// Daniel is left out too: macOS lists it (en-GB) but reads in the Japanese
+// default voice on the machine this was checked on (Reed en-US was the one that sounded right).
 // Network voices ("Google UK English Male") say the gender in the name; those
 // only count when no local English voice exists.
 const FEMALE_NAMES = ['samantha', 'ava', 'allison', 'susan', 'zoe', 'victoria', 'karen', 'moira', 'tessa', 'flo', 'shelley', 'sandy', 'grandma']
-const MALE_NAMES = ['alex', 'daniel', 'aaron', 'evan', 'nathan', 'tom', 'reed', 'eddy', 'rocko', 'grandpa']
+const MALE_NAMES = ['reed', 'eddy', 'rocko', 'grandpa', 'alex', 'aaron', 'evan', 'nathan', 'tom']
 
 /** "Flo (英語(アメリカ合衆国))" -> "flo": the name before any locale suffix. */
 const baseName = (name: string) => name.split(/[\s(]/)[0].toLowerCase()

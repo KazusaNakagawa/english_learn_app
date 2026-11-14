@@ -769,12 +769,12 @@ describe('playTTS with stopTTS', () => {
     })
 
     it('speaks in the chosen voice\'s own language, not the en-US default', async () => {
-      const daniel = { lang: 'en-GB', name: 'Daniel', localService: true }
-      voices = [{ lang: 'en-US', name: 'Samantha', localService: true }, daniel]
+      const reedGb = { lang: 'en-GB', name: 'Reed (英語(イギリス))', localService: true }
+      voices = [{ lang: 'en-US', name: 'Samantha', localService: true }, reedGb]
       const { playTTS } = await load()
       await expect(playTTS('hello', { voice: 'male', lang: 'en' })).resolves.toBe('webspeech')
       const utterance = speak.mock.calls[0][0]
-      expect(utterance.voice).toBe(daniel)
+      expect(utterance.voice).toBe(reedGb)
       expect(utterance.lang).toBe('en-GB')
     })
 
