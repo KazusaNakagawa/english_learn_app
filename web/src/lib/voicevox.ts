@@ -106,6 +106,21 @@ export function voicevoxUsable({ endpoint, apiKey }: { endpoint: string; apiKey:
   return !!endpoint && (!!apiKey || isLocalEndpoint(endpoint))
 }
 
+/**
+ * Whether a local engine answers right now. Only for local endpoints: it costs
+ * nothing there, whereas a request to the AWS endpoint can cold start Lambda and
+ * count toward the API's alarms.
+ */
+export async function probeLocalEngine(endpoint: string, signal?: AbortSignal, timeoutMs = 2000): Promise<boolean> {
+  const timeout = AbortSignal.timeout(timeoutMs)
+  try {
+    const res = await fetch(`${endpoint}/version`, { signal: signal ? AbortSignal.any([signal, timeout]) : timeout })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
 /** Long enough for a Lambda cold start, which takes 10 to 30 seconds. */
 const CHECK_TIMEOUT_MS = 40_000
 

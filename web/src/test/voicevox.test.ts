@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { checkEndpoint, defaultEndpoint, endpointError, endpointOrigin, isLocalEndpoint, normalizeEndpoint, resolveVoicevox, voicevoxHeaders, voicevoxUsable } from '@/lib/voicevox'
+import { checkEndpoint, defaultEndpoint, endpointError, endpointOrigin, isLocalEndpoint, normalizeEndpoint, probeLocalEngine, resolveVoicevox, voicevoxHeaders, voicevoxUsable } from '@/lib/voicevox'
 
 describe('isLocalEndpoint', () => {
   it.each([
@@ -223,5 +223,33 @@ describe('voicevoxUsable', () => {
     ['no endpoint and no key', '', '', false],
   ])('%s -> %s', (_label, endpoint, apiKey, usable) => {
     expect(voicevoxUsable({ endpoint, apiKey })).toBe(usable)
+  })
+})
+
+describe('probeLocalEngine', () => {
+  afterEach(() => { vi.unstubAllGlobals() })
+
+  it('is true when /version answers', async () => {
+    const fetchMock = vi.fn(async () => new Response('"0.25.1"', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(probeLocalEngine('http://127.0.0.1:50021')).resolves.toBe(true)
+    expect(fetchMock).toHaveBeenCalledWith('http://127.0.0.1:50021/version', expect.anything())
+  })
+
+  it('is false on an HTTP error', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 500 })))
+    await expect(probeLocalEngine('http://127.0.0.1:50021')).resolves.toBe(false)
+  })
+
+  it('is false when the engine is not running', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch') }))
+    await expect(probeLocalEngine('http://127.0.0.1:50021')).resolves.toBe(false)
+  })
+
+  it('gives up after the timeout', async () => {
+    vi.stubGlobal('fetch', vi.fn((_url: string, init: RequestInit) => new Promise((_, reject) => {
+      init.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
+    })))
+    await expect(probeLocalEngine('http://127.0.0.1:50021', undefined, 20)).resolves.toBe(false)
   })
 })
