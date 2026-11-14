@@ -3,6 +3,8 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath, URL } from 'node:url'
+import { VitePWA } from 'vite-plugin-pwa'
+import { manifest, NETWORK_ONLY } from './pwa-manifest'
 import { createApiHandler } from '../launcher/lib/api.mjs'
 
 /**
@@ -30,6 +32,18 @@ export default defineConfig({
     react(),
     tailwindcss(),
     localApi(),
+    VitePWA({
+      // The user decides when to reload onto a new version (see PwaUpdateNotice).
+      registerType: 'prompt',
+      manifest,
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,png,svg,woff2}'],
+        // The app uses HashRouter, so the shell is always index.html.
+        navigateFallback: 'index.html',
+        navigateFallbackDenylist: NETWORK_ONLY,
+        cleanupOutdatedCaches: true,
+      },
+    }),
   ],
   resolve: {
     alias: {

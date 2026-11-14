@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router'
 import TabBar from './TabBar'
 import { VoicevoxKeyNotice } from '@/components/VoicevoxKeyNotice'
+import { PwaUpdateNotice } from '@/components/PwaUpdateNotice'
 
 export default function AppLayout() {
   return (
@@ -9,6 +10,7 @@ export default function AppLayout() {
         <Outlet />
       </div>
       <VoicevoxKeyNotice />
+      <PwaUpdateNotice />
       <TabBar />
     </div>
   )
