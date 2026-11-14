@@ -18,7 +18,7 @@ import { useClaudeCodeStatus } from '@/hooks/useClaudeCodeStatus'
 import { CLAUDE_MODELS, type ClaudeModel } from '@/services/ClaudeCodeService'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-import { checkEndpoint, defaultEndpoint, endpointError, endpointOrigin, isLocalEndpoint, resolveVoicevox } from '@/lib/voicevox'
+import { checkEndpoint, defaultEndpoint, endpointError, endpointOrigin, isLocalEndpoint, resolveVoicevox, voicevoxUsable } from '@/lib/voicevox'
 
 const VOICEVOX_STYLES = [
   { id: '3',  label: 'ノーマル' },
@@ -92,21 +92,24 @@ function ListRow({
 }
 
 function SegmentedControl<T extends string>({
-  options, value, onChange,
+  options, value, onChange, disabledOptions = [],
 }: {
   options: readonly T[]
   value: T
   onChange: (v: T) => void
+  disabledOptions?: readonly T[]
 }) {
   return (
     <div className="flex bg-muted rounded-lg p-0.5 gap-0.5">
       {options.map((opt) => (
         <button
           key={opt}
+          disabled={disabledOptions.includes(opt)}
           onClick={() => onChange(opt)}
           className={cn(
             'flex-1 text-xs font-medium py-1.5 px-2 rounded-md transition-all',
             value === opt ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+            'disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-muted-foreground',
           )}
         >
           {opt}
@@ -361,6 +364,8 @@ export default function SettingsPage() {
   const vvEndpointError = endpointError(vvEndpoint)
   const usingBuildKey = voicevox.keySource === 'build'
   const keyHeldBack = !!vvKey && voicevox.keySource !== 'settings' && !!voicevox.endpoint
+  const zundamonUsable = voicevoxUsable(voicevox)
+  const zundamonOff = zundamonUsable ? [] : (['ずんだもん'] as const)
   const needsKey = !!voicevox.endpoint && !voicevox.apiKey && !isLocalEndpoint(voicevox.endpoint)
 
   async function testEndpoint() {
@@ -420,7 +425,10 @@ export default function SettingsPage() {
         <div>
           <SectionLabel label="英語の音声設定" />
           <GroupCard>
-            <Row><SegmentedControl options={EN_VOICES} value={enVoice} onChange={setEnVoice} /></Row>
+            <Row><SegmentedControl options={EN_VOICES} value={enVoice} onChange={setEnVoice} disabledOptions={zundamonOff} /></Row>
+            {!zundamonUsable && (
+              <Row><p className="text-xs text-muted-foreground">ずんだもんは、VOICEVOX の接続先と API キーを設定すると選べます。それまではブラウザの音声で読みます</p></Row>
+            )}
             <Row>
               <Button
                 className="w-full bg-[var(--ios-blue)] hover:bg-[var(--ios-blue)]/90 text-white"
@@ -439,7 +447,7 @@ export default function SettingsPage() {
         <div>
           <SectionLabel label="日本語の音声設定" />
           <GroupCard>
-            <Row><SegmentedControl options={JA_VOICES} value={jaVoice} onChange={setJaVoice} /></Row>
+            <Row><SegmentedControl options={JA_VOICES} value={jaVoice} onChange={setJaVoice} disabledOptions={zundamonOff} /></Row>
             <Row>
               <Button
                 className="w-full bg-[var(--ios-blue)] hover:bg-[var(--ios-blue)]/90 text-white"

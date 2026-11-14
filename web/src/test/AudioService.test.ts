@@ -768,11 +768,13 @@ describe('playTTS with stopTTS', () => {
       expect(voicesChanged).toBeNull()
     })
 
-    it('does not wait for voices when the zundamon voice falls back', async () => {
+    it('reads the zundamon fallback with the default (female) browser voice', async () => {
       vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const samantha = { lang: 'en-US', name: 'Samantha', localService: true }
+      voices = [{ lang: 'en-US', name: 'Albert', localService: true }, samantha]
       const { playTTS } = await load()
       await expect(playTTS('hello', { voice: 'zundamon', lang: 'en' })).resolves.toBe('webspeech')
-      expect(voicesChanged).toBeNull()
+      expect(speak.mock.calls[0][0].voice).toBe(samantha)
     })
 
     it('does not speak when the timeout passes after a stop', async () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { checkEndpoint, defaultEndpoint, endpointError, endpointOrigin, isLocalEndpoint, normalizeEndpoint, resolveVoicevox, voicevoxHeaders } from '@/lib/voicevox'
+import { checkEndpoint, defaultEndpoint, endpointError, endpointOrigin, isLocalEndpoint, normalizeEndpoint, resolveVoicevox, voicevoxHeaders, voicevoxUsable } from '@/lib/voicevox'
 
 describe('isLocalEndpoint', () => {
   it.each([
@@ -209,5 +209,19 @@ describe('checkEndpoint', () => {
     const fetchMock = respond(ok())
     await expect(checkEndpoint('', '')).resolves.toEqual({ ok: false, message: '接続先が設定されていません' })
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('voicevoxUsable', () => {
+  const AWS = 'https://abc.execute-api.ap-northeast-1.amazonaws.com/poc'
+
+  it.each([
+    ['a remote endpoint with a key', AWS, 'key', true],
+    ['a local engine without a key', 'http://127.0.0.1:50021', '', true],
+    ['a remote endpoint without a key', AWS, '', false],
+    ['no endpoint', '', 'key', false],
+    ['no endpoint and no key', '', '', false],
+  ])('%s -> %s', (_label, endpoint, apiKey, usable) => {
+    expect(voicevoxUsable({ endpoint, apiKey })).toBe(usable)
   })
 })

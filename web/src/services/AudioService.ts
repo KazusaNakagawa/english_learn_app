@@ -70,8 +70,7 @@ async function speakWebSpeech(
   // Absent in some embedded browsers. SettingsPage shows this message; the other
   // pages only log it.
   if (!window.speechSynthesis) throw new Error('このブラウザは音声合成に対応していません')
-  // Only an English non-zundamon voice reads the list.
-  const voices = lang === 'en' && voice !== 'zundamon' ? await loadVoices(signal) : []
+  const voices = lang === 'en' ? await loadVoices(signal) : []
   if (signal.aborted) return
   return new Promise((resolve, reject) => {
     // An engine can fire neither end nor error, so the utterance cannot be
@@ -271,6 +270,8 @@ export async function playTTS(
 
   // 3. Web Speech API fallback
   if (isStopped()) return 'cancelled'
-  await speakWebSpeech(text, lang, voice, signal)
+  // Zundamon has no browser voice of its own. Leaving the choice to the browser
+  // can land on a harsh legacy voice, so it reads with the default (female) one.
+  await speakWebSpeech(text, lang, voice === 'zundamon' ? 'default' : voice, signal)
   return isStopped() ? 'cancelled' : 'webspeech'
 }

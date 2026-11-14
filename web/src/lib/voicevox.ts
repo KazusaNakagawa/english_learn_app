@@ -98,6 +98,14 @@ export function resolveVoicevox(settings: VoicevoxSettings): { endpoint: string;
   return { endpoint, apiKey: '', keySource: 'none' }
 }
 
+/**
+ * Whether zundamon can be requested at all: an endpoint, plus a key unless the
+ * engine is local. Mirrors the check playTTS makes before it calls VOICEVOX.
+ */
+export function voicevoxUsable({ endpoint, apiKey }: { endpoint: string; apiKey: string }): boolean {
+  return !!endpoint && (!!apiKey || isLocalEndpoint(endpoint))
+}
+
 /** Long enough for a Lambda cold start, which takes 10 to 30 seconds. */
 const CHECK_TIMEOUT_MS = 40_000
 

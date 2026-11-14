@@ -372,4 +372,36 @@ describe('SettingsPage', () => {
       expect(fetchMock).not.toHaveBeenCalled()
     })
   })
+
+  describe('zundamon availability', () => {
+    afterEach(() => { localStorage.clear() })
+
+    const zundamonButtons = () => screen.getAllByRole('button', { name: 'ずんだもん' })
+
+    it('disables zundamon for both languages while there is no endpoint, and says why', async () => {
+      await renderPage()
+      expect(zundamonButtons()).toHaveLength(2)
+      zundamonButtons().forEach((b) => expect(b).toBeDisabled())
+      expect(screen.getByText(/ずんだもんは、VOICEVOX の接続先と API キーを設定すると選べます/)).toBeInTheDocument()
+    })
+
+    it('keeps zundamon disabled for a remote endpoint without a key', async () => {
+      saveSettings({ voicevoxEndpoint: 'https://voicevox.example.com' })
+      await renderPage()
+      zundamonButtons().forEach((b) => expect(b).toBeDisabled())
+    })
+
+    it('enables zundamon once a local engine is set, and hides the hint', async () => {
+      await renderPage()
+      await userEvent.type(screen.getByPlaceholderText(/接続先 URL/), 'http://127.0.0.1:50021')
+      zundamonButtons().forEach((b) => expect(b).toBeEnabled())
+      expect(screen.queryByText(/ずんだもんは、VOICEVOX の接続先/)).not.toBeInTheDocument()
+    })
+
+    it('leaves the other voices selectable while zundamon is disabled', async () => {
+      await renderPage()
+      expect(screen.getByRole('button', { name: '女性' })).toBeEnabled()
+      expect(screen.getByRole('button', { name: '男性' })).toBeEnabled()
+    })
+  })
 })
