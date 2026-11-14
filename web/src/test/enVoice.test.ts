@@ -9,13 +9,15 @@ const googleMale = v('Google UK English Male', 'en-GB', false)
 const googleFemale = v('Google UK English Female', 'en-GB', false)
 const googleUs = v('Google US English', 'en-US', false)
 const samantha = v('Samantha')
+const daniel = v('Daniel', 'en-GB')
+const albert = v('Albert')
 const fred = v('Fred')
 const novelty = v('Bad News')
 const japanese = v('Kyoko', 'ja-JP')
 
 describe('pickEnVoice', () => {
   describe('offline-safe (local voices first)', () => {
-    const voices = [googleMale, googleFemale, googleUs, novelty, fred, samantha, japanese]
+    const voices = [googleMale, googleFemale, googleUs, albert, novelty, fred, daniel, samantha, japanese]
 
     it('picks a known local female voice over a network one', () => {
       expect(pickEnVoice(voices, 'female')).toBe(samantha)
@@ -23,7 +25,7 @@ describe('pickEnVoice', () => {
     })
 
     it('picks a known local male voice over a network one', () => {
-      expect(pickEnVoice(voices, 'male')).toBe(fred)
+      expect(pickEnVoice(voices, 'male')).toBe(daniel)
     })
 
     it('matches a voice whose name carries a locale suffix', () => {
@@ -31,9 +33,20 @@ describe('pickEnVoice', () => {
       expect(pickEnVoice([googleFemale, flo], 'female')).toBe(flo)
     })
 
-    it('prefers en-US among the matching local voices', () => {
-      const karen = v('Karen', 'en-AU')
-      expect(pickEnVoice([karen, samantha], 'female')).toBe(samantha)
+    it('prefers the better sounding name over list order', () => {
+      expect(pickEnVoice([albert, fred, daniel], 'male')).toBe(daniel)
+      expect(pickEnVoice([v('Flo'), v('Karen', 'en-AU'), samantha], 'female')).toBe(samantha)
+    })
+
+    it('never picks the old synthesizer voices; the browser default is used instead', () => {
+      expect(pickEnVoice([albert, fred, v('Ralph'), v('Junior'), v('Kathy')], 'male')).toBeNull()
+      expect(pickEnVoice([albert, fred, v('Ralph'), v('Junior'), v('Kathy')], 'female')).toBeNull()
+    })
+
+    it('prefers en-US when the same name exists in several variants', () => {
+      const eddyGb = v('Eddy', 'en-GB')
+      const eddyUs = v('Eddy')
+      expect(pickEnVoice([eddyGb, eddyUs], 'male')).toBe(eddyUs)
     })
 
     it('never returns a network voice while a local English voice exists', () => {
