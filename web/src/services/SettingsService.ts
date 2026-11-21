@@ -7,8 +7,9 @@
  */
 
 export interface AppSettings {
-  enVoice: 'default' | 'female' | 'male' | 'zundamon'
-  jaVoice: 'zundamon' | 'default'
+  /** kokoro: the local voice (launcher), falling back to the browser voice. */
+  enVoice: 'kokoro' | 'default' | 'female' | 'male' | 'zundamon'
+  jaVoice: 'kokoro' | 'zundamon' | 'default'
   voicevoxStyle: string   // speaker ID
   /** Empty means the build-time endpoint. Resolve with resolveVoicevox before use. */
   voicevoxEndpoint: string
@@ -22,11 +23,16 @@ export interface AppSettings {
   claudeModel: 'sonnet' | 'haiku' | 'opus'
   playPattern: 'bilingual' | 'en-only'
   intervalSec: number
+  /**
+   * 2 once the voice defaults moved to the local voice. Settings saved before
+   * that still hold the old defaults, which loadSettings moves over once.
+   */
+  voiceDefaultsVersion: number
 }
 
 const DEFAULTS: AppSettings = {
-  enVoice: 'female',
-  jaVoice: 'zundamon',
+  enVoice: 'kokoro',
+  jaVoice: 'kokoro',
   voicevoxStyle: '22',
   voicevoxEndpoint: '',
   voicevoxApiKey: '',
@@ -38,6 +44,24 @@ const DEFAULTS: AppSettings = {
   claudeModel: 'sonnet',
   playPattern: 'bilingual',
   intervalSec: 1.5,
+  voiceDefaultsVersion: 2,
+}
+
+/**
+ * Settings saved before the local voice existed carry the defaults of the time
+ * (female / zundamon, the latter falling back to the system voice since the
+ * VOICEVOX Lambda was removed). Those move to the local voice once; any other
+ * choice was the user's and stays. Saving records version 2, so a later pick
+ * of female or zundamon sticks.
+ */
+function migrateVoiceDefaults(parsed: Partial<AppSettings>): Partial<AppSettings> {
+  if (parsed.voiceDefaultsVersion === 2) return parsed
+  return {
+    ...parsed,
+    enVoice: parsed.enVoice === undefined || parsed.enVoice === 'female' ? 'kokoro' : parsed.enVoice,
+    jaVoice: parsed.jaVoice === undefined || parsed.jaVoice === 'zundamon' ? 'kokoro' : parsed.jaVoice,
+    voiceDefaultsVersion: 2,
+  }
 }
 
 const SETTINGS_KEY = 'english_learn_app_settings'
@@ -71,7 +95,7 @@ function saveApiKeys(keys: Partial<ApiKeys>): void {
 export function loadSettings(): AppSettings {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY)
-    const parsed: Partial<AppSettings> = raw ? JSON.parse(raw) : {}
+    const parsed = migrateVoiceDefaults(raw ? JSON.parse(raw) : {})
     const rawInterval = Number(parsed.intervalSec)
     const intervalSec = isFinite(rawInterval)
       ? Math.min(INTERVAL_MAX, Math.max(INTERVAL_MIN, rawInterval))
