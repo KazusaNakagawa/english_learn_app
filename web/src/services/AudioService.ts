@@ -3,13 +3,14 @@
  *
  * Priority:
  *   1. IndexedDB cache hit → play immediately
- *   2. VOICEVOX Lambda → fetch WAV, cache, play
+ *   2. Kokoro (local API) or VOICEVOX, by the chosen voice → fetch WAV, cache, play
  *   3. Web Speech API fallback (no cache)
  */
 
 import { getCache, putCache, makeCacheKey, evictCache } from './AudioCacheService'
 import { defaultEndpoint, isLocalEndpoint, normalizeEndpoint, voicevoxHeaders } from '@/lib/voicevox'
 import { reportMissingVoicevoxKey } from '@/lib/voicevoxNotice'
+import { fetchLocalVoice, isLocalVoiceAvailable, KOKORO_VOICES, LocalVoiceError } from './LocalVoiceService'
 
 const CACHE_MAX_BYTES = 50 * 1024 * 1024 // 50 MB
 const VOICE_LOAD_TIMEOUT_MS = 3000
@@ -18,7 +19,7 @@ const VOICE_LOAD_TIMEOUT_MS = 3000
 const UTTERANCE_BASE_TIMEOUT_MS = 10_000
 const UTTERANCE_TIMEOUT_PER_CHAR_MS = 300
 
-export type VoiceType = 'default' | 'female' | 'male' | 'zundamon'
+export type VoiceType = 'kokoro' | 'default' | 'female' | 'male' | 'zundamon'
 
 export interface PlayOptions {
   voice: VoiceType
@@ -31,7 +32,11 @@ export interface PlayOptions {
   onColdStartEnd?: () => void
 }
 
-export type PlaySource = 'cache' | 'voicevox' | 'webspeech' | 'cancelled'
+export type PlaySource = 'cache' | 'kokoro' | 'voicevox' | 'webspeech' | 'cancelled'
+
+// The cache key's "endpoint" for Kokoro clips: they come from whichever local
+// API served the page, and never collide with a VOICEVOX engine's clips.
+const KOKORO_CACHE_ENDPOINT = 'local-kokoro'
 
 // ---- Web Speech API helpers ----
 
@@ -65,7 +70,8 @@ function pickEnVoice(voices: SpeechSynthesisVoice[], type: VoiceType): SpeechSyn
   if (type === 'female' || type === 'default') {
     return en.find((v) => /female/i.test(v.name)) ?? null
   }
-  if (type === 'male') {
+  // Kokoro's English voice is male, so its fallback stays close to it.
+  if (type === 'male' || type === 'kokoro') {
     return en.find((v) => /male/i.test(v.name) && !/female/i.test(v.name)) ?? null
   }
   return null
@@ -165,6 +171,24 @@ async function storeInCache(cacheKey: string, text: string, speakerId: string, b
   }
 }
 
+/**
+ * Play the cached clip for cacheKey. Resolves 'cache' or 'cancelled' when it
+ * handled the call, null on a miss or an unreadable cache.
+ */
+async function playFromCache(cacheKey: string, isStopped: () => boolean): Promise<PlaySource | null> {
+  try {
+    const cached = await getCache(cacheKey)
+    if (isStopped()) return 'cancelled'
+    if (!cached) return null
+    console.debug('[AudioService] cache hit:', cacheKey)
+    await playBlob(cached.audio_data)
+    return isStopped() ? 'cancelled' : 'cache'
+  } catch (err) {
+    console.warn('[AudioService] cache read failed:', err)
+    return null
+  }
+}
+
 let _currentPlayback: { stop: () => void } | null = null
 let _stopController = new AbortController()
 
@@ -216,7 +240,7 @@ export function stopTTS(): void {
 // ---- Public API ----
 
 /**
- * Play TTS audio. Tries cache → VOICEVOX → Web Speech API in order.
+ * Play TTS audio. Tries cache → Kokoro or VOICEVOX → Web Speech API in order.
  * Starting a call supersedes any call still in progress, so only one clip can
  * be playing and stopTTS can always reach it.
  * Returns which source was used, or 'cancelled' if stopped or superseded first.
@@ -236,7 +260,36 @@ export async function playTTS(
   const { signal } = _stopController
   const isStopped = () => signal.aborted
 
-  if (useVoicevox) {
+  if (voice === 'kokoro') {
+    const speaker = `kokoro:${KOKORO_VOICES[lang]}`
+    const cacheKey = await makeCacheKey(text, speaker, KOKORO_CACHE_ENDPOINT).catch((err) => {
+      console.warn('[AudioService] cache unavailable:', err)
+      return null
+    })
+    // 1. Cache hit: plays even when the local API is gone (static hosting, offline).
+    if (cacheKey) {
+      const hit = await playFromCache(cacheKey, isStopped)
+      if (hit) return hit
+    }
+    if (isStopped()) return 'cancelled'
+
+    // 2. Local API
+    if (isLocalVoiceAvailable()) {
+      try {
+        const blob = await fetchLocalVoice(text, lang, signal)
+        if (isStopped()) return 'cancelled'
+        if (cacheKey) void storeInCache(cacheKey, text, speaker, blob)
+        await playBlob(blob)
+        return isStopped() ? 'cancelled' : 'kokoro'
+      } catch (err) {
+        if (isStopped()) return 'cancelled'
+        // Starting, no launcher, or a word the voice cannot read: the browser
+        // voice reads this one. Only an unexpected failure is worth an error.
+        if (err instanceof LocalVoiceError) console.info(`[AudioService] local voice ${err.code}, using the browser voice`)
+        else console.error('[AudioService] local voice failed, falling back to Web Speech:', err)
+      }
+    }
+  } else if (useVoicevox) {
     // crypto.subtle is undefined on non-secure origins such as a LAN dev URL.
     // Keyed by endpoint too, so switching engines does not replay another engine's clip.
     const cacheKey = await makeCacheKey(text, speakerId, base).catch((err) => {
@@ -246,17 +299,8 @@ export async function playTTS(
 
     // 1. Cache hit
     if (cacheKey) {
-      try {
-        const cached = await getCache(cacheKey)
-        if (isStopped()) return 'cancelled'
-        if (cached) {
-          console.debug('[AudioService] cache hit:', cacheKey)
-          await playBlob(cached.audio_data)
-          return isStopped() ? 'cancelled' : 'cache'
-        }
-      } catch (err) {
-        console.warn('[AudioService] cache read failed:', err)
-      }
+      const hit = await playFromCache(cacheKey, isStopped)
+      if (hit) return hit
     }
     if (isStopped()) return 'cancelled'
 

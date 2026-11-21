@@ -39,8 +39,8 @@ const AI_PROVIDERS = ['Claude Code', 'OpenAI'] as const
 type AiProvider = typeof AI_PROVIDERS[number]
 const AI_PROVIDER_IDS: Record<AiProvider, AppSettings['aiProvider']> = { 'Claude Code': 'claude-code', OpenAI: 'openai' }
 
-const EN_VOICES  = ['デフォルト', '女性', '男性', 'ずんだもん'] as const
-const JA_VOICES  = ['ずんだもん', 'デフォルト'] as const
+const EN_VOICES  = ['ナチュラル', 'デフォルト', '女性', '男性', 'ずんだもん'] as const
+const JA_VOICES  = ['ナチュラル', 'ずんだもん', 'デフォルト'] as const
 const PATTERNS   = ['バイリンガル (EN+JA)', '英語のみ (EN+EN)'] as const
 
 type EnVoice  = typeof EN_VOICES[number]
@@ -105,7 +105,8 @@ function SegmentedControl<T extends string>({
           key={opt}
           onClick={() => onChange(opt)}
           className={cn(
-            'flex-1 text-xs font-medium py-1.5 px-2 rounded-md transition-all',
+            // Five voices share a phone-width row; one line each keeps them readable.
+            'flex-1 whitespace-nowrap text-[11px] sm:text-xs font-medium py-1.5 px-1 sm:px-2 rounded-md transition-all',
             value === opt ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
           )}
         >
@@ -149,13 +150,13 @@ function formatBytes(bytes: number): string {
 // ---- Page ----
 
 const EN_VOICE_MAP: Record<string, EnVoice> = {
-  female: '女性', male: '男性', zundamon: 'ずんだもん', default: 'デフォルト',
+  kokoro: 'ナチュラル', female: '女性', male: '男性', zundamon: 'ずんだもん', default: 'デフォルト',
 }
 const EN_VOICE_RMAP: Record<EnVoice, string> = {
-  '女性': 'female', '男性': 'male', 'ずんだもん': 'zundamon', 'デフォルト': 'default',
+  'ナチュラル': 'kokoro', '女性': 'female', '男性': 'male', 'ずんだもん': 'zundamon', 'デフォルト': 'default',
 }
-const JA_VOICE_MAP: Record<string, JaVoice> = { zundamon: 'ずんだもん', default: 'デフォルト' }
-const JA_VOICE_RMAP: Record<JaVoice, string> = { 'ずんだもん': 'zundamon', 'デフォルト': 'default' }
+const JA_VOICE_MAP: Record<string, JaVoice> = { kokoro: 'ナチュラル', zundamon: 'ずんだもん', default: 'デフォルト' }
+const JA_VOICE_RMAP: Record<JaVoice, string> = { 'ナチュラル': 'kokoro', 'ずんだもん': 'zundamon', 'デフォルト': 'default' }
 const PATTERN_MAP: Record<string, Pattern> = { bilingual: 'バイリンガル (EN+JA)', 'en-only': '英語のみ (EN+EN)' }
 const PATTERN_RMAP: Record<Pattern, string> = { 'バイリンガル (EN+JA)': 'bilingual', '英語のみ (EN+EN)': 'en-only' }
 
@@ -164,8 +165,8 @@ function initFromSettings() {
   const s = loadSettings()
   const v = Number(s.intervalSec)
   return {
-    enVoice:   (EN_VOICE_MAP[s.enVoice]   ?? '女性')                as EnVoice,
-    jaVoice:   (JA_VOICE_MAP[s.jaVoice]   ?? 'ずんだもん')          as JaVoice,
+    enVoice:   (EN_VOICE_MAP[s.enVoice]   ?? 'ナチュラル')          as EnVoice,
+    jaVoice:   (JA_VOICE_MAP[s.jaVoice]   ?? 'ナチュラル')          as JaVoice,
     pattern:   (PATTERN_MAP[s.playPattern] ?? 'バイリンガル (EN+JA)') as Pattern,
     interval:  Number.isFinite(v) ? Math.min(5, Math.max(0.5, v)) : 1.5,
     vvStyle:   s.voicevoxStyle,
@@ -676,7 +677,7 @@ export default function SettingsPage() {
               {[
                 {
                   title: '英語・日本語それぞれの音声を個別に設定できます。',
-                  body: '英語音声: デフォルト/女性/男性/ずんだもん から選択\n日本語音声: ずんだもん/デフォルト から選択',
+                  body: '英語音声: ナチュラル/デフォルト/女性/男性/ずんだもん から選択\n日本語音声: ナチュラル/ずんだもん/デフォルト から選択\nナチュラルは、このパソコンで動く自然な音声です（ランチャーから開いたときに使えます）',
                 },
                 {
                   title: '単語の追加・編集画面で「AIで例文を生成」を押すと、意味・発音記号・例文を自動で入力します。',
