@@ -1,18 +1,30 @@
-// The local API: /api/health and POST /api/generate-sentences. Shared by the
-// launcher's server and the Vite dev server (web/vite.config.ts).
+// The local API: /api/health, POST /api/generate-sentences, and POST /api/tts.
+// Shared by the launcher's server and the Vite dev server (web/vite.config.ts).
 //
-// The generate endpoint spends the user's Claude subscription, so it answers
-// only the app's own page: a loopback client, a loopback Host (no DNS
+// The generate endpoint spends the user's Claude subscription and the TTS
+// endpoint this machine's CPU, so both answer only the app's own page: a loopback client, a loopback Host (no DNS
 // rebinding), and an Origin equal to that Host. It never sends CORS headers.
 import { APP_ID } from "./app-id.mjs"
 import { claudeStatus, ClaudeError } from "./claude.mjs"
 import { generateSentences } from "./generate.mjs"
+import { createTts, TtsError } from "./tts.mjs"
 
 /** Model aliases the page may pick; anything else is refused. */
 export const MODELS = ["sonnet", "haiku", "opus"]
 export const DEFAULT_MODEL = "sonnet"
 
 const MAX_BODY_BYTES = 8 * 1024
+/** Longer than any example sentence; keeps one request from tying up the worker. */
+export const MAX_TTS_CHARS = 500
+const TTS_LANGS = ["en", "ja"]
+
+const TTS_STATUS_BY_CODE = {
+  "uv-missing": 503,
+  starting: 503,
+  "unsupported-text": 422,
+  timeout: 504,
+  failed: 502,
+}
 
 const STATUS_BY_CODE = {
   "bad-request": 400,
@@ -84,7 +96,7 @@ function readJson(req) {
  * Build the handler. It returns true when it handled the request (any /api/
  * path), false to let the caller serve it.
  */
-export function createApiHandler({ version, status = claudeStatus, generate = generateSentences } = {}) {
+export function createApiHandler({ version, status = claudeStatus, generate = generateSentences, tts = createTts() } = {}) {
   // The run in progress, if any. `aborting` marks one the page cancelled: it is
   // still stopping its CLI, so a retry waits for it rather than getting 409.
   let current = null
@@ -98,8 +110,51 @@ export function createApiHandler({ version, status = claudeStatus, generate = ge
 
   // Plain /api/health only says which app this is, so a second launch can
   // recognise a running copy without waiting for the CLI.
-  async function health(req, res, withClaude) {
-    sendJson(res, 200, withClaude ? { app: APP_ID, version, claude: await sharedStatus() } : { app: APP_ID, version })
+  // ?tts=1 also starts the local voice when it is not running, so it is
+  // usually ready by the time the page first plays something.
+  async function health(req, res, { withClaude, withTts }) {
+    const body = { app: APP_ID, version }
+    if (withTts) {
+      tts.start()
+      body.tts = { status: tts.status() }
+    }
+    if (withClaude) body.claude = await sharedStatus()
+    sendJson(res, 200, body)
+  }
+
+  async function ttsHandler(req, res) {
+    if (!/^application\/json\b/i.test(req.headers["content-type"] ?? "")) {
+      return fail(res, 415, "bad-request", "Content-Type は application/json にしてください")
+    }
+    const body = await readJson(req)
+    if (Array.isArray(body)) {
+      const [code, message] = body
+      return fail(res, code, "bad-request", message, code === 413 ? { connection: "close" } : {})
+    }
+    const { text, lang } = body.value ?? {}
+    if (typeof text !== "string" || !text.trim()) return fail(res, 400, "bad-request", "読み上げる文がありません")
+    if (text.length > MAX_TTS_CHARS) return fail(res, 400, "bad-request", `読み上げる文は ${MAX_TTS_CHARS} 文字までです`)
+    if (!TTS_LANGS.includes(lang)) return fail(res, 400, "bad-request", "使えない言語が指定されました")
+
+    // A page that stops playback aborts its fetch, which closes this response.
+    const controller = new AbortController()
+    const onClose = () => {
+      if (!res.writableEnded) controller.abort()
+    }
+    res.on("close", onClose)
+    try {
+      const wav = await tts.synthesize({ text, lang, signal: controller.signal })
+      if (controller.signal.aborted) return
+      res.writeHead(200, { "content-type": "audio/wav", "content-length": wav.length, "cache-control": "no-store" })
+      res.end(wav)
+    } catch (err) {
+      if (controller.signal.aborted || err?.name === "AbortError") return
+      if (err instanceof TtsError) return fail(res, TTS_STATUS_BY_CODE[err.code] ?? 502, err.code, err.message)
+      console.error("[api] tts failed:", err)
+      fail(res, 500, "failed", "ローカル音声を生成できませんでした")
+    } finally {
+      res.off("close", onClose)
+    }
   }
 
   async function generateHandler(req, res) {
@@ -144,12 +199,13 @@ export function createApiHandler({ version, status = claudeStatus, generate = ge
     await run.done
   }
 
-  return function handle(req, res) {
+  function handle(req, res) {
     const [pathname, query = ""] = (req.url ?? "/").split("?")
     if (!pathname.startsWith("/api/")) return false
 
     const isGenerate = pathname === "/api/generate-sentences"
-    const refused = checkRequest(req, { requireOrigin: isGenerate })
+    const isTts = pathname === "/api/tts"
+    const refused = checkRequest(req, { requireOrigin: isGenerate || isTts })
     if (refused) {
       fail(res, 403, "forbidden", "このページからは使えません")
       return true
@@ -157,7 +213,17 @@ export function createApiHandler({ version, status = claudeStatus, generate = ge
 
     if (pathname === "/api/health") {
       if (req.method !== "GET" && req.method !== "HEAD") fail(res, 405, "bad-request", "Method Not Allowed", { allow: "GET, HEAD" })
-      else health(req, res, new URLSearchParams(query).get("claude") === "1").catch(() => fail(res, 500, "failed", "状態を確認できませんでした"))
+      else {
+        const params = new URLSearchParams(query)
+        health(req, res, { withClaude: params.get("claude") === "1", withTts: params.get("tts") === "1" }).catch(() =>
+          fail(res, 500, "failed", "状態を確認できませんでした"),
+        )
+      }
+      return true
+    }
+    if (isTts) {
+      if (req.method !== "POST") fail(res, 405, "bad-request", "Method Not Allowed", { allow: "POST" })
+      else ttsHandler(req, res)
       return true
     }
     if (isGenerate) {
@@ -168,4 +234,8 @@ export function createApiHandler({ version, status = claudeStatus, generate = ge
     fail(res, 404, "not-found", "Not Found")
     return true
   }
+
+  /** Stop what the handler started (the local voice). Call when the server closes. */
+  handle.stop = () => tts.stop()
+  return handle
 }

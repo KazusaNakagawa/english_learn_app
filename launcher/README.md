@@ -38,6 +38,36 @@ it is not. The local API behind it (`POST /api/generate-sentences`):
 - runs one generation at a time, gives up after 3 minutes, and stops the CLI
   when the page cancels.
 
+## Local voice (Kokoro)
+
+Speech can use [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) on this
+machine: English in the `am_echo` voice, Japanese in `jf_alpha`. Free, no key,
+and nothing leaves the machine. It needs [uv](https://docs.astral.sh/uv/):
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+The first start installs its Python packages and downloads the model, about
+1.5 GB in total (uv's cache and `~/.cache/huggingface`); later starts take a few
+seconds. Without uv, speech uses the browser's voice as before.
+
+On macOS, also installing `espeak-ng` (`brew install espeak-ng`) lets Kokoro
+read English words missing from its dictionary; without it, a sentence with
+such a word is read by the browser's voice instead.
+
+The local API behind it (`POST /api/tts` with `{ "text", "lang": "en" | "ja" }`,
+answering `audio/wav`):
+
+- starts the voice on the first `GET /api/health?tts=1` or `POST /api/tts`, and
+  answers 503 `starting` until it is ready, so the page falls back meanwhile;
+- has the same loopback and `Origin` checks as the generate endpoint;
+- runs one sentence at a time (up to 500 characters) and stops the voice when
+  the launcher stops.
+
+To remove it: `uv cache clean` and delete
+`~/.cache/huggingface/hub/models--hexgrad--Kokoro-82M`.
+
 ## Options
 
 ```
@@ -51,8 +81,9 @@ it is not. The local API behind it (`POST /api/generate-sentences`):
 
 - Node.js 20+ (releasing needs 20.12+)
 
-No API keys are needed. Speech falls back to the browser's voice when no
-VOICEVOX endpoint is set. Sentence generation needs the Claude Code CLI (above)
+No API keys are needed. Speech uses the local voice when uv is installed (above),
+and otherwise falls back to the browser's voice when no VOICEVOX endpoint is set.
+Sentence generation needs the Claude Code CLI (above)
 or an OpenAI key entered in Settings.
 
 ## Development (in the repository)

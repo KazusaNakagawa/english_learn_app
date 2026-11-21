@@ -2,8 +2,9 @@ import assert from "node:assert/strict"
 import { createServer, request } from "node:http"
 import { after, before, beforeEach, test } from "node:test"
 
-import { checkRequest, createApiHandler } from "../lib/api.mjs"
+import { checkRequest, createApiHandler, MAX_TTS_CHARS } from "../lib/api.mjs"
 import { ClaudeError } from "../lib/claude.mjs"
+import { TtsError } from "../lib/tts.mjs"
 
 let server
 let port
@@ -11,6 +12,26 @@ let origin
 let generateImpl
 let calls
 let statusCalls = 0
+let ttsImpl
+let ttsCalls
+const ttsStub = {
+  state: "idle",
+  starts: 0,
+  stopped: 0,
+  status() {
+    return this.state
+  },
+  start() {
+    this.starts++
+  },
+  synthesize(req) {
+    ttsCalls.push(req)
+    return ttsImpl(req)
+  },
+  async stop() {
+    this.stopped++
+  },
+}
 
 const CONTENT = { meaning: "m", phonetic: "p", sentences: [{ english: "E.", japanese: "J。", category: "c" }] }
 
@@ -26,6 +47,7 @@ before(async () => {
       calls.push(options)
       return generateImpl(options)
     },
+    tts: ttsStub,
   })
   server = createServer((req, res) => {
     if (!api(req, res)) {
@@ -43,6 +65,8 @@ after(() => new Promise((r) => server.close(r)))
 beforeEach(() => {
   calls = []
   generateImpl = async () => CONTENT
+  ttsCalls = []
+  ttsImpl = async ({ text }) => Buffer.from(`RIFF${text}`)
 })
 
 function send(path, { method = "GET", headers = {}, body } = {}) {
@@ -288,6 +312,113 @@ test("closing the request aborts the generation", async () => {
     await new Promise((r) => setTimeout(r, 10))
   }
   assert.fail("slot never freed")
+})
+
+// --- tts ---
+
+const postTts = (body, headers = {}) =>
+  send("/api/tts", {
+    method: "POST",
+    headers: { origin, "content-type": "application/json", ...headers },
+    body: typeof body === "string" ? body : JSON.stringify(body),
+  })
+
+test("GET /api/health without tts=1 neither reports nor starts the local voice", async () => {
+  ttsStub.starts = 0
+  const res = await send("/api/health")
+  assert.equal(res.json.tts, undefined)
+  assert.equal(ttsStub.starts, 0)
+})
+
+test("GET /api/health?tts=1 reports the local voice status and starts it", async () => {
+  ttsStub.starts = 0
+  ttsStub.state = "starting"
+  const res = await send("/api/health?tts=1")
+  assert.deepEqual(res.json.tts, { status: "starting" })
+  assert.equal(ttsStub.starts, 1)
+  ttsStub.state = "idle"
+})
+
+test("POST /api/tts returns the WAV for the text and language", async () => {
+  const res = await postTts({ text: "Hello there.", lang: "en" })
+  assert.equal(res.status, 200)
+  assert.equal(res.headers["content-type"], "audio/wav")
+  assert.equal(res.headers["cache-control"], "no-store")
+  assert.equal(res.text, "RIFFHello there.")
+  assert.equal(ttsCalls[0].lang, "en")
+})
+
+test("tts from another origin, or with no Origin, is 403 and does not run", async () => {
+  assert.equal((await postTts({ text: "x", lang: "en" }, { origin: "https://evil.example" })).status, 403)
+  const noOrigin = await send("/api/tts", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ text: "x", lang: "en" }),
+  })
+  assert.equal(noOrigin.status, 403)
+  assert.equal(ttsCalls.length, 0)
+})
+
+test("tts rejects bad input before running", async () => {
+  assert.equal((await postTts("text=x", { "content-type": "text/plain" })).status, 415)
+  assert.equal((await postTts("{nope")).status, 400)
+  assert.equal((await postTts({ text: " ", lang: "en" })).status, 400)
+  assert.equal((await postTts({ text: "x", lang: "fr" })).status, 400)
+  assert.equal((await postTts({ text: "x".repeat(MAX_TTS_CHARS + 1), lang: "en" })).status, 400)
+  assert.equal((await postTts({ text: "x".repeat(20_000), lang: "en" })).status, 413)
+  assert.equal(ttsCalls.length, 0)
+})
+
+test("GET on the tts endpoint is 405", async () => {
+  const res = await send("/api/tts", { headers: { origin } })
+  assert.equal(res.status, 405)
+  assert.equal(res.headers.allow, "POST")
+})
+
+for (const [code, status] of [
+  ["uv-missing", 503],
+  ["starting", 503],
+  ["unsupported-text", 422],
+  ["timeout", 504],
+  ["failed", 502],
+]) {
+  test(`a tts ${code} error is ${status} with a readable message`, async () => {
+    ttsImpl = async () => {
+      throw new TtsError(code)
+    }
+    const res = await postTts({ text: "x", lang: "ja" })
+    assert.equal(res.status, status)
+    assert.equal(res.json.error, code)
+    assert.ok(res.json.message.length > 0)
+  })
+}
+
+test("closing a tts request aborts the synthesis", async () => {
+  let aborted = false
+  let started
+  const startedP = new Promise((r) => (started = r))
+  ttsImpl = ({ signal }) =>
+    new Promise((resolve, reject) => {
+      started()
+      signal.addEventListener("abort", () => {
+        aborted = true
+        reject(Object.assign(new Error("aborted"), { name: "AbortError" }))
+      })
+    })
+  const r = request({ host: "127.0.0.1", port, path: "/api/tts", method: "POST", headers: { origin, "content-type": "application/json" } })
+  r.on("error", () => {})
+  r.end(JSON.stringify({ text: "x", lang: "en" }))
+  await startedP
+  r.destroy()
+  for (let i = 0; i < 100 && !aborted; i++) await new Promise((res) => setTimeout(res, 10))
+  assert.equal(aborted, true)
+})
+
+test("handler.stop() stops the local voice", async () => {
+  const stub = { ...ttsStub, stopped: 0 }
+  const api = createApiHandler({ version: "1", tts: stub })
+  await api.stop()
+  assert.equal(stub.stopped, 1)
 })
 
 // --- checkRequest (pure) ---
