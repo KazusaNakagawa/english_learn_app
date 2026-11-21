@@ -14,6 +14,8 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ClaudeCodeSetup } from '@/components/ClaudeCodeSetup'
+import { LocalVoiceSetup } from '@/components/LocalVoiceSetup'
+import { useLocalVoiceStatus } from '@/hooks/useLocalVoiceStatus'
 import { useClaudeCodeStatus } from '@/hooks/useClaudeCodeStatus'
 import { CLAUDE_MODELS, type ClaudeModel } from '@/services/ClaudeCodeService'
 import { Input } from '@/components/ui/input'
@@ -298,6 +300,8 @@ export default function SettingsPage() {
   const [init] = useState(initFromSettings)
   const [enVoice,   setEnVoiceRaw]   = useState<EnVoice>(init.enVoice)
   const [jaVoice,   setJaVoiceRaw]   = useState<JaVoice>(init.jaVoice)
+  const usesLocalVoice = enVoice === 'ナチュラル' || jaVoice === 'ナチュラル'
+  const localVoice = useLocalVoiceStatus(usesLocalVoice)
   const [pattern,   setPatternRaw]   = useState<Pattern>(init.pattern)
   const [interval,  setIntervalSRaw] = useState(init.interval)
   const [vvStyle,   setVvStyleRaw]   = useState(init.vvStyle)
@@ -453,6 +457,16 @@ export default function SettingsPage() {
             </Row>
           </GroupCard>
         </div>
+
+        {/* ナチュラル音声（ローカルの Kokoro） */}
+        {usesLocalVoice && (
+          <div>
+            <SectionLabel label="ナチュラル音声" />
+            <GroupCard>
+              <Row><LocalVoiceSetup state={localVoice.state} onRecheck={localVoice.recheck} /></Row>
+            </GroupCard>
+          </div>
+        )}
 
         {/* 連続再生設定 */}
         <div>
