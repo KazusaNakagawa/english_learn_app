@@ -58,7 +58,7 @@ function decodePath(rawPath) {
  */
 export function createAppServer({ root, version, api = createApiHandler({ version }) }) {
   const base = resolve(root)
-  return createServer((req, res) => {
+  const server = createServer((req, res) => {
     res.setHeader("x-content-type-options", "nosniff")
     if (api(req, res)) return
     const pathname = (req.url ?? "/").split("?")[0]
@@ -92,4 +92,7 @@ export function createAppServer({ root, version, api = createApiHandler({ versio
     // pipeline closes the file when the browser cancels the request.
     pipeline(createReadStream(file), res, () => {})
   })
+  // The API may run a child process (the local voice); it ends with the server.
+  server.on("close", () => api.stop?.())
+  return server
 }

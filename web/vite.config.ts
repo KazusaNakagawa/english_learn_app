@@ -8,9 +8,10 @@ import { manifest, NETWORK_ONLY } from './pwa-manifest'
 import { createApiHandler } from '../launcher/lib/api.mjs'
 
 /**
- * Serve the launcher's local API (/api/health, /api/generate-sentences) from
- * the dev server too, so `npm run dev` can generate sentences with the Claude
- * Code CLI exactly as `npx english-learn-app` does. Dev server only: a
+ * Serve the launcher's local API (/api/health, /api/generate-sentences,
+ * /api/tts) from the dev server too, so `npm run dev` can generate sentences
+ * with the Claude Code CLI and speak with the local voice exactly as
+ * `npx english-learn-app` does. Dev server only: a
  * production build is static and gets the API from the launcher.
  */
 function localApi(): Plugin {
@@ -23,6 +24,8 @@ function localApi(): Plugin {
       server.middlewares.use((req, res, next) => {
         if (!api(req, res)) next()
       })
+      // Stop the local voice worker with the dev server.
+      server.httpServer?.on('close', () => void api.stop())
     },
   }
 }
