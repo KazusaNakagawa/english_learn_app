@@ -61,6 +61,8 @@ answering `audio/wav`):
 
 - starts the voice on the first `GET /api/health?tts=1` or `POST /api/tts`, and
   answers 503 `starting` until it is ready, so the page falls back meanwhile;
+  a health request another site's page makes (`Sec-Fetch-Site: cross-site`)
+  gets the status but never starts it;
 - has the same loopback and `Origin` checks as the generate endpoint;
 - runs one sentence at a time (up to 500 characters) and stops the voice when
   the launcher stops.

@@ -339,6 +339,18 @@ test("GET /api/health?tts=1 reports the local voice status and starts it", async
   ttsStub.state = "idle"
 })
 
+test("a cross-site health request gets the status but does not start the local voice", async () => {
+  ttsStub.starts = 0
+  for (const site of ["cross-site", "same-site"]) {
+    const res = await send("/api/health?tts=1", { headers: { "sec-fetch-site": site } })
+    assert.equal(res.status, 200)
+    assert.deepEqual(res.json.tts, { status: "idle" })
+  }
+  assert.equal(ttsStub.starts, 0)
+  await send("/api/health?tts=1", { headers: { "sec-fetch-site": "same-origin" } })
+  assert.equal(ttsStub.starts, 1)
+})
+
 test("POST /api/tts returns the WAV for the text and language", async () => {
   const res = await postTts({ text: "Hello there.", lang: "en" })
   assert.equal(res.status, 200)

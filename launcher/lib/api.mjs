@@ -51,6 +51,12 @@ export function checkRequest(req, { requireOrigin }) {
   return null
 }
 
+/** True for a browser request another site made (Fetch Metadata). Non-browser clients send no header. */
+export function isCrossSite(req) {
+  const site = req.headers["sec-fetch-site"]
+  return site === "cross-site" || site === "same-site"
+}
+
 function sendJson(res, status, body, headers = {}) {
   res.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...headers })
   res.end(JSON.stringify(body))
@@ -111,11 +117,14 @@ export function createApiHandler({ version, status = claudeStatus, generate = ge
   // Plain /api/health only says which app this is, so a second launch can
   // recognise a running copy without waiting for the CLI.
   // ?tts=1 also starts the local voice when it is not running, so it is
-  // usually ready by the time the page first plays something.
+  // usually ready by the time the page first plays something. Health needs no
+  // Origin (a same-origin GET carries none), so another site could request it
+  // too, e.g. with an <img>; browsers mark those cross-site, and they only get
+  // the status, never a start (the first one downloads about 1.5 GB).
   async function health(req, res, { withClaude, withTts }) {
     const body = { app: APP_ID, version }
     if (withTts) {
-      tts.start()
+      if (!isCrossSite(req)) tts.start()
       body.tts = { status: tts.status() }
     }
     if (withClaude) body.claude = await sharedStatus()
