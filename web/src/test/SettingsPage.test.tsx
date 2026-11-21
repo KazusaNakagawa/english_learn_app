@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { IDBFactory } from 'fake-indexeddb'
@@ -331,8 +331,8 @@ describe('SettingsPage', () => {
     it('shows the setup steps, including the dev server, when there is no local API', async () => {
       vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 404, json: async () => ({}) })))
       await renderPage()
-      expect(await screen.findByText('この画面では Claude Code で生成できません')).toBeInTheDocument()
-      expect(screen.getByText('npm run dev')).toBeInTheDocument()
+      const notice = (await screen.findByText('この画面では Claude Code で生成できません')).closest('[role="status"]') as HTMLElement
+      expect(within(notice).getByText('npm run dev')).toBeInTheDocument()
     })
 
     it('saves the Claude model', async () => {
@@ -366,10 +366,34 @@ describe('SettingsPage', () => {
 
     it('does not check the local API while OpenAI is selected', async () => {
       saveSettings({ aiProvider: 'openai' })
-      const fetchMock = vi.fn(async () => health({ installed: true, loggedIn: true }))
+      const fetchMock = vi.fn<(url: string) => Promise<unknown>>(async () => health({ installed: true, loggedIn: true }))
       vi.stubGlobal('fetch', fetchMock)
       await renderPage()
-      expect(fetchMock).not.toHaveBeenCalled()
+      expect(fetchMock.mock.calls.map(([url]) => url)).not.toContain('/api/health?claude=1')
+    })
+  })
+  describe('local voice', () => {
+    const ttsHealth = (status: string) => ({ ok: true, status: 200, json: async () => ({ app: 'english-learn-app', tts: { status }, claude: { installed: true, loggedIn: true } }) })
+
+    it('shows the local voice status when ナチュラル is selected', async () => {
+      vi.stubGlobal('fetch', vi.fn(async () => ttsHealth('ready')))
+      await renderPage()
+      expect(await screen.findByText('ナチュラル音声で読み上げます')).toBeInTheDocument()
+    })
+
+    it('shows the uv steps when uv is missing', async () => {
+      vi.stubGlobal('fetch', vi.fn(async () => ttsHealth('uv-missing')))
+      await renderPage()
+      expect(await screen.findByText(/uv が必要です/)).toBeInTheDocument()
+    })
+
+    it('hides the section and asks nothing when neither language uses ナチュラル', async () => {
+      saveSettings({ enVoice: 'female', jaVoice: 'zundamon', aiProvider: 'openai' })
+      const fetchMock = vi.fn<(url: string) => Promise<unknown>>(async () => ttsHealth('ready'))
+      vi.stubGlobal('fetch', fetchMock)
+      await renderPage()
+      expect(screen.queryByText('ナチュラル音声')).not.toBeInTheDocument()
+      expect(fetchMock.mock.calls.map(([url]) => url)).not.toContain('/api/health?tts=1')
     })
   })
 })
