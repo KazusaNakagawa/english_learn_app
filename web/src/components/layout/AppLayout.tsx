@@ -3,6 +3,7 @@ import { Outlet } from 'react-router'
 import TabBar from './TabBar'
 import { VoicevoxKeyNotice } from '@/components/VoicevoxKeyNotice'
 import { PwaUpdateNotice } from '@/components/PwaUpdateNotice'
+import { ZundamonAvatar } from '@/components/ZundamonAvatar'
 import { checkLocalVoice, isLocalVoiceChoice } from '@/services/LocalVoiceService'
 import { loadSettings } from '@/services/SettingsService'
 
@@ -23,6 +24,7 @@ export default function AppLayout() {
       </div>
       <VoicevoxKeyNotice />
       <PwaUpdateNotice />
+      <ZundamonAvatar />
       <TabBar />
     </div>
   )

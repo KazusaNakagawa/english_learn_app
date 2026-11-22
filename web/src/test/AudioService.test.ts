@@ -170,6 +170,64 @@ describe('playTTS with stopTTS', () => {
     })
   })
 
+  describe('zundamon avatar state', () => {
+    const speech = () => import('@/lib/zundamonSpeech').then((m) => m.getZundamonSpeech())
+
+    it('exposes the playing clip and clears it when the clip ends', async () => {
+      const { playTTS } = await load()
+      const result = playTTS('hello', options)
+      await audioStarted()
+      expect((await speech())?.audio).toBe(FakeAudio.instances[0])
+      FakeAudio.instances[0].onended?.()
+      await result
+      expect(await speech()).toBeNull()
+    })
+
+    it('exposes a cached clip too', async () => {
+      cache.getCache.mockResolvedValue(cached)
+      const { playTTS } = await load()
+      const result = playTTS('hello', options)
+      await audioStarted()
+      expect((await speech())?.audio).toBe(FakeAudio.instances[0])
+      FakeAudio.instances[0].onended?.()
+      await result
+    })
+
+    it('clears it on a stop', async () => {
+      const { playTTS, stopTTS } = await load()
+      const result = playTTS('hello', options)
+      await audioStarted()
+      stopTTS()
+      await result
+      expect(await speech()).toBeNull()
+    })
+
+    it('shows the avatar without a clip while the browser voice reads zundamon', async () => {
+      let seen: unknown = 'unset'
+      const { playTTS } = await load()
+      const { getZundamonSpeech } = await import('@/lib/zundamonSpeech')
+      speak.mockImplementation((utterance: { onend: (() => void) | null }) => {
+        seen = getZundamonSpeech()
+        utterance.onend?.()
+      })
+      await expect(playTTS('hello', { voice: 'zundamon', lang: 'en' })).resolves.toBe('webspeech')
+      expect(seen).toEqual({ audio: null, envelope: null })
+      expect(getZundamonSpeech()).toBeNull()
+    })
+
+    it('leaves it unset for other voices', async () => {
+      let seen: unknown = 'unset'
+      const { playTTS } = await load()
+      const { getZundamonSpeech } = await import('@/lib/zundamonSpeech')
+      speak.mockImplementation((utterance: { onend: (() => void) | null }) => {
+        seen = getZundamonSpeech()
+        utterance.onend?.()
+      })
+      await playTTS('hello', { voice: 'female', lang: 'en' })
+      expect(seen).toBeNull()
+    })
+  })
+
   describe('stopping during playback', () => {
     it('does not speak after a freshly fetched clip is stopped', async () => {
       const { playTTS, stopTTS } = await load()

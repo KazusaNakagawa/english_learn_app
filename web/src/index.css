@@ -141,3 +141,9 @@
     @apply font-sans;
     }
 }
+/* ZundamonAvatar: a small hop while zundamon speaks. */
+@keyframes zunda-bob {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  25% { transform: translateY(-4px) rotate(-1.5deg); }
+  75% { transform: translateY(-2px) rotate(1.5deg); }
+}

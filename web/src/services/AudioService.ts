@@ -10,6 +10,8 @@
 import { getCache, putCache, makeCacheKey, evictCache } from './AudioCacheService'
 import { defaultEndpoint, isLocalEndpoint, normalizeEndpoint, voicevoxHeaders } from '@/lib/voicevox'
 import { reportMissingVoicevoxKey } from '@/lib/voicevoxNotice'
+import { wavEnvelope } from '@/lib/wavEnvelope'
+import { getZundamonSpeech, setZundamonSpeech } from '@/lib/zundamonSpeech'
 import { fetchLocalVoice, isLocalVoiceAvailable, isLocalVoiceChoice, KOKORO_VOICES, LocalVoiceError } from './LocalVoiceService'
 
 const CACHE_MAX_BYTES = 50 * 1024 * 1024 // 50 MB
@@ -175,13 +177,13 @@ async function storeInCache(cacheKey: string, text: string, speakerId: string, b
  * Play the cached clip for cacheKey. Resolves 'cache' or 'cancelled' when it
  * handled the call, null on a miss or an unreadable cache.
  */
-async function playFromCache(cacheKey: string, isStopped: () => boolean): Promise<PlaySource | null> {
+async function playFromCache(cacheKey: string, isStopped: () => boolean, zundamon = false): Promise<PlaySource | null> {
   try {
     const cached = await getCache(cacheKey)
     if (isStopped()) return 'cancelled'
     if (!cached) return null
     console.debug('[AudioService] cache hit:', cacheKey)
-    await playBlob(cached.audio_data)
+    await playBlob(cached.audio_data, zundamon)
     return isStopped() ? 'cancelled' : 'cache'
   } catch (err) {
     console.warn('[AudioService] cache read failed:', err)
@@ -192,7 +194,17 @@ async function playFromCache(cacheKey: string, isStopped: () => boolean): Promis
 let _currentPlayback: { stop: () => void } | null = null
 let _stopController = new AbortController()
 
-function playBlob(blob: Blob): Promise<void> {
+/** Shows the avatar for this clip, and moves its mouth once the clip is analysed. */
+function showZundamon(audio: HTMLAudioElement, blob: Blob): void {
+  setZundamonSpeech({ audio, envelope: null })
+  if (typeof blob.arrayBuffer !== 'function') return
+  blob.arrayBuffer().then((buffer) => {
+    const envelope = wavEnvelope(buffer)
+    if (envelope && getZundamonSpeech()?.audio === audio) setZundamonSpeech({ audio, envelope })
+  }).catch(() => {})
+}
+
+function playBlob(blob: Blob, zundamon = false): Promise<void> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(blob)
     const audio = new Audio(url)
@@ -203,6 +215,7 @@ function playBlob(blob: Blob): Promise<void> {
       audio.onended = null
       audio.onerror = null
       if (_currentPlayback === playback) _currentPlayback = null
+      if (getZundamonSpeech()?.audio === audio) setZundamonSpeech(null)
       URL.revokeObjectURL(url)
       finish()
     }
@@ -217,6 +230,7 @@ function playBlob(blob: Blob): Promise<void> {
       }),
     }
     _currentPlayback = playback
+    if (zundamon) showZundamon(audio, blob)
     audio.onended = () => settle(resolve)
     audio.onerror = () => settle(() => reject(new Error('Audio playback failed')))
     audio.play().catch((err) => settle(() => reject(err)))
@@ -299,7 +313,7 @@ export async function playTTS(
 
     // 1. Cache hit
     if (cacheKey) {
-      const hit = await playFromCache(cacheKey, isStopped)
+      const hit = await playFromCache(cacheKey, isStopped, true)
       if (hit) return hit
     }
     if (isStopped()) return 'cancelled'
@@ -311,7 +325,7 @@ export async function playTTS(
       if (isStopped()) return 'cancelled'
       if (cacheKey) void storeInCache(cacheKey, text, speakerId, blob)
       console.debug('[AudioService] playing fetched clip, size:', blob.size)
-      await playBlob(blob)
+      await playBlob(blob, true)
       return isStopped() ? 'cancelled' : 'voicevox'
     } catch (err) {
       if (isStopped()) return 'cancelled'
@@ -325,6 +339,13 @@ export async function playTTS(
 
   // 3. Web Speech API fallback
   if (isStopped()) return 'cancelled'
-  await speakWebSpeech(text, lang, voice, signal)
+  // The avatar still appears, with a steady mouth since there is no clip to analyse.
+  const speech = voice === 'zundamon' ? { audio: null, envelope: null } : null
+  if (speech) setZundamonSpeech(speech)
+  try {
+    await speakWebSpeech(text, lang, voice, signal)
+  } finally {
+    if (speech && getZundamonSpeech() === speech) setZundamonSpeech(null)
+  }
   return isStopped() ? 'cancelled' : 'webspeech'
 }
