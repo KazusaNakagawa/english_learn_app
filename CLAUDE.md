@@ -138,6 +138,21 @@ This installs a pre-commit hook that blocks commits with hardcoded `DEVELOPMENT_
 
 1. **Create an Issue** — file a GitHub Issue for the task before starting.
 2. **Cut a working branch** — pull the latest `develop` branch, then create a feature branch from it.
+   When working in a git worktree, create it under `.worktrees/<name>` (git-ignored) rather than
+   a sibling directory, so it stays inside the Claude Code session's working directory. Use a flat
+   name such as `issue-309`, not the branch name: `feature/...` would leave an empty `feature/`
+   directory behind on removal.
+
+   ```bash
+   git fetch origin
+   git worktree add .worktrees/issue-309 -b chore/issue-309-... origin/develop
+   # when the PR is merged
+   git worktree remove .worktrees/issue-309
+   ```
+
+   A session started inside `.worktrees/<name>` loads this file twice: the worktree's copy and
+   the main checkout's (an ancestor directory). They only disagree when the branch edits
+   `CLAUDE.md`; in that case the worktree's copy is the one under review.
 3. **Implement** — make the code changes.
 4. **Manual verification** — confirm the change works by running the app or the affected AWS stack by hand.
 5. **Document if needed** — if the change introduces non-obvious behaviour, a setup step, or a known pitfall, add a document under `docs/`.

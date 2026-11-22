@@ -38,6 +38,8 @@ interface ImportMetaEnv {
   readonly VITE_APP_ENV: string
   readonly VITE_VOICEVOX_ENDPOINT_POC: string
   readonly VITE_VOICEVOX_API_KEY_POC: string
+  /** 'true' shows the zundamon avatar; anything else, or unset, keeps it off. */
+  readonly VITE_ZUNDAMON_AVATAR?: string
 }
 
 interface ImportMeta {

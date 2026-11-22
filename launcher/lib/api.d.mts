@@ -5,6 +5,9 @@ export declare const MODELS: readonly string[]
 export declare const DEFAULT_MODEL: string
 
 /** Handles /api/* and returns true; returns false for every other path. */
-export type ApiHandler = (req: IncomingMessage, res: ServerResponse) => boolean
+export type ApiHandler = ((req: IncomingMessage, res: ServerResponse) => boolean) & {
+  /** Stops the local voice worker, if it was started. */
+  stop: () => Promise<void>
+}
 
 export declare function createApiHandler(options?: { version?: string }): ApiHandler

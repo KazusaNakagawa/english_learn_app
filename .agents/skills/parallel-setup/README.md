@@ -28,7 +28,7 @@ gh auth status
 これにより以下が自動実行されます：
 1. 最新のdevelopブランチをfetch
 2. 各Issueごとにfeatureブランチを作成
-3. Git worktreeを作成（`~/worktree-worker1`, `~/worktree-worker2`）
+3. Git worktreeを作成（`.worktrees/worker1`, `.worktrees/worker2`）
 4. tmuxセッション `parallel-dev` を**ペイン分割モード**で起動
 5. 各ペインで独立したCodexセッションを開始
 6. 各ワーカーで `/start <issue-number>` を実行
@@ -51,7 +51,7 @@ tmux attach -t parallel-dev
 ```bash
 ┌──────────────────────────────────────────────┐
 │ Worker 1 (#79)     │ Worker 2 (#80)         │
-│ ~/worktree-worker1 │ ~/worktree-worker2     │
+│ .worktrees/worker1 │ .worktrees/worker2     │
 │                    │                        │
 │ Codex              │ Codex                  │
 │ [task output...]   │ [task output...]       │
@@ -218,7 +218,7 @@ tmux attach -t parallel-dev
 git worktree list
 
 # 削除
-git worktree remove ~/worktree-worker1
+git worktree remove .worktrees/worker1
 # または
 /parallel-cleanup
 ```
@@ -247,15 +247,12 @@ main repository (~/work/english_learn_app)
 │   └── parallel-cleanup/
 └── ...
 
-worktree-worker1 (~/worktree-worker1)  [feature/issue-100-auth]
-├── .git -> ../work/english_learn_app/.git/worktrees/worker1
-└── ... (full working copy)
-
-worktree-worker2 (~/worktree-worker2)  [feature/issue-101-payment]
-└── ...
-
-worktree-worker3 (~/worktree-worker3)  [feature/issue-102-dashboard]
-└── ...
+main repository/.worktrees/   (git-ignored)
+├── worker1/  [feature/issue-100-auth]
+│   ├── .git -> ../../.git/worktrees/worker1
+│   └── ... (full working copy)
+├── worker2/  [feature/issue-101-payment]
+└── worker3/  [feature/issue-102-dashboard]
 ```
 
 ### tmux レイアウト

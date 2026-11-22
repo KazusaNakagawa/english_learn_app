@@ -3,7 +3,7 @@
  *
  * Priority:
  *   1. IndexedDB cache hit → play immediately
- *   2. VOICEVOX Lambda → fetch WAV, cache, play
+ *   2. Kokoro (local API) or VOICEVOX, by the chosen voice → fetch WAV, cache, play
  *   3. Web Speech API fallback (no cache)
  */
 
@@ -11,6 +11,9 @@ import { getCache, putCache, makeCacheKey, evictCache } from './AudioCacheServic
 import { defaultEndpoint, isLocalEndpoint, normalizeEndpoint, voicevoxHeaders } from '@/lib/voicevox'
 import { reportMissingVoicevoxKey } from '@/lib/voicevoxNotice'
 import { pickEnVoice } from '@/lib/enVoice'
+import { wavEnvelope, type Envelope } from '@/lib/wavEnvelope'
+import { getZundamonSpeech, isZundamonAvatarEnabled, setZundamonSpeech } from '@/lib/zundamonSpeech'
+import { fetchLocalVoice, isLocalVoiceAvailable, isLocalVoiceChoice, KOKORO_VOICES, LocalVoiceError } from './LocalVoiceService'
 
 const CACHE_MAX_BYTES = 50 * 1024 * 1024 // 50 MB
 const VOICE_LOAD_TIMEOUT_MS = 3000
@@ -19,6 +22,7 @@ const VOICE_LOAD_TIMEOUT_MS = 3000
 const UTTERANCE_BASE_TIMEOUT_MS = 10_000
 const UTTERANCE_TIMEOUT_PER_CHAR_MS = 300
 
+/** English male and Japanese female play the local voice when it is available (see LocalVoiceService). */
 export type VoiceType = 'default' | 'female' | 'male' | 'zundamon'
 
 export interface PlayOptions {
@@ -32,7 +36,11 @@ export interface PlayOptions {
   onColdStartEnd?: () => void
 }
 
-export type PlaySource = 'cache' | 'voicevox' | 'webspeech' | 'cancelled'
+export type PlaySource = 'cache' | 'kokoro' | 'voicevox' | 'webspeech' | 'cancelled'
+
+// The cache key's "endpoint" for Kokoro clips: they come from whichever local
+// API served the page, and never collide with a VOICEVOX engine's clips.
+const KOKORO_CACHE_ENDPOINT = 'local-kokoro'
 
 // ---- Web Speech API helpers ----
 
@@ -66,6 +74,8 @@ async function speakWebSpeech(
   lang: 'en' | 'ja',
   voice: VoiceType,
   signal: AbortSignal,
+  /** Called once the engine actually starts speaking. */
+  onStart?: () => void,
 ): Promise<void> {
   // Absent in some embedded browsers. SettingsPage shows this message; the other
   // pages only log it.
@@ -96,6 +106,7 @@ async function speakWebSpeech(
       // engine may switch to a voice of another language.
       if (v) { utt.voice = v; utt.lang = v.lang }
     }
+    utt.onstart = () => { if (!signal.aborted) onStart?.() }
     utt.onend = () => settle(resolve)
     utt.onerror = (e) => settle(() => reject(new Error(e.error)))
     window.speechSynthesis.speak(utt)
@@ -156,10 +167,58 @@ async function storeInCache(cacheKey: string, text: string, speakerId: string, b
   }
 }
 
+/**
+ * Play the cached clip for cacheKey. Resolves 'cache' or 'cancelled' when it
+ * handled the call, null on a miss or an unreadable cache.
+ */
+async function playFromCache(cacheKey: string, isStopped: () => boolean, avatar?: AvatarClip): Promise<PlaySource | null> {
+  try {
+    const cached = await getCache(cacheKey)
+    if (isStopped()) return 'cancelled'
+    if (!cached) return null
+    console.debug('[AudioService] cache hit:', cacheKey)
+    await playBlob(cached.audio_data, avatar)
+    return isStopped() ? 'cancelled' : 'cache'
+  } catch (err) {
+    console.warn('[AudioService] cache read failed:', err)
+    return null
+  }
+}
+
 let _currentPlayback: { stop: () => void } | null = null
 let _stopController = new AbortController()
 
-function playBlob(blob: Blob): Promise<void> {
+/** A clip the avatar speaks. The key is its cache key; null when caching is unavailable. */
+interface AvatarClip { key: string | null }
+
+// A clip's loudness never changes, and practice replays the same sentences, so
+// each is analysed once. A few numbers per second of audio: the cap only keeps
+// a very long session from growing without bound.
+const ENVELOPE_CACHE_MAX = 500
+const _envelopes = new Map<string, Envelope | null>()
+
+function rememberEnvelope(key: string, envelope: Envelope | null): void {
+  if (_envelopes.size >= ENVELOPE_CACHE_MAX) _envelopes.delete(_envelopes.keys().next().value!)
+  _envelopes.set(key, envelope)
+}
+
+/** Shows the avatar for this clip, and moves its mouth once the clip is analysed. */
+function showZundamon(audio: HTMLAudioElement, blob: Blob, { key }: AvatarClip): void {
+  if (key !== null && _envelopes.has(key)) {
+    setZundamonSpeech({ audio, envelope: _envelopes.get(key) ?? null })
+    return
+  }
+  setZundamonSpeech({ audio, envelope: null })
+  if (typeof blob.arrayBuffer !== 'function') return
+  blob.arrayBuffer().then((buffer) => {
+    const envelope = wavEnvelope(buffer)
+    if (key !== null) rememberEnvelope(key, envelope)
+    if (envelope && getZundamonSpeech()?.audio === audio) setZundamonSpeech({ audio, envelope })
+  }).catch(() => {})
+}
+
+/** With avatar, zundamon is shown speaking this clip (when the avatar is turned on). */
+function playBlob(blob: Blob, avatar?: AvatarClip): Promise<void> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(blob)
     const audio = new Audio(url)
@@ -170,6 +229,7 @@ function playBlob(blob: Blob): Promise<void> {
       audio.onended = null
       audio.onerror = null
       if (_currentPlayback === playback) _currentPlayback = null
+      if (getZundamonSpeech()?.audio === audio) setZundamonSpeech(null)
       URL.revokeObjectURL(url)
       finish()
     }
@@ -186,7 +246,12 @@ function playBlob(blob: Blob): Promise<void> {
     _currentPlayback = playback
     audio.onended = () => settle(resolve)
     audio.onerror = () => settle(() => reject(new Error('Audio playback failed')))
-    audio.play().catch((err) => settle(() => reject(err)))
+    // Only once playback has really started: a rejected play() (autoplay
+    // policy, a clip that cannot be decoded) must not show a silent avatar.
+    audio.play().then(
+      () => { if (!settled && avatar && isZundamonAvatarEnabled()) showZundamon(audio, blob, avatar) },
+      (err) => settle(() => reject(err)),
+    )
   })
 }
 
@@ -207,7 +272,7 @@ export function stopTTS(): void {
 // ---- Public API ----
 
 /**
- * Play TTS audio. Tries cache → VOICEVOX → Web Speech API in order.
+ * Play TTS audio. Tries cache → Kokoro or VOICEVOX → Web Speech API in order.
  * Starting a call supersedes any call still in progress, so only one clip can
  * be playing and stopTTS can always reach it.
  * Returns which source was used, or 'cancelled' if stopped or superseded first.
@@ -227,7 +292,36 @@ export async function playTTS(
   const { signal } = _stopController
   const isStopped = () => signal.aborted
 
-  if (useVoicevox) {
+  if (isLocalVoiceChoice(voice, lang)) {
+    const speaker = `kokoro:${KOKORO_VOICES[lang]}`
+    const cacheKey = await makeCacheKey(text, speaker, KOKORO_CACHE_ENDPOINT).catch((err) => {
+      console.warn('[AudioService] cache unavailable:', err)
+      return null
+    })
+    // 1. Cache hit: plays even when the local API is gone (static hosting, offline).
+    if (cacheKey) {
+      const hit = await playFromCache(cacheKey, isStopped)
+      if (hit) return hit
+    }
+    if (isStopped()) return 'cancelled'
+
+    // 2. Local API
+    if (isLocalVoiceAvailable()) {
+      try {
+        const blob = await fetchLocalVoice(text, lang, signal)
+        if (isStopped()) return 'cancelled'
+        if (cacheKey) void storeInCache(cacheKey, text, speaker, blob)
+        await playBlob(blob)
+        return isStopped() ? 'cancelled' : 'kokoro'
+      } catch (err) {
+        if (isStopped()) return 'cancelled'
+        // Starting, no launcher, or a word the voice cannot read: the browser
+        // voice reads this one. Only an unexpected failure is worth an error.
+        if (err instanceof LocalVoiceError) console.info(`[AudioService] local voice ${err.code}, using the browser voice`)
+        else console.error('[AudioService] local voice failed, falling back to Web Speech:', err)
+      }
+    }
+  } else if (useVoicevox) {
     // crypto.subtle is undefined on non-secure origins such as a LAN dev URL.
     // Keyed by endpoint too, so switching engines does not replay another engine's clip.
     const cacheKey = await makeCacheKey(text, speakerId, base).catch((err) => {
@@ -237,17 +331,8 @@ export async function playTTS(
 
     // 1. Cache hit
     if (cacheKey) {
-      try {
-        const cached = await getCache(cacheKey)
-        if (isStopped()) return 'cancelled'
-        if (cached) {
-          console.debug('[AudioService] cache hit:', cacheKey)
-          await playBlob(cached.audio_data)
-          return isStopped() ? 'cancelled' : 'cache'
-        }
-      } catch (err) {
-        console.warn('[AudioService] cache read failed:', err)
-      }
+      const hit = await playFromCache(cacheKey, isStopped, { key: cacheKey })
+      if (hit) return hit
     }
     if (isStopped()) return 'cancelled'
 
@@ -258,7 +343,7 @@ export async function playTTS(
       if (isStopped()) return 'cancelled'
       if (cacheKey) void storeInCache(cacheKey, text, speakerId, blob)
       console.debug('[AudioService] playing fetched clip, size:', blob.size)
-      await playBlob(blob)
+      await playBlob(blob, { key: cacheKey })
       return isStopped() ? 'cancelled' : 'voicevox'
     } catch (err) {
       if (isStopped()) return 'cancelled'
@@ -274,6 +359,13 @@ export async function playTTS(
   if (isStopped()) return 'cancelled'
   // Zundamon has no browser voice of its own. Leaving the choice to the browser
   // can land on a harsh legacy voice, so it reads with the default (female) one.
-  await speakWebSpeech(text, lang, voice === 'zundamon' ? 'default' : voice, signal)
+  // The avatar still appears once the voice starts, with a steady mouth since
+  // there is no clip to analyse. Not before: the engine can be missing or fail.
+  const speech = voice === 'zundamon' && isZundamonAvatarEnabled() ? { audio: null, envelope: null } : null
+  try {
+    await speakWebSpeech(text, lang, voice === 'zundamon' ? 'default' : voice, signal, speech ? () => setZundamonSpeech(speech) : undefined)
+  } finally {
+    if (speech && getZundamonSpeech() === speech) setZundamonSpeech(null)
+  }
   return isStopped() ? 'cancelled' : 'webspeech'
 }

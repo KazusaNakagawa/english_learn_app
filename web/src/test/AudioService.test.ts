@@ -170,6 +170,135 @@ describe('playTTS with stopTTS', () => {
     })
   })
 
+  describe('zundamon avatar state', () => {
+    const speech = () => import('@/lib/zundamonSpeech').then((m) => m.getZundamonSpeech())
+    beforeEach(() => { vi.stubEnv('VITE_ZUNDAMON_AVATAR', 'true') })
+
+    it('stays unset while the avatar is turned off', async () => {
+      vi.stubEnv('VITE_ZUNDAMON_AVATAR', '')
+      const { playTTS } = await load()
+      const result = playTTS('hello', options)
+      await audioStarted()
+      expect(await speech()).toBeNull()
+      FakeAudio.instances[0].onended?.()
+      await result
+    })
+
+    it('exposes the playing clip and clears it when the clip ends', async () => {
+      const { playTTS } = await load()
+      const result = playTTS('hello', options)
+      await audioStarted()
+      expect((await speech())?.audio).toBe(FakeAudio.instances[0])
+      FakeAudio.instances[0].onended?.()
+      await result
+      expect(await speech()).toBeNull()
+    })
+
+    it('exposes a cached clip too', async () => {
+      cache.getCache.mockResolvedValue(cached)
+      const { playTTS } = await load()
+      const result = playTTS('hello', options)
+      await audioStarted()
+      expect((await speech())?.audio).toBe(FakeAudio.instances[0])
+      FakeAudio.instances[0].onended?.()
+      await result
+    })
+
+    it('clears it on a stop', async () => {
+      const { playTTS, stopTTS } = await load()
+      const result = playTTS('hello', options)
+      await audioStarted()
+      stopTTS()
+      await result
+      expect(await speech()).toBeNull()
+    })
+
+    it('shows the avatar without a clip while the browser voice reads zundamon', async () => {
+      let seen: unknown = 'unset'
+      const { playTTS } = await load()
+      const { getZundamonSpeech } = await import('@/lib/zundamonSpeech')
+      speak.mockImplementation((utterance: { onstart: (() => void) | null; onend: (() => void) | null }) => {
+        utterance.onstart?.()
+        seen = getZundamonSpeech()
+        utterance.onend?.()
+      })
+      await expect(playTTS('hello', { voice: 'zundamon', lang: 'en' })).resolves.toBe('webspeech')
+      expect(seen).toEqual({ audio: null, envelope: null })
+      expect(getZundamonSpeech()).toBeNull()
+    })
+
+    /** Every state the avatar was handed during the call. */
+    const recordSpeech = async () => {
+      const m = await import('@/lib/zundamonSpeech')
+      const seen: unknown[] = []
+      m.subscribeZundamonSpeech(() => seen.push(m.getZundamonSpeech()))
+      return seen
+    }
+
+    it('waits for play() to resolve before showing the avatar', async () => {
+      FakeAudio.holdPlay = true
+      const { playTTS, stopTTS } = await load()
+      const seen = await recordSpeech()
+      const result = playTTS('hello', options)
+      await audioStarted()
+      await flush()
+      expect(seen).toEqual([])
+      stopTTS()
+      await result
+    })
+
+    it('never shows the avatar for a clip whose play() is rejected', async () => {
+      vi.spyOn(FakeAudio.prototype, 'play').mockRejectedValue(new DOMException('blocked', 'NotAllowedError'))
+      const { playTTS } = await load()
+      const seen = await recordSpeech()
+      speak.mockImplementation((utterance: { onend: (() => void) | null }) => utterance.onend?.())
+      await expect(playTTS('hello', options)).resolves.toBe('webspeech')
+      expect(seen.filter((s) => s !== null && (s as { audio: unknown }).audio !== null)).toEqual([])
+    })
+
+    it('never shows the avatar when the browser cannot speak', async () => {
+      vi.stubGlobal('speechSynthesis', undefined)
+      const { playTTS } = await load()
+      const seen = await recordSpeech()
+      await expect(playTTS('hello', { voice: 'zundamon', lang: 'en' })).rejects.toThrow()
+      expect(seen).toEqual([])
+    })
+
+    it('waits for the browser voice to start before showing the avatar', async () => {
+      const { playTTS } = await load()
+      const seen = await recordSpeech()
+      speak.mockImplementation((utterance: { onend: (() => void) | null }) => utterance.onend?.())
+      await playTTS('hello', { voice: 'zundamon', lang: 'en' })
+      expect(seen).toEqual([])
+    })
+
+    it('analyses a cached clip once, however often it replays', async () => {
+      const arrayBuffer = vi.fn(async () => new ArrayBuffer(0))
+      cache.getCache.mockResolvedValue({ audio_data: { arrayBuffer } })
+      const { playTTS } = await load()
+      for (let i = 1; i <= 2; i++) {
+        const result = playTTS('hello', options)
+        await audioStarted(i)
+        await flush()
+        FakeAudio.instances[i - 1].onended?.()
+        await result
+      }
+      expect(arrayBuffer).toHaveBeenCalledOnce()
+    })
+
+    it('leaves it unset for other voices', async () => {
+      let seen: unknown = 'unset'
+      const { playTTS } = await load()
+      const { getZundamonSpeech } = await import('@/lib/zundamonSpeech')
+      speak.mockImplementation((utterance: { onend: (() => void) | null }) => {
+        seen = getZundamonSpeech()
+        utterance.onend?.()
+      })
+      await playTTS('hello', { voice: 'female', lang: 'en' })
+      expect(seen).toBeNull()
+    })
+  })
+
   describe('stopping during playback', () => {
     it('does not speak after a freshly fetched clip is stopped', async () => {
       const { playTTS, stopTTS } = await load()

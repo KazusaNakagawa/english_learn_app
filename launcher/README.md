@@ -6,6 +6,10 @@ Run the English Learn App web version on your own machine with one command.
 npx english-learn-app
 ```
 
+> Not published to npm yet. From the repository, run
+> `node scripts/prepare-dist.mjs && npm start` in `launcher/` instead
+> (see Development below).
+
 It serves the app at http://127.0.0.1:5280/ and opens it in your browser.
 Press Ctrl-C to stop. Running the command again while it is up just reopens
 the browser.
@@ -17,15 +21,11 @@ URL. Keep using the same port: the app opened on another port starts empty.
 
 AIで例文を生成 runs the Claude Code CLI on this machine, using your
 Pro/Max login. No API key is needed. macOS and Linux only for now: on
-Windows the npm-installed `claude.cmd` is not started yet. One-time setup:
+Windows the npm-installed `claude.cmd` is not started yet. Setup steps and
+what each status in Settings means are in
+[web/README.md](../web/README.md#ai-で例文を生成するclaude-code) (Japanese).
 
-```bash
-npm install -g @anthropic-ai/claude-code
-claude          # log in with a Pro or Max account
-```
-
-Settings → 例文の生成方法 shows whether it is ready, and what to do when
-it is not. The local API behind it (`POST /api/generate-sentences`):
+The local API behind it (`POST /api/generate-sentences`):
 
 - runs `claude -p` with structured output, no tools, no slash commands, no
   MCP servers, and no saved session;
@@ -37,6 +37,27 @@ it is not. The local API behind it (`POST /api/generate-sentences`):
   cannot spend your subscription;
 - runs one generation at a time, gives up after 3 minutes, and stops the CLI
   when the page cancels.
+
+## Local voice (Kokoro)
+
+Speech can use [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) on this
+machine (English `am_echo`, Japanese `jf_alpha`). It needs
+[uv](https://docs.astral.sh/uv/); without it, speech uses the browser's voice.
+Setup (uv, optional `espeak-ng`, the ~1.5 GB first download, removal) is in
+[web/README.md](../web/README.md#ローカル音声kokoro) (Japanese); design notes
+and pitfalls are in
+[docs/web/local-tts-kokoro.md](../docs/web/local-tts-kokoro.md).
+
+The local API behind it (`POST /api/tts` with `{ "text", "lang": "en" | "ja" }`,
+answering `audio/wav`):
+
+- starts the voice on the first `GET /api/health?tts=1` or `POST /api/tts`, and
+  answers 503 `starting` until it is ready, so the page falls back meanwhile;
+  a health request another site's page makes (`Sec-Fetch-Site: cross-site`)
+  gets the status but never starts it;
+- has the same loopback and `Origin` checks as the generate endpoint;
+- runs one sentence at a time (up to 500 characters) and stops the voice when
+  the launcher stops.
 
 ## Options
 
@@ -51,8 +72,9 @@ it is not. The local API behind it (`POST /api/generate-sentences`):
 
 - Node.js 20+ (releasing needs 20.12+)
 
-No API keys are needed. Speech falls back to the browser's voice when no
-VOICEVOX endpoint is set. Sentence generation needs the Claude Code CLI (above)
+No API keys are needed. Speech uses the local voice when uv is installed (above),
+and otherwise falls back to the browser's voice when no VOICEVOX endpoint is set.
+Sentence generation needs the Claude Code CLI (above)
 or an OpenAI key entered in Settings.
 
 ## Development (in the repository)

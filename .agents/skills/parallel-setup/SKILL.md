@@ -77,11 +77,18 @@ else
   branch_name="feature/issue-100-${sanitized_title}"
 fi
 
-# Create worktree
-git worktree add ~/worktree-worker1 -b "$branch_name" develop
-git worktree add ~/worktree-worker2 -b "feature/issue-101-..." develop
-git worktree add ~/worktree-worker3 -b "feature/issue-102-..." develop
+# Create worktrees under <main checkout>/.worktrees/ (git-ignored; see CLAUDE.md).
+# Resolve the main checkout from the shared git dir so this also works when
+# run from inside another worktree.
+main_root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
+git worktree add "$main_root/.worktrees/worker1" -b "$branch_name" develop
+git worktree add "$main_root/.worktrees/worker2" -b "feature/issue-101-..." develop
+git worktree add "$main_root/.worktrees/worker3" -b "feature/issue-102-..." develop
 ```
+
+Each worker session starts inside its own worktree, so it loads that worktree's
+`CLAUDE.md`/`AGENTS.md` **and** the main checkout's (an ancestor directory). They
+only differ when a worker's branch edits those files.
 
 ### 4. Create tmux Session with Pane Split Layout
 
@@ -97,20 +104,20 @@ tmux new-session -d -s parallel-dev -x $TMUX_WIDTH -y $TMUX_HEIGHT
 tmux rename-window -t parallel-dev:0 workers
 
 # Step 2: Setup Worker 1 (pane 0)
-tmux send-keys -t parallel-dev:workers.0 'cd ~/worktree-worker1' Enter
+tmux send-keys -t parallel-dev:workers.0 "cd '$main_root/.worktrees/worker1'" Enter
 sleep 1  # Wait for directory change
 
 # Step 3: Split pane for Worker 2
 tmux split-window -h -t parallel-dev:workers
 
 # Step 4: Setup Worker 2 (pane 1)
-tmux send-keys -t parallel-dev:workers.1 'cd ~/worktree-worker2' Enter
+tmux send-keys -t parallel-dev:workers.1 "cd '$main_root/.worktrees/worker2'" Enter
 sleep 1  # Wait for directory change
 
 # Step 5: For 3+ workers, continue splitting
 # Worker 3 example:
 # tmux split-window -h -t parallel-dev:workers
-# tmux send-keys -t parallel-dev:workers.2 'cd ~/worktree-worker3' Enter
+# tmux send-keys -t parallel-dev:workers.2 "cd '$main_root/.worktrees/worker3'" Enter
 # sleep 1
 
 # Step 6: Adjust layout based on worker count
@@ -238,8 +245,8 @@ echo "✓ Parallel Development Environment Ready!"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 echo "Created 2 workers in split-pane layout:"
-echo "  📍 Worker 1: Issue #79 (~/worktree-worker1) [pane 0]"
-echo "  📍 Worker 2: Issue #80 (~/worktree-worker2) [pane 1]"
+echo "  📍 Worker 1: Issue #79 (.worktrees/worker1) [pane 0]"
+echo "  📍 Worker 2: Issue #80 (.worktrees/worker2) [pane 1]"
 echo ""
 echo "All workers are visible simultaneously!"
 echo ""
@@ -346,7 +353,7 @@ When development is complete, use `/parallel-cleanup` to:
 
 ```bash
 git worktree list
-git worktree remove ~/worktree-worker1
+git worktree remove .worktrees/worker1
 ```
 
 ### "tmux session already exists"

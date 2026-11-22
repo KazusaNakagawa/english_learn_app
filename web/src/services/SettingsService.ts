@@ -7,8 +7,10 @@
  */
 
 export interface AppSettings {
+  /** male plays the local voice (launcher), falling back to a browser voice. */
   enVoice: 'default' | 'female' | 'male' | 'zundamon'
-  jaVoice: 'zundamon' | 'default'
+  /** female plays the local voice (launcher), falling back to the browser voice. */
+  jaVoice: 'female' | 'zundamon' | 'default'
   voicevoxStyle: string   // speaker ID
   /** Empty means the build-time endpoint. Resolve with resolveVoicevox before use. */
   voicevoxEndpoint: string
@@ -22,11 +24,16 @@ export interface AppSettings {
   claudeModel: 'sonnet' | 'haiku' | 'opus'
   playPattern: 'bilingual' | 'en-only'
   intervalSec: number
+  /**
+   * 2 once the voice defaults moved to the local voice. Settings saved before
+   * that still hold the old defaults, which loadSettings moves over once.
+   */
+  voiceDefaultsVersion: number
 }
 
 const DEFAULTS: AppSettings = {
-  enVoice: 'female',
-  jaVoice: 'zundamon',
+  enVoice: 'male',
+  jaVoice: 'female',
   voicevoxStyle: '22',
   voicevoxEndpoint: '',
   voicevoxApiKey: '',
@@ -38,6 +45,30 @@ const DEFAULTS: AppSettings = {
   claudeModel: 'sonnet',
   playPattern: 'bilingual',
   intervalSec: 1.5,
+  voiceDefaultsVersion: 2,
+}
+
+/** A separate 'kokoro' voice existed briefly; English male / Japanese female took its place. */
+type StoredVoices = { enVoice?: AppSettings['enVoice'] | 'kokoro'; jaVoice?: AppSettings['jaVoice'] | 'kokoro' }
+
+/**
+ * Settings saved before the local voice existed carry the defaults of the time
+ * (English female, Japanese zundamon, the latter falling back to the system
+ * voice since the VOICEVOX Lambda was removed). Those move to the local voice
+ * (English male, Japanese female) once; any other choice was the user's and
+ * stays. Saving records version 2, so a later pick of English female or
+ * zundamon sticks.
+ */
+function migrateVoiceDefaults(stored: Omit<Partial<AppSettings>, 'enVoice' | 'jaVoice'> & StoredVoices): Partial<AppSettings> {
+  const enVoice = stored.enVoice === 'kokoro' ? 'male' : stored.enVoice
+  const jaVoice = stored.jaVoice === 'kokoro' ? 'female' : stored.jaVoice
+  if (stored.voiceDefaultsVersion === 2) return { ...stored, enVoice, jaVoice }
+  return {
+    ...stored,
+    enVoice: enVoice === undefined || enVoice === 'female' ? 'male' : enVoice,
+    jaVoice: jaVoice === undefined || jaVoice === 'zundamon' ? 'female' : jaVoice,
+    voiceDefaultsVersion: 2,
+  }
 }
 
 const SETTINGS_KEY = 'english_learn_app_settings'
@@ -71,7 +102,7 @@ function saveApiKeys(keys: Partial<ApiKeys>): void {
 export function loadSettings(): AppSettings {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY)
-    const parsed: Partial<AppSettings> = raw ? JSON.parse(raw) : {}
+    const parsed = migrateVoiceDefaults(raw ? JSON.parse(raw) : {})
     const rawInterval = Number(parsed.intervalSec)
     const intervalSec = isFinite(rawInterval)
       ? Math.min(INTERVAL_MAX, Math.max(INTERVAL_MIN, rawInterval))
