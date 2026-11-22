@@ -6,6 +6,10 @@ Run the English Learn App web version on your own machine with one command.
 npx english-learn-app
 ```
 
+> Not published to npm yet. From the repository, run
+> `node scripts/prepare-dist.mjs && npm start` in `launcher/` instead
+> (see Development below).
+
 It serves the app at http://127.0.0.1:5280/ and opens it in your browser.
 Press Ctrl-C to stop. Running the command again while it is up just reopens
 the browser.
