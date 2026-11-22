@@ -42,6 +42,35 @@ AI による例文生成と音声合成を組み合わせた、発音練習に�
 
 ---
 
+## 使っている音声
+
+設定画面の選択肢ごとに、実際に読み上げる音声は次のとおりです。
+
+| 設定 | iOS 版 | Web 版 |
+|------|--------|--------|
+| 英語「男性」（Web 版の既定） | iOS の男性音声 | **Kokoro-82M の `am_echo`**（このパソコンで生成） |
+| 英語「女性」 | iOS の女性音声 | ブラウザの女性音声 |
+| 英語「デフォルト」 | iOS の標準音声 | ブラウザの標準音声 |
+| 日本語「女性」（Web 版の既定） | —（iOS 版にはない選択肢） | **Kokoro-82M の `jf_alpha`**（このパソコンで生成） |
+| 日本語「デフォルト」 | iOS の標準音声 | ブラウザの標準音声 |
+| 英語・日本語「ずんだもん」 | VOICEVOX（AWS の API） | VOICEVOX（Docker か AWS。[接続先](#ずんだもん音声の接続先)） |
+
+- **Kokoro**（Web 版のローカル音声）は、ランチャーか `npm run dev` で開いたときに、このパソコンの中で音声を作ります。無料で、API キーは要らず、文章を外部に送りません。[uv](https://docs.astral.sh/uv/) が必要です（[ローカル音声](#ローカル音声kokoro)）。
+- 音声を作れないときは、同じ性別のブラウザの音声で読みます。準備中、uv がない、静的サーバーで開いた、などの場合です。
+- 生成した音声は IndexedDB にキャッシュし、2 回目からはすぐに再生します。
+
+### クレジットとライセンス
+
+| 音声 | ライセンス | 表記 |
+|------|-----------|------|
+| VOICEVOX:ずんだもん | [ずんだもん音源利用規約](https://zunko.jp/con_ongen_kiyaku.html)、[VOICEVOX 利用規約](https://voicevox.hiroshiba.jp/term/) | **必須**。商用・非商用とも「VOICEVOX:ずんだもん」。アプリでは設定画面に表示しています |
+| Kokoro-82M（`am_echo` / `jf_alpha`） | Apache-2.0（[モデルカード](https://huggingface.co/hexgrad/Kokoro-82M)） | 義務なし。モデルはアプリに同梱せず、初回に Hugging Face から取得します |
+| espeak-ng（任意。Kokoro が辞書にない英単語を読むため） | GPL-3.0 | 利用者が `brew install` で入れるもので、アプリには同梱しません |
+
+> Kokoro の日本語の声のうち `jf_gongitsune` / `jf_nezumi` / `jf_tebukuro` / `jm_kumo` は CC BY 3.0 のデータ（Koniwa）から作られており、作者名の表記が必要です。この 4 つに切り替える場合は表記を追加してください。
+
+---
+
 ## 動作環境
 
 | 項目 | 要件 |
@@ -50,6 +79,7 @@ AI による例文生成と音声合成を組み合わせた、発音練習に�
 | 実行環境 | iOS 17.0 以上（シミュレーター / 実機） |
 | Web 版の開発環境 | Node.js 20 以上 + npm |
 | Web 版の実行環境 | Chrome / Safari などのモダンブラウザ |
+| Web 版のローカル音声（任意） | [uv](https://docs.astral.sh/uv/)。初回に約 1.5 GB をダウンロード。macOS は `espeak-ng` もあるとよい |
 
 ---
 
@@ -208,7 +238,9 @@ OpenAI の API キーを入力すると、単語追加時に例文を自動生�
 | ネットワーク監視 | Network framework（NWPathMonitor） |
 | クラウド TTS 基盤 | AWS Lambda + API Gateway（VOICEVOX エンジン） |
 | インフラ管理 | AWS CDK（TypeScript） |
-| Web 版 | React + Vite + TypeScript、IndexedDB（データ保存）、Web Speech API（音声） |
+| Web 版 | React + Vite + TypeScript、PWA（vite-plugin-pwa）、IndexedDB（データ・音声キャッシュ） |
+| Web 版の音声 | Kokoro-82M（ローカル、Python を uv で起動）、VOICEVOX、Web Speech API（フォールバック） |
+| ランチャー | Node.js（依存なし）。`/api/generate-sentences`（Claude Code CLI）と `/api/tts`（Kokoro）を提供 |
 
 ---
 
@@ -237,6 +269,12 @@ OpenAI の API キーを入力すると、単語追加時に例文を自動生�
 - 設定画面の「例文の生成方法」に出る案内に従ってください（[AI で例文を生成する（Claude Code）](#ai-で例文を生成するclaude-code)）
 - ターミナルで `claude auth status` を実行し、`"loggedIn": true` になっているか確認します
 
+### Web 版でローカル音声（Kokoro）にならない場合
+
+- 設定画面の「ローカル音声」に出る案内に従ってください（[ローカル音声](#ローカル音声kokoro)）
+- 英語は「男性」、日本語は「女性」を選んでいるか確認します。ほかの選択肢はローカル音声を使いません
+- 初回は準備に数分かかり、その間はブラウザの音声で読みます
+
 ### OpenAI 例文生成が失敗する場合
 
 - 設定画面で OpenAI API キーが入力されているか確認
@@ -252,8 +290,10 @@ OpenAI の API キーを入力すると、単語追加時に例文を自動生�
 
 - 単語の追加・編集・ゴミ箱（10 日間は復元可能）・アーカイブ
 - iOS 版と同じ形式の JSON で単語データをインポート（追加 / 置き換え）・エクスポート
-- 例文の読み上げ（ずんだもん / ブラウザの音声）と連続再生、音声キャッシュ
-- 意味・発音記号・例文の自動生成。このパソコンの Claude Code（Pro / Max プラン）で API キーなしで生成するか、OpenAI の API キーで生成します
+- 例文の読み上げ（ローカル音声 Kokoro / ずんだもん / ブラウザの音声）と連続再生、音声キャッシュ。どの設定でどの音声になるかは [使っている音声](#使っている音声)
+- 意味・発音記号・例文の自動生成。このパソコンの Claude Code（Pro / Max プラン）で API キーなしで生成するか、OpenAI の API キーで生成します。例文生成の条件はプリセットで管理できます
+- PWA としてインストールでき、単語一覧はオフラインでも開けます（[docs/web/pwa.md](docs/web/pwa.md)）
+- 設定画面からプライバシーポリシーと利用規約を開けます
 
 > Web 版の API キー（OpenAI / VOICEVOX）は sessionStorage に保存されるため、タブを閉じると消えます。
 
@@ -272,7 +312,7 @@ npm run dev
 
 ### ワンコマンドで起動（ランチャー）
 
-`launcher/` は、ビルド済みの Web 版を手元で配信してブラウザを開く npm パッケージです。
+`launcher/` は、ビルド済みの Web 版を手元で配信してブラウザを開く npm パッケージです。npm にはまだ公開していないので、リポジトリから起動します。
 
 ```bash
 cd launcher
@@ -282,7 +322,24 @@ npm start                       # http://127.0.0.1:5280/ で配信し、ブラ�
 
 - ポートは 5280 で固定です。開発サーバー（5173）とは URL が違うので、それぞれ別の単語データになります。
 - 起動中にもう一度実行すると、ブラウザを開き直すだけで終了します。5280 を別のプログラムが使っているときはエラーで止まります。
-- 公開は `launcher/` で `npm publish` です。毎回 `web/` を作り直し、そのとき `VITE_APP_VERSION` / `VITE_APP_ENV` 以外の `VITE_*`（VOICEVOX の接続先と API キーなど）を空にします。`web/.env*` の値がバンドルに残っていれば中止します。詳しくは [launcher/README.md](launcher/README.md)。
+- 公開する場合は `launcher/` で `npm publish` します（仕組みだけ用意してあり、未公開です）。毎回 `web/` を作り直し、そのとき `VITE_APP_VERSION` / `VITE_APP_ENV` 以外の `VITE_*`（VOICEVOX の接続先と API キーなど）を空にします。`web/.env*` の値がバンドルに残っていれば中止します。詳しくは [launcher/README.md](launcher/README.md)。
+
+### ローカル音声（Kokoro）
+
+英語「男性」と日本語「女性」は、このパソコンで動かす [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) で読み上げます（英語 `am_echo`、日本語 `jf_alpha`）。ランチャーか `npm run dev` で開いたときだけ使えます。
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh   # uv をインストール（初回のみ）
+brew install espeak-ng                              # 任意（macOS）。辞書にない英単語も Kokoro で読む
+```
+
+- uv を入れたら、ランチャー（または `npm run dev`）を Ctrl-C で止めて起動し直し、設定画面の「ローカル音声」で「再確認」を押します。
+- 初回は Python のパッケージとモデル（合わせて約 1.5 GB）をダウンロードするため数分かかります。2 回目からは数秒で準備できます。
+- 準備中や uv がないときは、ブラウザの音声で読みます。設定画面の「ローカル音声」に状態と対処が出ます。
+- espeak-ng がないと、辞書にない英単語を含む文はブラウザの音声で読みます。
+- 削除するときは `uv cache clean` を実行し、`~/.cache/huggingface/hub/models--hexgrad--Kokoro-82M` を消します。
+
+仕組みと注意点は [docs/web/local-tts-kokoro.md](docs/web/local-tts-kokoro.md)、API の仕様は [launcher/README.md](launcher/README.md) を参照してください。
 
 ### AI で例文を生成する（Claude Code）
 
