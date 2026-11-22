@@ -25,6 +25,9 @@ RDS 上で MySQL のロール設計を検証するため、**RDS をパブリッ
 
 **EC2 の起動自体は許可されている**（`ec2:RunInstances` の dry-run は権限ではなく AMI 検証で落ちた）。
 断念した理由は、**EC2 を SSM に登録するためのインスタンスプロファイルが作れなかった**ことだ。
+今回はインスタンスプロファイルを付ける方式で登録するつもりだった。アカウント単位の
+Default Host Management Configuration（DHMC）が有効なら、プロファイルなしでも SSM に登録できる。
+ただしこのアカウントで DHMC が有効かどうかは確かめていないので、「SSM 登録には必ずプロファイルが要る」という話ではない。
 SSM エージェントが登録されない EC2 は、ポートフォワーディングの踏み台として使えない。
 
 ```bash
@@ -128,7 +131,7 @@ AccessDenied: ... not authorized to perform: iam:SimulatePrincipalPolicy
 
 ここは正確に書いておく。塞がれているのは**このスタックが持つ既存ポリシーを書き換える経路**だけで、**実効権限を上げる経路は別に残っている**。
 
-`infra` は `iam:CreateRole` / `iam:CreatePolicy` / `iam:PutRolePolicy` / `iam:AttachRolePolicy` / `iam:UpdateAssumeRolePolicy` を持ち、`PowerUserAccess` 側で `sts:AssumeRole` も通る。つまり**自分を信頼する新しいロールを作り、任意の権限を載せて引き受けられる**。`DenyGrantingAdministratorAccess` が止めるのは AWS 管理の `AdministratorAccess` を「貼る」ことだけで、同等の内容を独自ポリシーやインラインポリシーで書く分には条件に当たらない。
+`infra` は `iam:CreateRole` / `iam:CreatePolicy` / `iam:PutRolePolicy` / `iam:AttachRolePolicy` / `iam:UpdateAssumeRolePolicy` を持ち、`PowerUserAccess` 側で `sts:AssumeRole` も通る。つまり MFA 認証済みのセッションなら、**自分を信頼する新しいロールを作り、任意の権限を載せて引き受けられる**。MFA なしのセッションや長期アクセスキーでは、`deny-without-mfa` が `sts:AssumeRole` を含むほぼすべての操作を拒否するので、この経路は使えない。`DenyGrantingAdministratorAccess` が止めるのは AWS 管理の `AdministratorAccess` を「貼る」ことだけで、同等の内容を独自ポリシーやインラインポリシーで書く分には条件に当たらない。
 
 これも設計側は把握していた。
 
