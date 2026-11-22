@@ -11,7 +11,7 @@ import { getCache, putCache, makeCacheKey, evictCache } from './AudioCacheServic
 import { defaultEndpoint, isLocalEndpoint, normalizeEndpoint, voicevoxHeaders } from '@/lib/voicevox'
 import { reportMissingVoicevoxKey } from '@/lib/voicevoxNotice'
 import { wavEnvelope } from '@/lib/wavEnvelope'
-import { getZundamonSpeech, setZundamonSpeech } from '@/lib/zundamonSpeech'
+import { getZundamonSpeech, isZundamonAvatarEnabled, setZundamonSpeech } from '@/lib/zundamonSpeech'
 import { fetchLocalVoice, isLocalVoiceAvailable, isLocalVoiceChoice, KOKORO_VOICES, LocalVoiceError } from './LocalVoiceService'
 
 const CACHE_MAX_BYTES = 50 * 1024 * 1024 // 50 MB
@@ -230,7 +230,7 @@ function playBlob(blob: Blob, zundamon = false): Promise<void> {
       }),
     }
     _currentPlayback = playback
-    if (zundamon) showZundamon(audio, blob)
+    if (zundamon && isZundamonAvatarEnabled()) showZundamon(audio, blob)
     audio.onended = () => settle(resolve)
     audio.onerror = () => settle(() => reject(new Error('Audio playback failed')))
     audio.play().catch((err) => settle(() => reject(err)))
@@ -340,7 +340,7 @@ export async function playTTS(
   // 3. Web Speech API fallback
   if (isStopped()) return 'cancelled'
   // The avatar still appears, with a steady mouth since there is no clip to analyse.
-  const speech = voice === 'zundamon' ? { audio: null, envelope: null } : null
+  const speech = voice === 'zundamon' && isZundamonAvatarEnabled() ? { audio: null, envelope: null } : null
   if (speech) setZundamonSpeech(speech)
   try {
     await speakWebSpeech(text, lang, voice, signal)

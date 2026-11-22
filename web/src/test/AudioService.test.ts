@@ -172,6 +172,17 @@ describe('playTTS with stopTTS', () => {
 
   describe('zundamon avatar state', () => {
     const speech = () => import('@/lib/zundamonSpeech').then((m) => m.getZundamonSpeech())
+    beforeEach(() => { vi.stubEnv('VITE_ZUNDAMON_AVATAR', 'true') })
+
+    it('stays unset while the avatar is turned off', async () => {
+      vi.stubEnv('VITE_ZUNDAMON_AVATAR', '')
+      const { playTTS } = await load()
+      const result = playTTS('hello', options)
+      await audioStarted()
+      expect(await speech()).toBeNull()
+      FakeAudio.instances[0].onended?.()
+      await result
+    })
 
     it('exposes the playing clip and clears it when the clip ends', async () => {
       const { playTTS } = await load()

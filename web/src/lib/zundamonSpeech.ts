@@ -11,6 +11,14 @@ export interface ZundamonSpeech {
   envelope: Envelope | null
 }
 
+/**
+ * Off unless web/.env sets VITE_ZUNDAMON_AVATAR=true. While off, nothing is
+ * shown and no clip is analysed. Read on each call, so tests can stub it.
+ */
+export function isZundamonAvatarEnabled(): boolean {
+  return import.meta.env.VITE_ZUNDAMON_AVATAR === 'true'
+}
+
 let current: ZundamonSpeech | null = null
 const listeners = new Set<() => void>()
 
