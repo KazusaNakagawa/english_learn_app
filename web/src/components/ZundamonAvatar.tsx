@@ -34,7 +34,12 @@ function Placeholder({ open }: { open: boolean }) {
   )
 }
 
-/** Zundamon at the bottom right while speaking: bobbing, with the mouth following the voice. */
+/**
+ * Zundamon at the bottom right while speaking: bobbing, with the mouth following the voice.
+ * z-30 keeps it under the notices above the tab bar (VoicevoxKeyNotice and
+ * PwaUpdateNotice, z-40): the key notice can appear while zundamon speaks, and
+ * it is what tells the user how to fix a missing key.
+ */
 export function ZundamonAvatar() {
   const speech = useSyncExternalStore(subscribeZundamonSpeech, getZundamonSpeech)
   const speaking = speech !== null
@@ -75,7 +80,7 @@ export function ZundamonAvatar() {
       data-testid="zundamon-avatar"
       data-speaking={speaking}
       data-mouth={open ? 'open' : 'closed'}
-      className="pointer-events-none fixed right-3 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-40 h-40 w-32 animate-in fade-in slide-in-from-bottom-4 duration-300 sm:h-52 sm:w-40"
+      className="pointer-events-none fixed right-3 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-30 h-40 w-32 animate-in fade-in slide-in-from-bottom-4 duration-300 sm:h-52 sm:w-40"
     >
       <div className={speaking ? 'h-full w-full motion-safe:animate-[zunda-bob_0.6s_ease-in-out_infinite]' : 'h-full w-full'}>
         {/* Both images stay mounted, so switching the mouth never waits on a load. */}

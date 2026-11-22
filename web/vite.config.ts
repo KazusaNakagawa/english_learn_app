@@ -41,6 +41,9 @@ export default defineConfig({
       manifest,
       workbox: {
         globPatterns: ['**/*.{js,css,html,png,svg,woff2}'],
+        // The zundamon art is the developer's own copy (git-ignored). Precaching
+        // it would hand it to every visitor even with VITE_ZUNDAMON_AVATAR off.
+        globIgnores: ['zundamon/**'],
         // The app uses HashRouter, so the shell is always index.html.
         navigateFallback: 'index.html',
         navigateFallbackDenylist: NETWORK_ONLY,

@@ -217,13 +217,59 @@ describe('playTTS with stopTTS', () => {
       let seen: unknown = 'unset'
       const { playTTS } = await load()
       const { getZundamonSpeech } = await import('@/lib/zundamonSpeech')
-      speak.mockImplementation((utterance: { onend: (() => void) | null }) => {
+      speak.mockImplementation((utterance: { onstart: (() => void) | null; onend: (() => void) | null }) => {
+        utterance.onstart?.()
         seen = getZundamonSpeech()
         utterance.onend?.()
       })
       await expect(playTTS('hello', { voice: 'zundamon', lang: 'en' })).resolves.toBe('webspeech')
       expect(seen).toEqual({ audio: null, envelope: null })
       expect(getZundamonSpeech()).toBeNull()
+    })
+
+    /** Every state the avatar was handed during the call. */
+    const recordSpeech = async () => {
+      const m = await import('@/lib/zundamonSpeech')
+      const seen: unknown[] = []
+      m.subscribeZundamonSpeech(() => seen.push(m.getZundamonSpeech()))
+      return seen
+    }
+
+    it('waits for play() to resolve before showing the avatar', async () => {
+      FakeAudio.holdPlay = true
+      const { playTTS, stopTTS } = await load()
+      const seen = await recordSpeech()
+      const result = playTTS('hello', options)
+      await audioStarted()
+      await flush()
+      expect(seen).toEqual([])
+      stopTTS()
+      await result
+    })
+
+    it('never shows the avatar for a clip whose play() is rejected', async () => {
+      vi.spyOn(FakeAudio.prototype, 'play').mockRejectedValue(new DOMException('blocked', 'NotAllowedError'))
+      const { playTTS } = await load()
+      const seen = await recordSpeech()
+      speak.mockImplementation((utterance: { onend: (() => void) | null }) => utterance.onend?.())
+      await expect(playTTS('hello', options)).resolves.toBe('webspeech')
+      expect(seen.filter((s) => s !== null && (s as { audio: unknown }).audio !== null)).toEqual([])
+    })
+
+    it('never shows the avatar when the browser cannot speak', async () => {
+      vi.stubGlobal('speechSynthesis', undefined)
+      const { playTTS } = await load()
+      const seen = await recordSpeech()
+      await expect(playTTS('hello', { voice: 'zundamon', lang: 'en' })).rejects.toThrow()
+      expect(seen).toEqual([])
+    })
+
+    it('waits for the browser voice to start before showing the avatar', async () => {
+      const { playTTS } = await load()
+      const seen = await recordSpeech()
+      speak.mockImplementation((utterance: { onend: (() => void) | null }) => utterance.onend?.())
+      await playTTS('hello', { voice: 'zundamon', lang: 'en' })
+      expect(seen).toEqual([])
     })
 
     it('leaves it unset for other voices', async () => {

@@ -84,6 +84,8 @@ async function speakWebSpeech(
   lang: 'en' | 'ja',
   voice: VoiceType,
   signal: AbortSignal,
+  /** Called once the engine actually starts speaking. */
+  onStart?: () => void,
 ): Promise<void> {
   // Absent in some embedded browsers. SettingsPage shows this message; the other
   // pages only log it.
@@ -113,6 +115,7 @@ async function speakWebSpeech(
       const v = pickEnVoice(voices, voice)
       if (v) utt.voice = v
     }
+    utt.onstart = () => { if (!signal.aborted) onStart?.() }
     utt.onend = () => settle(resolve)
     utt.onerror = (e) => settle(() => reject(new Error(e.error)))
     window.speechSynthesis.speak(utt)
@@ -230,10 +233,14 @@ function playBlob(blob: Blob, zundamon = false): Promise<void> {
       }),
     }
     _currentPlayback = playback
-    if (zundamon && isZundamonAvatarEnabled()) showZundamon(audio, blob)
     audio.onended = () => settle(resolve)
     audio.onerror = () => settle(() => reject(new Error('Audio playback failed')))
-    audio.play().catch((err) => settle(() => reject(err)))
+    // Only once playback has really started: a rejected play() (autoplay
+    // policy, a clip that cannot be decoded) must not show a silent avatar.
+    audio.play().then(
+      () => { if (!settled && zundamon && isZundamonAvatarEnabled()) showZundamon(audio, blob) },
+      (err) => settle(() => reject(err)),
+    )
   })
 }
 
@@ -339,11 +346,11 @@ export async function playTTS(
 
   // 3. Web Speech API fallback
   if (isStopped()) return 'cancelled'
-  // The avatar still appears, with a steady mouth since there is no clip to analyse.
+  // The avatar still appears once the voice starts, with a steady mouth since
+  // there is no clip to analyse. Not before: the engine can be missing or fail.
   const speech = voice === 'zundamon' && isZundamonAvatarEnabled() ? { audio: null, envelope: null } : null
-  if (speech) setZundamonSpeech(speech)
   try {
-    await speakWebSpeech(text, lang, voice, signal)
+    await speakWebSpeech(text, lang, voice, signal, speech ? () => setZundamonSpeech(speech) : undefined)
   } finally {
     if (speech && getZundamonSpeech() === speech) setZundamonSpeech(null)
   }
