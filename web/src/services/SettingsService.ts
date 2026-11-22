@@ -7,9 +7,10 @@
  */
 
 export interface AppSettings {
-  /** kokoro: the local voice (launcher), falling back to the browser voice. */
-  enVoice: 'kokoro' | 'default' | 'female' | 'male' | 'zundamon'
-  jaVoice: 'kokoro' | 'zundamon' | 'default'
+  /** male plays the local voice (launcher), falling back to a browser voice. */
+  enVoice: 'default' | 'female' | 'male' | 'zundamon'
+  /** female plays the local voice (launcher), falling back to the browser voice. */
+  jaVoice: 'female' | 'zundamon' | 'default'
   voicevoxStyle: string   // speaker ID
   /** Empty means the build-time endpoint. Resolve with resolveVoicevox before use. */
   voicevoxEndpoint: string
@@ -31,8 +32,8 @@ export interface AppSettings {
 }
 
 const DEFAULTS: AppSettings = {
-  enVoice: 'kokoro',
-  jaVoice: 'kokoro',
+  enVoice: 'male',
+  jaVoice: 'female',
   voicevoxStyle: '22',
   voicevoxEndpoint: '',
   voicevoxApiKey: '',
@@ -47,19 +48,25 @@ const DEFAULTS: AppSettings = {
   voiceDefaultsVersion: 2,
 }
 
+/** A separate 'kokoro' voice existed briefly; English male / Japanese female took its place. */
+type StoredVoices = { enVoice?: AppSettings['enVoice'] | 'kokoro'; jaVoice?: AppSettings['jaVoice'] | 'kokoro' }
+
 /**
  * Settings saved before the local voice existed carry the defaults of the time
- * (female / zundamon, the latter falling back to the system voice since the
- * VOICEVOX Lambda was removed). Those move to the local voice once; any other
- * choice was the user's and stays. Saving records version 2, so a later pick
- * of female or zundamon sticks.
+ * (English female, Japanese zundamon, the latter falling back to the system
+ * voice since the VOICEVOX Lambda was removed). Those move to the local voice
+ * (English male, Japanese female) once; any other choice was the user's and
+ * stays. Saving records version 2, so a later pick of English female or
+ * zundamon sticks.
  */
-function migrateVoiceDefaults(parsed: Partial<AppSettings>): Partial<AppSettings> {
-  if (parsed.voiceDefaultsVersion === 2) return parsed
+function migrateVoiceDefaults(stored: Omit<Partial<AppSettings>, 'enVoice' | 'jaVoice'> & StoredVoices): Partial<AppSettings> {
+  const enVoice = stored.enVoice === 'kokoro' ? 'male' : stored.enVoice
+  const jaVoice = stored.jaVoice === 'kokoro' ? 'female' : stored.jaVoice
+  if (stored.voiceDefaultsVersion === 2) return { ...stored, enVoice, jaVoice }
   return {
-    ...parsed,
-    enVoice: parsed.enVoice === undefined || parsed.enVoice === 'female' ? 'kokoro' : parsed.enVoice,
-    jaVoice: parsed.jaVoice === undefined || parsed.jaVoice === 'zundamon' ? 'kokoro' : parsed.jaVoice,
+    ...stored,
+    enVoice: enVoice === undefined || enVoice === 'female' ? 'male' : enVoice,
+    jaVoice: jaVoice === undefined || jaVoice === 'zundamon' ? 'female' : jaVoice,
     voiceDefaultsVersion: 2,
   }
 }

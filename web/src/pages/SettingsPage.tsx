@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button'
 import { ClaudeCodeSetup } from '@/components/ClaudeCodeSetup'
 import { LocalVoiceSetup } from '@/components/LocalVoiceSetup'
 import { useLocalVoiceStatus } from '@/hooks/useLocalVoiceStatus'
+import { isLocalVoiceChoice } from '@/services/LocalVoiceService'
 import { useClaudeCodeStatus } from '@/hooks/useClaudeCodeStatus'
 import { CLAUDE_MODELS, type ClaudeModel } from '@/services/ClaudeCodeService'
 import { Input } from '@/components/ui/input'
@@ -41,8 +42,8 @@ const AI_PROVIDERS = ['Claude Code', 'OpenAI'] as const
 type AiProvider = typeof AI_PROVIDERS[number]
 const AI_PROVIDER_IDS: Record<AiProvider, AppSettings['aiProvider']> = { 'Claude Code': 'claude-code', OpenAI: 'openai' }
 
-const EN_VOICES  = ['ナチュラル', 'デフォルト', '女性', '男性', 'ずんだもん'] as const
-const JA_VOICES  = ['ナチュラル', 'ずんだもん', 'デフォルト'] as const
+const EN_VOICES  = ['デフォルト', '女性', '男性', 'ずんだもん'] as const
+const JA_VOICES  = ['女性', 'ずんだもん', 'デフォルト'] as const
 const PATTERNS   = ['バイリンガル (EN+JA)', '英語のみ (EN+EN)'] as const
 
 type EnVoice  = typeof EN_VOICES[number]
@@ -107,8 +108,7 @@ function SegmentedControl<T extends string>({
           key={opt}
           onClick={() => onChange(opt)}
           className={cn(
-            // Five voices share a phone-width row; one line each keeps them readable.
-            'flex-1 whitespace-nowrap text-[11px] sm:text-xs font-medium py-1.5 px-1 sm:px-2 rounded-md transition-all',
+            'flex-1 text-xs font-medium py-1.5 px-2 rounded-md transition-all',
             value === opt ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
           )}
         >
@@ -152,13 +152,13 @@ function formatBytes(bytes: number): string {
 // ---- Page ----
 
 const EN_VOICE_MAP: Record<string, EnVoice> = {
-  kokoro: 'ナチュラル', female: '女性', male: '男性', zundamon: 'ずんだもん', default: 'デフォルト',
+  female: '女性', male: '男性', zundamon: 'ずんだもん', default: 'デフォルト',
 }
 const EN_VOICE_RMAP: Record<EnVoice, string> = {
-  'ナチュラル': 'kokoro', '女性': 'female', '男性': 'male', 'ずんだもん': 'zundamon', 'デフォルト': 'default',
+  '女性': 'female', '男性': 'male', 'ずんだもん': 'zundamon', 'デフォルト': 'default',
 }
-const JA_VOICE_MAP: Record<string, JaVoice> = { kokoro: 'ナチュラル', zundamon: 'ずんだもん', default: 'デフォルト' }
-const JA_VOICE_RMAP: Record<JaVoice, string> = { 'ナチュラル': 'kokoro', 'ずんだもん': 'zundamon', 'デフォルト': 'default' }
+const JA_VOICE_MAP: Record<string, JaVoice> = { female: '女性', zundamon: 'ずんだもん', default: 'デフォルト' }
+const JA_VOICE_RMAP: Record<JaVoice, string> = { '女性': 'female', 'ずんだもん': 'zundamon', 'デフォルト': 'default' }
 const PATTERN_MAP: Record<string, Pattern> = { bilingual: 'バイリンガル (EN+JA)', 'en-only': '英語のみ (EN+EN)' }
 const PATTERN_RMAP: Record<Pattern, string> = { 'バイリンガル (EN+JA)': 'bilingual', '英語のみ (EN+EN)': 'en-only' }
 
@@ -167,8 +167,8 @@ function initFromSettings() {
   const s = loadSettings()
   const v = Number(s.intervalSec)
   return {
-    enVoice:   (EN_VOICE_MAP[s.enVoice]   ?? 'ナチュラル')          as EnVoice,
-    jaVoice:   (JA_VOICE_MAP[s.jaVoice]   ?? 'ナチュラル')          as JaVoice,
+    enVoice:   (EN_VOICE_MAP[s.enVoice]   ?? '男性')                as EnVoice,
+    jaVoice:   (JA_VOICE_MAP[s.jaVoice]   ?? '女性')                as JaVoice,
     pattern:   (PATTERN_MAP[s.playPattern] ?? 'バイリンガル (EN+JA)') as Pattern,
     interval:  Number.isFinite(v) ? Math.min(5, Math.max(0.5, v)) : 1.5,
     vvStyle:   s.voicevoxStyle,
@@ -300,7 +300,7 @@ export default function SettingsPage() {
   const [init] = useState(initFromSettings)
   const [enVoice,   setEnVoiceRaw]   = useState<EnVoice>(init.enVoice)
   const [jaVoice,   setJaVoiceRaw]   = useState<JaVoice>(init.jaVoice)
-  const usesLocalVoice = enVoice === 'ナチュラル' || jaVoice === 'ナチュラル'
+  const usesLocalVoice = isLocalVoiceChoice(EN_VOICE_RMAP[enVoice], 'en') || isLocalVoiceChoice(JA_VOICE_RMAP[jaVoice], 'ja')
   const localVoice = useLocalVoiceStatus(usesLocalVoice)
   const [pattern,   setPatternRaw]   = useState<Pattern>(init.pattern)
   const [interval,  setIntervalSRaw] = useState(init.interval)
@@ -458,10 +458,10 @@ export default function SettingsPage() {
           </GroupCard>
         </div>
 
-        {/* ナチュラル音声（ローカルの Kokoro） */}
+        {/* ローカル音声（Kokoro）: 英語の男性、日本語の女性 */}
         {usesLocalVoice && (
           <div>
-            <SectionLabel label="ナチュラル音声" />
+            <SectionLabel label="ローカル音声" />
             <GroupCard>
               <Row><LocalVoiceSetup state={localVoice.state} onRecheck={localVoice.recheck} /></Row>
             </GroupCard>
@@ -691,7 +691,7 @@ export default function SettingsPage() {
               {[
                 {
                   title: '英語・日本語それぞれの音声を個別に設定できます。',
-                  body: '英語音声: ナチュラル/デフォルト/女性/男性/ずんだもん から選択\n日本語音声: ナチュラル/ずんだもん/デフォルト から選択\nナチュラルは、このパソコンで動く自然な音声です（ランチャーから開いたときに使えます）',
+                  body: '英語音声: デフォルト/女性/男性/ずんだもん から選択\n日本語音声: 女性/ずんだもん/デフォルト から選択\n英語の男性と日本語の女性は、このパソコンで動く自然な音声で読み上げます（ランチャーから開いたときに使えます）',
                 },
                 {
                   title: '単語の追加・編集画面で「AIで例文を生成」を押すと、意味・発音記号・例文を自動で入力します。',

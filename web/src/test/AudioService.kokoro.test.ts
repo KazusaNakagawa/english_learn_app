@@ -71,10 +71,23 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('playTTS with the local voice', () => {
+describe('playTTS with the local voice (English male, Japanese female)', () => {
+  it('does not use the local voice for English female', async () => {
+    const { playTTS } = await load()
+    await expect(playTTS('Hello.', { voice: 'female', lang: 'en' })).resolves.toBe('webspeech')
+    expect(local.fetchLocalVoice).not.toHaveBeenCalled()
+    expect(spoken[0]).toMatchObject({ voice: { name: 'Samantha Female' } })
+  })
+
+  it('does not use the local voice for the Japanese default voice', async () => {
+    const { playTTS } = await load()
+    await expect(playTTS('こんにちは', { voice: 'default', lang: 'ja' })).resolves.toBe('webspeech')
+    expect(local.fetchLocalVoice).not.toHaveBeenCalled()
+  })
+
   it('plays the local voice clip and caches it under its own key', async () => {
     const { playTTS } = await load()
-    await expect(playTTS('Hello.', { voice: 'kokoro', lang: 'en' })).resolves.toBe('kokoro')
+    await expect(playTTS('Hello.', { voice: 'male', lang: 'en' })).resolves.toBe('kokoro')
     expect(local.fetchLocalVoice).toHaveBeenCalledWith('Hello.', 'en', expect.any(AbortSignal))
     expect(cache.makeCacheKey).toHaveBeenCalledWith('Hello.', 'kokoro:am_echo', 'local-kokoro')
     await vi.waitFor(() => expect(cache.putCache).toHaveBeenCalledWith('kokoro-key', 'Hello.', 'kokoro:am_echo', expect.any(Blob)))
@@ -83,7 +96,7 @@ describe('playTTS with the local voice', () => {
 
   it('keys Japanese clips by the Japanese voice', async () => {
     const { playTTS } = await load()
-    await playTTS('こんにちは', { voice: 'kokoro', lang: 'ja' })
+    await playTTS('こんにちは', { voice: 'female', lang: 'ja' })
     expect(cache.makeCacheKey).toHaveBeenCalledWith('こんにちは', 'kokoro:jf_alpha', 'local-kokoro')
     expect(local.fetchLocalVoice).toHaveBeenCalledWith('こんにちは', 'ja', expect.any(AbortSignal))
   })
@@ -92,7 +105,7 @@ describe('playTTS with the local voice', () => {
     cache.getCache.mockResolvedValue({ audio_data: new Blob(['cached']) })
     local.isLocalVoiceAvailable.mockReturnValue(false)
     const { playTTS } = await load()
-    await expect(playTTS('Hello.', { voice: 'kokoro', lang: 'en' })).resolves.toBe('cache')
+    await expect(playTTS('Hello.', { voice: 'male', lang: 'en' })).resolves.toBe('cache')
     expect(local.fetchLocalVoice).not.toHaveBeenCalled()
   })
 
@@ -100,7 +113,7 @@ describe('playTTS with the local voice', () => {
     const { LocalVoiceError } = await import('@/services/LocalVoiceService')
     local.fetchLocalVoice.mockRejectedValue(new LocalVoiceError('starting'))
     const { playTTS } = await load()
-    await expect(playTTS('Hello.', { voice: 'kokoro', lang: 'en' })).resolves.toBe('webspeech')
+    await expect(playTTS('Hello.', { voice: 'male', lang: 'en' })).resolves.toBe('webspeech')
     expect(spoken[0]).toMatchObject({ text: 'Hello.', voice: { name: 'Daniel Male' } })
     expect(cache.putCache).not.toHaveBeenCalled()
   })
@@ -109,13 +122,13 @@ describe('playTTS with the local voice', () => {
     const { LocalVoiceError } = await import('@/services/LocalVoiceService')
     local.fetchLocalVoice.mockRejectedValue(new LocalVoiceError('unsupported-text'))
     const { playTTS } = await load()
-    await expect(playTTS('Zyxquork.', { voice: 'kokoro', lang: 'en' })).resolves.toBe('webspeech')
+    await expect(playTTS('Zyxquork.', { voice: 'male', lang: 'en' })).resolves.toBe('webspeech')
   })
 
   it('skips the local API once it is known to be unavailable', async () => {
     local.isLocalVoiceAvailable.mockReturnValue(false)
     const { playTTS } = await load()
-    await expect(playTTS('こんにちは', { voice: 'kokoro', lang: 'ja' })).resolves.toBe('webspeech')
+    await expect(playTTS('こんにちは', { voice: 'female', lang: 'ja' })).resolves.toBe('webspeech')
     expect(local.fetchLocalVoice).not.toHaveBeenCalled()
   })
 
@@ -123,7 +136,7 @@ describe('playTTS with the local voice', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
     local.fetchLocalVoice.mockRejectedValue(new Error('boom'))
     const { playTTS } = await load()
-    await expect(playTTS('Hello.', { voice: 'kokoro', lang: 'en' })).resolves.toBe('webspeech')
+    await expect(playTTS('Hello.', { voice: 'male', lang: 'en' })).resolves.toBe('webspeech')
     expect(error).toHaveBeenCalled()
   })
 
@@ -133,7 +146,7 @@ describe('playTTS with the local voice', () => {
         new Promise((_, reject) => signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))),
     )
     const { playTTS, stopTTS } = await load()
-    const result = playTTS('Hello.', { voice: 'kokoro', lang: 'en' })
+    const result = playTTS('Hello.', { voice: 'male', lang: 'en' })
     await vi.waitFor(() => expect(local.fetchLocalVoice).toHaveBeenCalled())
     stopTTS()
     await expect(result).resolves.toBe('cancelled')
@@ -144,7 +157,7 @@ describe('playTTS with the local voice', () => {
     cache.makeCacheKey.mockRejectedValue(new Error('no crypto.subtle'))
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const { playTTS } = await load()
-    await expect(playTTS('Hello.', { voice: 'kokoro', lang: 'en' })).resolves.toBe('kokoro')
+    await expect(playTTS('Hello.', { voice: 'male', lang: 'en' })).resolves.toBe('kokoro')
     expect(cache.putCache).not.toHaveBeenCalled()
   })
 })

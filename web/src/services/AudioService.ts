@@ -10,7 +10,7 @@
 import { getCache, putCache, makeCacheKey, evictCache } from './AudioCacheService'
 import { defaultEndpoint, isLocalEndpoint, normalizeEndpoint, voicevoxHeaders } from '@/lib/voicevox'
 import { reportMissingVoicevoxKey } from '@/lib/voicevoxNotice'
-import { fetchLocalVoice, isLocalVoiceAvailable, KOKORO_VOICES, LocalVoiceError } from './LocalVoiceService'
+import { fetchLocalVoice, isLocalVoiceAvailable, isLocalVoiceChoice, KOKORO_VOICES, LocalVoiceError } from './LocalVoiceService'
 
 const CACHE_MAX_BYTES = 50 * 1024 * 1024 // 50 MB
 const VOICE_LOAD_TIMEOUT_MS = 3000
@@ -19,7 +19,8 @@ const VOICE_LOAD_TIMEOUT_MS = 3000
 const UTTERANCE_BASE_TIMEOUT_MS = 10_000
 const UTTERANCE_TIMEOUT_PER_CHAR_MS = 300
 
-export type VoiceType = 'kokoro' | 'default' | 'female' | 'male' | 'zundamon'
+/** English male and Japanese female play the local voice when it is available (see LocalVoiceService). */
+export type VoiceType = 'default' | 'female' | 'male' | 'zundamon'
 
 export interface PlayOptions {
   voice: VoiceType
@@ -70,8 +71,7 @@ function pickEnVoice(voices: SpeechSynthesisVoice[], type: VoiceType): SpeechSyn
   if (type === 'female' || type === 'default') {
     return en.find((v) => /female/i.test(v.name)) ?? null
   }
-  // Kokoro's English voice is male, so its fallback stays close to it.
-  if (type === 'male' || type === 'kokoro') {
+  if (type === 'male') {
     return en.find((v) => /male/i.test(v.name) && !/female/i.test(v.name)) ?? null
   }
   return null
@@ -260,7 +260,7 @@ export async function playTTS(
   const { signal } = _stopController
   const isStopped = () => signal.aborted
 
-  if (voice === 'kokoro') {
+  if (isLocalVoiceChoice(voice, lang)) {
     const speaker = `kokoro:${KOKORO_VOICES[lang]}`
     const cacheKey = await makeCacheKey(text, speaker, KOKORO_CACHE_ENDPOINT).catch((err) => {
       console.warn('[AudioService] cache unavailable:', err)

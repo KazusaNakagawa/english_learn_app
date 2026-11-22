@@ -15,14 +15,14 @@ interface Props {
 }
 
 /**
- * Whether the ナチュラル voice (Kokoro on this machine) is in use, and the
- * exact steps when it is not. Until it is ready, speech uses the browser voice.
+ * Whether the local voice (Kokoro on this machine: English 男性, Japanese 女性)
+ * is in use, and the exact steps when it is not. Until it is ready, speech uses the browser voice.
  */
 export function LocalVoiceSetup({ state, onRecheck }: Props) {
   if (state === 'checking') {
     return (
       <p className="flex items-center gap-1.5 text-xs text-muted-foreground px-1">
-        <Loader2 size={12} className="animate-spin" />ナチュラル音声の状態を確認しています…
+        <Loader2 size={12} className="animate-spin" />ローカル音声の状態を確認しています…
       </p>
     )
   }
@@ -30,7 +30,7 @@ export function LocalVoiceSetup({ state, onRecheck }: Props) {
   if (state === 'ready') {
     return (
       <p className="flex items-center gap-1.5 text-xs text-[var(--ios-green)] px-1">
-        <CheckCircle2 size={14} />ナチュラル音声で読み上げます
+        <CheckCircle2 size={14} />英語の男性・日本語の女性をローカル音声で読み上げます
       </p>
     )
   }
@@ -39,7 +39,7 @@ export function LocalVoiceSetup({ state, onRecheck }: Props) {
     return (
       <div role="status" className="space-y-1 px-1">
         <p className="flex items-center gap-1.5 text-xs font-medium">
-          <Loader2 size={12} className="animate-spin shrink-0" />ナチュラル音声を準備しています
+          <Loader2 size={12} className="animate-spin shrink-0" />ローカル音声を準備しています
         </p>
         <p className="text-xs text-muted-foreground">
           初回は約 1.5GB のダウンロードがあり、数分かかります。準備ができるまではブラウザの音声で読みます。
@@ -68,7 +68,7 @@ function guidance(state: 'no-server' | 'uv-missing' | 'failed'): { title: string
   switch (state) {
     case 'no-server':
       return {
-        title: 'この画面ではナチュラル音声を使えません（ブラウザの音声で読みます）',
+        title: 'この画面ではローカル音声を使えません（ブラウザの音声で読みます）',
         steps: [
           <>ターミナルで <Cmd>{LAUNCHER_COMMAND}</Cmd> を実行し、開いたページで使ってください</>,
           <>開発中は <Cmd>web/</Cmd> で <Cmd>npm run dev</Cmd> を実行したページでも使えます</>,
@@ -76,7 +76,7 @@ function guidance(state: 'no-server' | 'uv-missing' | 'failed'): { title: string
       }
     case 'uv-missing':
       return {
-        title: 'ナチュラル音声には uv が必要です（今はブラウザの音声で読みます）',
+        title: 'ローカル音声には uv が必要です（今はブラウザの音声で読みます）',
         steps: [
           <>ターミナルで <Cmd>{UV_INSTALL_COMMAND}</Cmd> を実行します</>,
           <>アプリを起動したターミナルで Ctrl-C を押して止め、もう一度起動します</>,
@@ -85,7 +85,7 @@ function guidance(state: 'no-server' | 'uv-missing' | 'failed'): { title: string
       }
     case 'failed':
       return {
-        title: 'ナチュラル音声を起動できませんでした（今はブラウザの音声で読みます）',
+        title: 'ローカル音声を起動できませんでした（今はブラウザの音声で読みます）',
         steps: [
           <>アプリを起動したターミナルに出ている <Cmd>[tts]</Cmd> のメッセージを確認してください</>,
           <>「再確認」を押すと、もう一度起動します</>,
