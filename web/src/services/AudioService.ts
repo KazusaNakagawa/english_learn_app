@@ -10,7 +10,7 @@
 import { getCache, putCache, makeCacheKey, evictCache } from './AudioCacheService'
 import { defaultEndpoint, isLocalEndpoint, normalizeEndpoint, voicevoxHeaders } from '@/lib/voicevox'
 import { reportMissingVoicevoxKey } from '@/lib/voicevoxNotice'
-import { wavEnvelope } from '@/lib/wavEnvelope'
+import { wavEnvelope, type Envelope } from '@/lib/wavEnvelope'
 import { getZundamonSpeech, isZundamonAvatarEnabled, setZundamonSpeech } from '@/lib/zundamonSpeech'
 import { fetchLocalVoice, isLocalVoiceAvailable, isLocalVoiceChoice, KOKORO_VOICES, LocalVoiceError } from './LocalVoiceService'
 
@@ -180,13 +180,13 @@ async function storeInCache(cacheKey: string, text: string, speakerId: string, b
  * Play the cached clip for cacheKey. Resolves 'cache' or 'cancelled' when it
  * handled the call, null on a miss or an unreadable cache.
  */
-async function playFromCache(cacheKey: string, isStopped: () => boolean, zundamon = false): Promise<PlaySource | null> {
+async function playFromCache(cacheKey: string, isStopped: () => boolean, avatar?: AvatarClip): Promise<PlaySource | null> {
   try {
     const cached = await getCache(cacheKey)
     if (isStopped()) return 'cancelled'
     if (!cached) return null
     console.debug('[AudioService] cache hit:', cacheKey)
-    await playBlob(cached.audio_data, zundamon)
+    await playBlob(cached.audio_data, avatar)
     return isStopped() ? 'cancelled' : 'cache'
   } catch (err) {
     console.warn('[AudioService] cache read failed:', err)
@@ -197,17 +197,37 @@ async function playFromCache(cacheKey: string, isStopped: () => boolean, zundamo
 let _currentPlayback: { stop: () => void } | null = null
 let _stopController = new AbortController()
 
+/** A clip the avatar speaks. The key is its cache key; null when caching is unavailable. */
+interface AvatarClip { key: string | null }
+
+// A clip's loudness never changes, and practice replays the same sentences, so
+// each is analysed once. A few numbers per second of audio: the cap only keeps
+// a very long session from growing without bound.
+const ENVELOPE_CACHE_MAX = 500
+const _envelopes = new Map<string, Envelope | null>()
+
+function rememberEnvelope(key: string, envelope: Envelope | null): void {
+  if (_envelopes.size >= ENVELOPE_CACHE_MAX) _envelopes.delete(_envelopes.keys().next().value!)
+  _envelopes.set(key, envelope)
+}
+
 /** Shows the avatar for this clip, and moves its mouth once the clip is analysed. */
-function showZundamon(audio: HTMLAudioElement, blob: Blob): void {
+function showZundamon(audio: HTMLAudioElement, blob: Blob, { key }: AvatarClip): void {
+  if (key !== null && _envelopes.has(key)) {
+    setZundamonSpeech({ audio, envelope: _envelopes.get(key) ?? null })
+    return
+  }
   setZundamonSpeech({ audio, envelope: null })
   if (typeof blob.arrayBuffer !== 'function') return
   blob.arrayBuffer().then((buffer) => {
     const envelope = wavEnvelope(buffer)
+    if (key !== null) rememberEnvelope(key, envelope)
     if (envelope && getZundamonSpeech()?.audio === audio) setZundamonSpeech({ audio, envelope })
   }).catch(() => {})
 }
 
-function playBlob(blob: Blob, zundamon = false): Promise<void> {
+/** With avatar, zundamon is shown speaking this clip (when the avatar is turned on). */
+function playBlob(blob: Blob, avatar?: AvatarClip): Promise<void> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(blob)
     const audio = new Audio(url)
@@ -238,7 +258,7 @@ function playBlob(blob: Blob, zundamon = false): Promise<void> {
     // Only once playback has really started: a rejected play() (autoplay
     // policy, a clip that cannot be decoded) must not show a silent avatar.
     audio.play().then(
-      () => { if (!settled && zundamon && isZundamonAvatarEnabled()) showZundamon(audio, blob) },
+      () => { if (!settled && avatar && isZundamonAvatarEnabled()) showZundamon(audio, blob, avatar) },
       (err) => settle(() => reject(err)),
     )
   })
@@ -320,7 +340,7 @@ export async function playTTS(
 
     // 1. Cache hit
     if (cacheKey) {
-      const hit = await playFromCache(cacheKey, isStopped, true)
+      const hit = await playFromCache(cacheKey, isStopped, { key: cacheKey })
       if (hit) return hit
     }
     if (isStopped()) return 'cancelled'
@@ -332,7 +352,7 @@ export async function playTTS(
       if (isStopped()) return 'cancelled'
       if (cacheKey) void storeInCache(cacheKey, text, speakerId, blob)
       console.debug('[AudioService] playing fetched clip, size:', blob.size)
-      await playBlob(blob, true)
+      await playBlob(blob, { key: cacheKey })
       return isStopped() ? 'cancelled' : 'voicevox'
     } catch (err) {
       if (isStopped()) return 'cancelled'

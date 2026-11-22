@@ -272,6 +272,20 @@ describe('playTTS with stopTTS', () => {
       expect(seen).toEqual([])
     })
 
+    it('analyses a cached clip once, however often it replays', async () => {
+      const arrayBuffer = vi.fn(async () => new ArrayBuffer(0))
+      cache.getCache.mockResolvedValue({ audio_data: { arrayBuffer } })
+      const { playTTS } = await load()
+      for (let i = 1; i <= 2; i++) {
+        const result = playTTS('hello', options)
+        await audioStarted(i)
+        await flush()
+        FakeAudio.instances[i - 1].onended?.()
+        await result
+      }
+      expect(arrayBuffer).toHaveBeenCalledOnce()
+    })
+
     it('leaves it unset for other voices', async () => {
       let seen: unknown = 'unset'
       const { playTTS } = await load()

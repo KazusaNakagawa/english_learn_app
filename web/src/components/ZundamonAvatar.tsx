@@ -45,11 +45,17 @@ export function ZundamonAvatar() {
   const speaking = speech !== null
   const [visible, setVisible] = useState(false)
   const [open, setOpen] = useState(false)
-  // Per image, not a count: the images remount and load again each time the avatar returns.
+  // Per image, not a count of load events: the images remount each time the
+  // avatar returns and may fire load again. A failed image is marked unloaded.
   const [loaded, setLoaded] = useState({ closed: false, open: false })
   const [failed, setFailed] = useState(false)
 
-  if (speaking && !visible) setVisible(true)
+  if (speaking && !visible) {
+    setVisible(true)
+    // A failed load (offline, a service worker update) gets another try on each
+    // return instead of the placeholder lasting until a reload.
+    setFailed(false)
+  }
 
   useEffect(() => {
     if (speaking || !visible) return
@@ -90,7 +96,10 @@ export function ZundamonAvatar() {
             src={`${IMAGE_DIR}mouth-${mouth}.png`}
             alt=""
             onLoad={() => setLoaded((l) => (l[mouth] ? l : { ...l, [mouth]: true }))}
-            onError={() => setFailed(true)}
+            onError={() => {
+              setFailed(true)
+              setLoaded((l) => ({ ...l, [mouth]: false }))
+            }}
             className="absolute inset-0 h-full w-full object-contain object-bottom drop-shadow-md"
             style={{ visibility: useImages && open === (mouth === 'open') ? 'visible' : 'hidden' }}
           />
