@@ -69,3 +69,7 @@ playground.xcworkspace
 *.local*
 output/
 data*
+
+# Git worktrees: ours (see CLAUDE.md Workflow) and Claude Code's built-in location
+.worktrees/
+.claude/worktrees/

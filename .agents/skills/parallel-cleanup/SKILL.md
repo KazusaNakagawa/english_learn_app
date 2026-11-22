@@ -51,8 +51,8 @@ Record the answers before moving on — step 4 acts on these, not on a pattern m
 
 ```bash
 # Absolute paths the user explicitly chose, one per line.
-SELECTED_WORKTREES="/Users/you/worktree-worker1
-/Users/you/worktree-worker2"
+SELECTED_WORKTREES="/Users/you/work/english_learn_app/.worktrees/worker1
+/Users/you/work/english_learn_app/.worktrees/worker2"
 
 # Only set to "yes" if the user confirmed discarding uncommitted work.
 FORCE_DISCARD="no"
@@ -90,7 +90,9 @@ unrelated worktree or uncommitted work.
 ```bash
 : "${SELECTED_WORKTREES:?No worktrees confirmed — re-run step 2 before removing anything}"
 
-repo_root="$(git rev-parse --show-toplevel)"
+# The main checkout, resolved from the shared git dir so this is correct even
+# when the skill runs from inside a worktree.
+repo_root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
 
 while IFS= read -r worktree; do
   [ -n "$worktree" ] || continue
@@ -101,8 +103,11 @@ while IFS= read -r worktree; do
     continue
   fi
 
-  # Strict allowlist: only the ~/worktree-worker<N> paths parallel-setup creates.
-  if [[ ! "$worktree" =~ ^${HOME}/worktree-worker[0-9]+$ ]]; then
+  # Strict allowlist: only the <main checkout>/.worktrees/worker<N> paths
+  # parallel-setup creates. Strip the prefix literally instead of building a
+  # regex from repo_root, whose characters would otherwise be regex syntax.
+  name="${worktree#"$repo_root/.worktrees/"}"
+  if [ "$name" = "$worktree" ] || [[ ! "$name" =~ ^worker[0-9]+$ ]]; then
     echo "⚠ Skipping $worktree (not a parallel-dev worktree)"
     continue
   fi
@@ -180,7 +185,7 @@ in step 2 — not by scanning `git worktree list`. Each entry then has to clear
 three further gates before it is touched:
 
 1. It is not the main repository checkout.
-2. It matches `~/worktree-worker<N>` exactly (the paths `parallel-setup` creates).
+2. It is exactly `<main checkout>/.worktrees/worker<N>` (the paths `parallel-setup` creates).
 3. It is still a registered worktree of this repository.
 
 Anything else is skipped with a message. A path the user never selected is never
@@ -222,8 +227,8 @@ Always asks for confirmation (step 2) before proceeding:
 ```bash
 # Worker 1 and 2 finished, but Worker 3 still working
 # Manually handle:
-git worktree remove ~/worktree-worker1
-git worktree remove ~/worktree-worker2
+git worktree remove .worktrees/worker1
+git worktree remove .worktrees/worker2
 # Keep worker3 for later
 ```
 
@@ -239,9 +244,9 @@ git worktree remove ~/worktree-worker2
 ## What Gets Removed
 
 ### Worktree Directories
-- `~/worktree-worker1/`
-- `~/worktree-worker2/`
-- `~/worktree-worker3/`
+- `.worktrees/worker1/`
+- `.worktrees/worker2/`
+- `.worktrees/worker3/`
 - etc.
 
 ### Git Metadata
@@ -274,21 +279,21 @@ git worktree remove ~/worktree-worker2
 
 ```bash
 # Option 1: Commit changes first
-cd ~/worktree-worker1
+cd .worktrees/worker1
 git add .
 git commit -m "WIP: Save progress"
 git push
 
 # Option 2: Force remove (loses changes)
-git worktree remove ~/worktree-worker1 --force
+git worktree remove .worktrees/worker1 --force
 ```
 
 ### "cannot remove a locked working tree"
 
 ```bash
 # Unlock and remove
-git worktree unlock ~/worktree-worker1
-git worktree remove ~/worktree-worker1
+git worktree unlock .worktrees/worker1
+git worktree remove .worktrees/worker1
 ```
 
 ### "no such session: parallel-dev"
@@ -323,9 +328,9 @@ tmux kill-session -t parallel-dev
 git worktree list
 
 # Remove one by one
-git worktree remove ~/worktree-worker1 --force
-git worktree remove ~/worktree-worker2 --force
-git worktree remove ~/worktree-worker3 --force
+git worktree remove .worktrees/worker1 --force
+git worktree remove .worktrees/worker2 --force
+git worktree remove .worktrees/worker3 --force
 
 # Clean up stale metadata
 git worktree prune
@@ -344,9 +349,9 @@ git checkout develop
 
 1. **Ensure all work is committed**
    ```bash
-   cd ~/worktree-worker1 && git status
-   cd ~/worktree-worker2 && git status
-   cd ~/worktree-worker3 && git status
+   cd .worktrees/worker1 && git status
+   cd .worktrees/worker2 && git status
+   cd .worktrees/worker3 && git status
    ```
 
 2. **Push all branches**
