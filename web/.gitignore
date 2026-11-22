@@ -6,3 +6,7 @@ dist
 playwright-report
 test-results
 .vite
+
+# Zundamon art for the avatar: obtained by each user under the character's
+# guidelines, never redistributed from this public repository.
+public/zundamon/

@@ -106,6 +106,8 @@ brew install espeak-ng                              # 任意（macOS）。辞書
 
 ローカルの Docker でエンジンを動かす手順は [docs/web/local-voicevox.md](../docs/web/local-voicevox.md) を参照してください。
 
+`web/.env` で `VITE_ZUNDAMON_AVATAR=true` にすると、ずんだもんの声で読んでいる間、画面右下に立ち絵が出ます。初期状態では出ません。画像の置き方は [docs/web/zundamon-avatar.md](../docs/web/zundamon-avatar.md) を参照してください。
+
 ## テスト・ビルド
 
 ```bash

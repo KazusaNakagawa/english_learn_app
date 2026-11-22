@@ -69,6 +69,7 @@ playground.xcworkspace
 *.local*
 output/
 data*
+web/public/zundamon/*
 
 # Git worktrees: ours (see CLAUDE.md Workflow) and Claude Code's built-in location
 .worktrees/
