@@ -15,36 +15,16 @@ https://github.com/user-attachments/assets/c3b27a16-7429-4013-9d7c-2de9c0098a28
 | `launcher/` | ビルド済みの Web 版を手元で配信し、ブラウザを開くコマンド（npm には未公開） | [launcher/README.md](launcher/README.md) |
 | `aws/` | ずんだもん音声（VOICEVOX エンジン）を AWS Lambda で動かす CDK スタックと、アカウントの IAM | [aws/README.md](aws/README.md) |
 
-## すぐ試す
+## はじめ方
 
-**Web 版**（Node.js 20 以上）
-
-```bash
-cd launcher
-node scripts/prepare-dist.mjs   # web/ をビルドして launcher/dist にコピー
-npm start                       # http://127.0.0.1:5280/ を開く
-```
-
-英語の男性・日本語の女性をこのパソコンの中で読み上げるには、[uv](https://docs.astral.sh/uv/) を入れます（[ローカル音声](web/README.md#ローカル音声kokoro)）。開発するときは `web/` で `npm run dev` を使います（[起動](web/README.md#起動)）。
-
-**iOS 版**（macOS + Xcode 15 以上）
-
-```bash
-cp EnglishLearnApp/EnglishLearnApp/AppConfig.swift.example EnglishLearnApp/EnglishLearnApp/AppConfig.swift
-cp EnglishLearnApp/EnglishLearnApp/Config.xcconfig.example EnglishLearnApp/EnglishLearnApp/Config.xcconfig
-open EnglishLearnApp/EnglishLearnApp.xcodeproj   # Cmd + R で実行
-```
-
-設定ファイルの中身は [セットアップ手順](EnglishLearnApp/README.md#セットアップ手順) を参照してください。
+| 版 | 手順 |
+|------|------|
+| Web 版（Node.js 20 以上） | ランチャーで起動: [web/README.md](web/README.md#ワンコマンドで起動ランチャー)。開発サーバー: [起動](web/README.md#起動) |
+| iOS 版（macOS + Xcode 15 以上） | [EnglishLearnApp/docs/01_setup.md](EnglishLearnApp/docs/01_setup.md) |
 
 ## 音声
 
-| 版 | 使える音声 |
-|------|------|
-| iOS | iOS の音声（デフォルト / 女性 / 男性）、ずんだもん（VOICEVOX） |
-| Web | ローカル音声 Kokoro（英語「男性」と日本語「女性」）、ずんだもん（VOICEVOX）、ブラウザの音声 |
-
-選択肢ごとの音声、クレジット表記、ライセンスは [docs/voices.md](docs/voices.md) にまとめています。ずんだもんを使うときは「VOICEVOX:ずんだもん」の表記が必要です。
+iOS の音声、ブラウザの音声、ずんだもん（VOICEVOX）、Web 版のローカル音声 Kokoro を使います。選択肢ごとの音声、クレジット表記（ずんだもんは必須）、ライセンスは [docs/voices.md](docs/voices.md) にまとめています。
 
 ## ドキュメント
 
