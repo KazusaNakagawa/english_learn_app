@@ -48,7 +48,7 @@ npm start                       # http://127.0.0.1:5280/ で配信し、ブラ�
 
 - ポートは 5280 で固定です。開発サーバー（5173）とは URL が違うので、それぞれ別の単語データになります。
 - 起動中にもう一度実行すると、ブラウザを開き直すだけで終了します。5280 を別のプログラムが使っているときはエラーで止まります。
-- 公開する場合は `launcher/` で `npm publish` します（仕組みだけ用意してあり、未公開です）。毎回 `web/` を作り直し、そのとき `VITE_APP_VERSION` / `VITE_APP_ENV` 以外の `VITE_*`（VOICEVOX の接続先と API キーなど）を空にします。`web/.env*` の値がバンドルに残っていれば中止します。詳しくは [launcher/README.md](../launcher/README.md)。
+- オプション（`--port` など）と公開の仕組み（未公開）は [launcher/README.md](../launcher/README.md) を参照してください。
 
 ## ローカル音声（Kokoro）
 
@@ -86,11 +86,8 @@ brew install espeak-ng                              # 任意（macOS）。辞書
 | Claude Code にログインしていません | 手順 2 を実行し、「再確認」を押します |
 | Claude の利用上限に達しました | プランの上限に達しています。リセットされるまで待つか、Haiku を選んでください |
 
-- ランチャーと開発サーバーは、`/api/generate-sentences` で `claude -p` を起動します。CLI には、ツールなし・スラッシュコマンドなし・MCP サーバーなし・セッションを保存しない設定を付けます。
-- 環境変数に `ANTHROPIC_API_KEY`・`ANTHROPIC_BASE_URL`・`CLAUDE_CODE_USE_BEDROCK` などがあっても、CLI には渡しません。Claude Code の設定ファイル（フックなど）も読み込みません。API の従量課金ではなく、ログイン中のプランで生成するためです。
-- この API が受け付けるのは、`127.0.0.1` からの、アプリ自身のページ（同じ Origin）からのリクエストだけです。ほかのサイトからは呼べません。
-- 「生成を中止」を押すと、`claude` のプロセスも止めます。
 - OpenAI の API キーで生成する場合は、設定の「例文の生成方法」で OpenAI を選びます。
+- ランチャーと開発サーバーは `/api/generate-sentences` で `claude -p` を起動します。従量課金にならないよう環境変数を外すこと、ほかのサイトから呼べないことなど、API の仕様は [launcher/README.md](../launcher/README.md#generating-sentences-with-claude-code) を参照してください。
 
 ## ずんだもん音声の接続先
 

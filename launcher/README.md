@@ -21,15 +21,11 @@ URL. Keep using the same port: the app opened on another port starts empty.
 
 AIで例文を生成 runs the Claude Code CLI on this machine, using your
 Pro/Max login. No API key is needed. macOS and Linux only for now: on
-Windows the npm-installed `claude.cmd` is not started yet. One-time setup:
+Windows the npm-installed `claude.cmd` is not started yet. Setup steps and
+what each status in Settings means are in
+[web/README.md](../web/README.md#ai-で例文を生成するclaude-code) (Japanese).
 
-```bash
-npm install -g @anthropic-ai/claude-code
-claude          # log in with a Pro or Max account
-```
-
-Settings → 例文の生成方法 shows whether it is ready, and what to do when
-it is not. The local API behind it (`POST /api/generate-sentences`):
+The local API behind it (`POST /api/generate-sentences`):
 
 - runs `claude -p` with structured output, no tools, no slash commands, no
   MCP servers, and no saved session;
@@ -45,20 +41,12 @@ it is not. The local API behind it (`POST /api/generate-sentences`):
 ## Local voice (Kokoro)
 
 Speech can use [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) on this
-machine: English in the `am_echo` voice, Japanese in `jf_alpha`. Free, no key,
-and nothing leaves the machine. It needs [uv](https://docs.astral.sh/uv/):
-
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-The first start installs its Python packages and downloads the model, about
-1.5 GB in total (uv's cache and `~/.cache/huggingface`); later starts take a few
-seconds. Without uv, speech uses the browser's voice as before.
-
-On macOS, also installing `espeak-ng` (`brew install espeak-ng`) lets Kokoro
-read English words missing from its dictionary; without it, a sentence with
-such a word is read by the browser's voice instead.
+machine (English `am_echo`, Japanese `jf_alpha`). It needs
+[uv](https://docs.astral.sh/uv/); without it, speech uses the browser's voice.
+Setup (uv, optional `espeak-ng`, the ~1.5 GB first download, removal) is in
+[web/README.md](../web/README.md#ローカル音声kokoro) (Japanese); design notes
+and pitfalls are in
+[docs/web/local-tts-kokoro.md](../docs/web/local-tts-kokoro.md).
 
 The local API behind it (`POST /api/tts` with `{ "text", "lang": "en" | "ja" }`,
 answering `audio/wav`):
@@ -70,9 +58,6 @@ answering `audio/wav`):
 - has the same loopback and `Origin` checks as the generate endpoint;
 - runs one sentence at a time (up to 500 characters) and stops the voice when
   the launcher stops.
-
-To remove it: `uv cache clean` and delete
-`~/.cache/huggingface/hub/models--hexgrad--Kokoro-82M`.
 
 ## Options
 
