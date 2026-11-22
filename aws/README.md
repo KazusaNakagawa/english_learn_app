@@ -109,27 +109,35 @@ aws secretsmanager create-secret \
 ### 差分確認
 
 ```bash
-npm run diff
+npm run diff:poc   # dev / pro は diff:dev / diff:pro
 ```
 
 ### デプロイ
 
 ```bash
-npm run deploy
+npm run deploy:poc   # dev / pro は deploy:dev / deploy:pro
 ```
+
+環境ごとの設定:
+
+| 環境 | Lambda メモリ | レートリミット | バースト |
+|------|-------------|--------------|---------|
+| poc | 2048 MB | 5 RPS | 10 |
+| dev | 2048 MB | 10 RPS | 20 |
+| pro | 3008 MB | 50 RPS | 100 |
 
 デプロイ完了後、Outputs に API エンドポイントが出力されます。
 
 ```bash
 Outputs:
-VoicevoxStack.VoicevoxApiEndpoint = https://xxxxxxxxxx.execute-api.ap-northeast-1.amazonaws.com
-VoicevoxStack.VoicevoxFunctionArn = arn:aws:lambda:ap-northeast-1:...
+VoicevoxStack-poc.VoicevoxApiEndpoint = https://xxxxxxxxxx.execute-api.ap-northeast-1.amazonaws.com
+VoicevoxStack-poc.VoicevoxFunctionArn = arn:aws:lambda:ap-northeast-1:...
 ```
 
 ### 削除
 
 ```bash
-npm run destroy
+npm run destroy:poc   # dev / pro は destroy:dev / destroy:pro
 ```
 
 ---
@@ -175,7 +183,7 @@ curl -X POST \
 | 項目 | 値 |
 | ------ | ----- |
 | ランタイム | Container Image |
-| メモリ | 2048 MB |
+| メモリ | 2048 MB（pro は 3008 MB） |
 | タイムアウト | 120 秒 |
 | アーキテクチャ | x86_64 |
 | ベースイメージ | `voicevox/voicevox_engine:cpu-ubuntu22.04-0.25.1` |
