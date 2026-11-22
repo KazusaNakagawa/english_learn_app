@@ -2301,15 +2301,37 @@ synth:iam exit=0
 synth:poc exit=0
 ```
 
-### 残っている確認（マージ後にやる）
+### マージ後に踏んだ確認（AC 1 と 2）
 
-- **doc だけの PR で発火すること**（AC 1）
-- **`docs/05` の行列を stack と食い違わせた PR が落ちること**（AC 2）
+`develop` にワークフローが載ってからでないと試せなかった 2 件。
+pull_request の paths 判定は PR の変更ファイル全体に効くので、#192 のブランチから
+枝分かれさせると `aws/**` も差分に入り「doc だけ」の証明にならない。
+そこでマージ後に、**`docs/05.iam_group_design.md` の 1 セルだけ**を壊した
+検証用 PR (#198, DO NOT MERGE) を立てた。`develop-workload` を
+`develop-workloads` にリネームしただけで、stack 側はそのまま。
 
-どちらも `develop` にワークフローが載ってからでないと素直に試せない。
-pull_request の paths 判定は PR の変更ファイル全体に対して効くので、
-このブランチから枝分かれさせると `aws/**` も差分に入ってしまい
-「doc だけ」の証明にならない。マージ後に doc 1 行だけの PR で確かめる。
+**AC 1 — doc だけの PR で発火する。** run 34668362686 が `pull_request` で起動。
+差分は doc 1 ファイルのみなので、`aws/**` だけのフィルタなら発火していない。
+
+**AC 2 — 食い違いで落ちる。** Jest で落ち、後続の synth はスキップされた。
+
+```console
+● docs/05.iam_group_design.md › lists the right policies for develop
+  - "develop-workload"
+  + "develop-workloads"
+● docs/05.iam_group_design.md › names only policies the stack actually references
+      "policy": "develop-workloads",
+
+Test Suites: 1 failed, 11 passed, 12 total
+Tests:       2 failed, 265 passed, 267 total
+```
+
+ステップ単位では `Install dependencies` → `TypeScript build` まで success、
+`Jest` が failure、`Synth IamStack` / `Synth VoicevoxStack-poc` は skipped。
+**ドキュメントの 1 語のズレが、人手を介さずにマージを止められる**ようになった。
+これが #191 で書いたテストに欠けていた最後の一片。
+
+確認後 #198 はクローズしてブランチも削除した（マージ用ではない）。
 
 ---
 
