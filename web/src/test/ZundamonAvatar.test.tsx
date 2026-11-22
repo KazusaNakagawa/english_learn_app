@@ -59,4 +59,17 @@ describe('ZundamonAvatar', () => {
     expect(container.querySelector('svg')).toBeNull()
     expect(container.querySelector('img[src$="mouth-closed.png"]')).not.toBeNull()
   })
+
+  it('keeps showing the art after leaving and coming back', () => {
+    const { container } = render(<ZundamonAvatar />)
+    for (let round = 0; round < 2; round++) {
+      act(() => setZundamonSpeech({ audio: null, envelope: null }))
+      // The images remount with the avatar and load again each time.
+      container.querySelectorAll('img').forEach((img) => fireEvent.load(img))
+      expect(container.querySelector('svg')).toBeNull()
+      act(() => setZundamonSpeech(null))
+      act(() => { vi.advanceTimersByTime(LINGER_MS) })
+      expect(avatar()).toBeNull()
+    }
+  })
 })

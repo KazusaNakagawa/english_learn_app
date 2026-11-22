@@ -40,7 +40,8 @@ export function ZundamonAvatar() {
   const speaking = speech !== null
   const [visible, setVisible] = useState(false)
   const [open, setOpen] = useState(false)
-  const [loaded, setLoaded] = useState(0)
+  // Per image, not a count: the images remount and load again each time the avatar returns.
+  const [loaded, setLoaded] = useState({ closed: false, open: false })
   const [failed, setFailed] = useState(false)
 
   if (speaking && !visible) setVisible(true)
@@ -67,7 +68,7 @@ export function ZundamonAvatar() {
 
   if (!visible) return null
 
-  const useImages = !failed && loaded === 2
+  const useImages = !failed && loaded.closed && loaded.open
   return (
     <div
       aria-hidden="true"
@@ -83,7 +84,7 @@ export function ZundamonAvatar() {
             key={mouth}
             src={`${IMAGE_DIR}mouth-${mouth}.png`}
             alt=""
-            onLoad={() => setLoaded((n) => n + 1)}
+            onLoad={() => setLoaded((l) => (l[mouth] ? l : { ...l, [mouth]: true }))}
             onError={() => setFailed(true)}
             className="absolute inset-0 h-full w-full object-contain object-bottom drop-shadow-md"
             style={{ visibility: useImages && open === (mouth === 'open') ? 'visible' : 'hidden' }}
