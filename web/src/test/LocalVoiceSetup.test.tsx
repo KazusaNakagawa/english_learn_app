@@ -11,15 +11,15 @@ describe('LocalVoiceSetup', () => {
     expect(screen.getByText(/状態を確認しています/)).toBeInTheDocument()
   })
 
-  it('says the natural voice is in use when ready', () => {
+  it('says which voices use the local voice when ready', () => {
     render(<LocalVoiceSetup state="ready" onRecheck={() => {}} />)
-    expect(screen.getByText('ナチュラル音声で読み上げます')).toBeInTheDocument()
+    expect(screen.getByText('英語の男性・日本語の女性をローカル音声で読み上げます')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /再確認/ })).not.toBeInTheDocument()
   })
 
   it('explains the first download while starting', () => {
     render(<LocalVoiceSetup state="starting" onRecheck={() => {}} />)
-    expect(screen.getByText('ナチュラル音声を準備しています')).toBeInTheDocument()
+    expect(screen.getByText('ローカル音声を準備しています')).toBeInTheDocument()
     expect(screen.getByText(/1.5GB/)).toBeInTheDocument()
   })
 
@@ -32,7 +32,7 @@ describe('LocalVoiceSetup', () => {
 
   it('points to the launcher when there is no local API', () => {
     render(<LocalVoiceSetup state="no-server" onRecheck={() => {}} />)
-    expect(screen.getByText(/この画面ではナチュラル音声を使えません/)).toBeInTheDocument()
+    expect(screen.getByText(/この画面ではローカル音声を使えません/)).toBeInTheDocument()
     expect(screen.getByText('npx english-learn-app')).toBeInTheDocument()
   })
 

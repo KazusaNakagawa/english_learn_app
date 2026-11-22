@@ -8,6 +8,16 @@
 /** The Kokoro voice the launcher uses for each language. */
 export const KOKORO_VOICES = { en: 'am_echo', ja: 'jf_alpha' } as const
 
+/**
+ * The voice setting that plays the local voice in each language: English
+ * 男性 (am_echo is male) and Japanese 女性 (jf_alpha is female).
+ */
+export const LOCAL_VOICE_SETTING = { en: 'male', ja: 'female' } as const
+
+export function isLocalVoiceChoice(voice: string, lang: 'en' | 'ja'): boolean {
+  return voice === LOCAL_VOICE_SETTING[lang]
+}
+
 export type LocalVoiceStatus =
   | 'ready'
   /** Installing or loading; the first start downloads about 1.5 GB. */

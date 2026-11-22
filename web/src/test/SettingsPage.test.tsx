@@ -375,10 +375,10 @@ describe('SettingsPage', () => {
   describe('local voice', () => {
     const ttsHealth = (status: string) => ({ ok: true, status: 200, json: async () => ({ app: 'english-learn-app', tts: { status }, claude: { installed: true, loggedIn: true } }) })
 
-    it('shows the local voice status when ナチュラル is selected', async () => {
+    it('shows the local voice status while English male or Japanese female is selected', async () => {
       vi.stubGlobal('fetch', vi.fn(async () => ttsHealth('ready')))
       await renderPage()
-      expect(await screen.findByText('ナチュラル音声で読み上げます')).toBeInTheDocument()
+      expect(await screen.findByText('英語の男性・日本語の女性をローカル音声で読み上げます')).toBeInTheDocument()
     })
 
     it('shows the uv steps when uv is missing', async () => {
@@ -387,12 +387,12 @@ describe('SettingsPage', () => {
       expect(await screen.findByText(/uv が必要です/)).toBeInTheDocument()
     })
 
-    it('hides the section and asks nothing when neither language uses ナチュラル', async () => {
+    it('hides the section and asks nothing when neither language uses the local voice', async () => {
       saveSettings({ enVoice: 'female', jaVoice: 'zundamon', aiProvider: 'openai' })
       const fetchMock = vi.fn<(url: string) => Promise<unknown>>(async () => ttsHealth('ready'))
       vi.stubGlobal('fetch', fetchMock)
       await renderPage()
-      expect(screen.queryByText('ナチュラル音声')).not.toBeInTheDocument()
+      expect(screen.queryByText('ローカル音声')).not.toBeInTheDocument()
       expect(fetchMock.mock.calls.map(([url]) => url)).not.toContain('/api/health?tts=1')
     })
   })

@@ -1,6 +1,6 @@
 # ローカル音声(Kokoro)
 
-Web 版の読み上げを、手元で動く Kokoro-82M で行う仕組みのメモです。英語は `am_echo`(米国男性)、日本語は `jf_alpha`(女性)を使います。無料で API キーは要らず、音声データはマシンの外に出ません。利用者向けの手順は [launcher/README.md](../../launcher/README.md) の「Local voice (Kokoro)」にあります。
+Web 版の読み上げを、手元で動く Kokoro-82M で行う仕組みのメモです。英語は `am_echo`(米国男性)、日本語は `jf_alpha`(女性)を使います。無料で API キーは要らず、音声データはマシンの外に出ません。設定画面では、英語の「男性」と日本語の「女性」がこの声です(既定)。ローカル音声が使えないときは、同じ性別のブラウザの声で読みます。利用者向けの手順は [launcher/README.md](../../launcher/README.md) の「Local voice (Kokoro)」にあります。
 
 2026-11-21 に、Apple M4(macOS、CPU のみ)と uv 0.10.12 で動作を確かめました。
 
