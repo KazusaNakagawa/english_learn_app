@@ -69,3 +69,6 @@ playground.xcworkspace
 *.local*
 output/
 data*
+
+# Git worktrees (see CLAUDE.md Workflow)
+.worktrees/
